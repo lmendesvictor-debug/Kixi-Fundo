@@ -398,18 +398,6 @@ export default function App() {
 
   // Load from local storage on mount
   useEffect(() => {
-    const isCleared = localStorage.getItem('kix_system_prod_v4_deploy');
-    if (!isCleared) {
-      localStorage.removeItem('kix_members');
-      localStorage.removeItem('kix_logs');
-      localStorage.removeItem('kix_payouts');
-      localStorage.removeItem('kix_current_month');
-      localStorage.removeItem('kix_current_user');
-      localStorage.removeItem('kix_redundant_autobackup');
-      localStorage.removeItem('kix_app_config');
-      localStorage.setItem('kix_system_prod_v4_deploy', 'true');
-    }
-
     let savedMembers = localStorage.getItem('kix_members');
     let savedLogs = localStorage.getItem('kix_logs');
     let savedPayouts = localStorage.getItem('kix_payouts');
@@ -421,7 +409,10 @@ export default function App() {
       try {
         const parsed = JSON.parse(redundantBackup);
         if (parsed && parsed.members) {
-          savedMembers = JSON.stringify(parsed.members);
+          const fictionalNames = ['Ana Paula Gouveia', 'Carlos Alberto Silva', 'Filomena da Costa', 'João Kiala', 'Teresa de Jesus'];
+          const cleanedMembers = parsed.members.filter((m: any) => !fictionalNames.includes(m.name));
+          
+          savedMembers = JSON.stringify(cleanedMembers);
           savedLogs = JSON.stringify(parsed.logs);
           savedPayouts = JSON.stringify(parsed.payoutsCompleted);
           savedMonth = String(parsed.currentMonth);
@@ -436,16 +427,62 @@ export default function App() {
       }
     }
 
-    if (savedMembers && savedLogs && savedPayouts) {
-      setMembers(JSON.parse(savedMembers));
-      setLogs(JSON.parse(savedLogs));
-      setPayoutsCompleted(JSON.parse(savedPayouts));
-      if (savedMonth) {
-        setCurrentMonth(Number(savedMonth));
+    if (savedMembers) {
+      try {
+        const parsedMembers: Member[] = JSON.parse(savedMembers);
+        const fictionalNames = ['Ana Paula Gouveia', 'Carlos Alberto Silva', 'Filomena da Costa', 'João Kiala', 'Teresa de Jesus'];
+        const cleanedMembers = parsedMembers.filter(m => !fictionalNames.includes(m.name));
+
+        setMembers(cleanedMembers);
+        if (cleanedMembers.length !== parsedMembers.length) {
+          localStorage.setItem('kix_members', JSON.stringify(cleanedMembers));
+        }
+      } catch (e) {
+        console.error("Erro ao analisar kix_members:", e);
+        setMembers(INITIAL_MEMBERS);
       }
     } else {
       setMembers(INITIAL_MEMBERS);
+    }
+
+    if (savedLogs) {
+      try {
+        setLogs(JSON.parse(savedLogs));
+      } catch (e) {
+        console.error("Erro ao analisar kix_logs:", e);
+        setLogs(INITIAL_LOGS);
+      }
+    } else {
       setLogs(INITIAL_LOGS);
+    }
+
+    if (savedPayouts) {
+      try {
+        setPayoutsCompleted(JSON.parse(savedPayouts));
+      } catch (e) {
+        console.error("Erro ao analisar kix_payouts:", e);
+        setPayoutsCompleted({
+          1: false,
+          2: false,
+          3: false,
+          4: false,
+          5: false,
+          6: false,
+        });
+      }
+    } else {
+      setPayoutsCompleted({
+        1: false,
+        2: false,
+        3: false,
+        4: false,
+        5: false,
+        6: false,
+      });
+    }
+
+    if (savedMonth) {
+      setCurrentMonth(Number(savedMonth));
     }
 
     if (savedUser) {

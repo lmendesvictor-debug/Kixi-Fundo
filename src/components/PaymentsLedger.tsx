@@ -38,7 +38,14 @@ export default function PaymentsLedger({
   formatCurrency,
 }: PaymentsLedgerProps) {
   // Filters State
-  const [filterMonth, setFilterMonth] = useState<string>('all');
+  const [filterMonth, setFilterMonth] = useState<string>(() => {
+    const monthNamesPortuguese = [
+      'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+      'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+    ];
+    const index = (currentMonth - 1) % 12;
+    return monthNamesPortuguese[index] || 'all';
+  });
   const [filterYear, setFilterYear] = useState<string>('2026');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -143,7 +150,7 @@ export default function PaymentsLedger({
     .reduce((sum, r) => sum + r.amount, 0);
 
   const handleClearFilters = () => {
-    setFilterMonth('all');
+    setFilterMonth(getMonthName(currentMonth));
     setFilterYear('2026');
     setFilterStatus('all');
     setSearchQuery('');
