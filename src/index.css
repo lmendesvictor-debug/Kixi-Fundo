@@ -1,0 +1,126 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Outfit', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* Dynamically re-map the slate color variables to CSS variables for dynamic adaptive contrast */
+  --color-slate-950: var(--slate-950);
+  --color-slate-900: var(--slate-900);
+  --color-slate-850: var(--slate-850);
+  --color-slate-800: var(--slate-800);
+  --color-slate-700: var(--slate-700);
+  --color-slate-650: var(--slate-650);
+  --color-slate-600: var(--slate-600);
+  --color-slate-500: var(--slate-500);
+  --color-slate-450: var(--slate-450);
+  --color-slate-400: var(--slate-400);
+  --color-slate-300: var(--slate-300);
+  --color-slate-205: var(--slate-205);
+  --color-slate-200: var(--slate-200);
+  --color-slate-150: var(--slate-150);
+  --color-slate-100: var(--slate-100);
+  --color-slate-50: var(--slate-50);
+
+  --color-brand-deep: var(--brand-deep);
+  --color-brand-ice: var(--brand-ice);
+  --color-brand-black: #050811;
+  --color-brand-white: #ffffff;
+}
+
+:root {
+  /* Dynamic colors for LIGHT background ("tons brancos" -> "letras pretas/escuras" for high contrast) */
+  --slate-950: #050811; /* Intense Deep Black for absolute readability */
+  --slate-900: #090e1a; /* Pitch charcoal black */
+  --slate-850: #0f172a;
+  --slate-800: #141b2c; /* High-contrast dark grey */
+  --slate-700: #1f2738; /* Crisp active grey */
+  --slate-650: #2c364e; /* Medium-dark contrast grey */
+  --slate-600: #384560; /* Medium slate */
+  --slate-500: #4a5a78; /* Subtext grey */
+  --slate-450: #64748b;
+  --slate-400: #7c8ea6; /* Border/disabled text */
+  --slate-300: #cbd5e1;
+  --slate-205: #cbd5e1;
+  --slate-200: #e2e8f0;
+  --slate-150: #f1f5f9;
+  --slate-100: #f1f5f9;
+  --slate-50: #f8fafc;
+
+  --brand-deep: #092b5a; /* Classic Royal Navy accent */
+  --brand-ice: #0284c7;  /* High-contrast Blue accent */
+}
+
+html.dark {
+  /* High-contrast functional DARK mode scale - mapped to match native Tailwind semantics (low = light text, high = dark bg) */
+  --slate-50: #ffffff;   /* Absolute bright white for highest-contrast text highlights */
+  --slate-100: #f1f5f9;  /* Brilliant light grey for main readable text */
+  --slate-150: #e2e8f0;  /* Very light grey */
+  --slate-200: #cbd5e1;  /* Soft grey for secondary text */
+  --slate-205: #cbd5e1;
+  --slate-300: #94a3b8;  /* Muted placeholder text */
+  --slate-400: #64748b;  /* Inactive or deeply muted labels */
+  --slate-450: #4a5a78;
+  --slate-500: #334155;  /* Subtle lines or separators */
+  --slate-600: #1e293b;  /* Deep control elements */
+  --slate-650: #111827;  /* Elevated cards, borders */
+  --slate-700: #0f172a;  /* Secondary widgets/filters container */
+  --slate-800: #0a0f1d;  /* Accent borders/cards */
+  --slate-850: #080c16;  /* Elevated panel backgrounds */
+  --slate-900: #050811;  /* Main dark card/row background (standard theme core) */
+  --slate-950: #020617;  /* Absolute base canvas background (matches body) */
+
+  --brand-deep: #38bdf8; /* Ice blue accent */
+  --brand-ice: #0ea5e9;  /* Sky blue brand contrast */
+}
+
+/* Custom scrollbar and subtle layout styles */
+@layer base {
+  body {
+    background-color: var(--slate-50);
+    color: var(--slate-900);
+    font-family: var(--font-sans);
+    font-weight: 500; /* slightly thicker font weight for enhanced contrast and readability */
+    transition-property: color, background-color, border-color, text-decoration-color, fill, stroke;
+    transition-duration: 250ms;
+  }
+  
+  html.dark body {
+    background-color: #040812; /* handsome dark midnight navy canvas instead of dull dark gray */
+    color: #ffffff; /* Highly legible white text on dark background as requested */
+  }
+
+  /* Make generic structural headings and strong contrast tags default to our stunning brand levels */
+  h1, h2, h3, h4, h5, h6, strong, th {
+    color: var(--slate-950);
+  }
+
+  html.dark h1, html.dark h2, html.dark h3, html.dark h4, html.dark h5, html.dark h6, html.dark strong, html.dark th {
+    color: #ffffff !important; /* Brilliant white for perfect contrast in dark mode! */
+  }
+
+  p {
+    color: var(--slate-700);
+  }
+
+  html.dark p {
+    color: #cbd5e1;
+  }
+}
+
+.font-display {
+  font-family: var(--font-display);
+}
+
+.shadow-custom {
+  box-shadow: 0 4px 20px -2px rgba(9, 43, 90, 0.05), 0 2px 6px -1px rgba(9, 43, 90, 0.03);
+}
+
+.shadow-custom-strong {
+  box-shadow: 0 10px 30px -5px rgba(9, 43, 90, 0.08), 0 4px 12px -2px rgba(9, 43, 90, 0.04);
+}
+

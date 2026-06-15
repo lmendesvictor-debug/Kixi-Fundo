@@ -1,0 +1,6 @@
+{
+  "name": "Kixi-Fundo Gestão de Finanças Comparticipadas",
+  "description": "Sistema de gestão de fundos rotativos comunitários com controle de contribuições mensais, escala automática de beneficiários e fundo social de interajuda.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
