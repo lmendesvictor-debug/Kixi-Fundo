@@ -6,7 +6,7 @@ import firebaseConfig from '../firebase-applet-config.json';
 // Inicializar aplicativo do Firebase com configurações persistentes
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export const db = getFirestore(app);
+export const db = getFirestore(app, (firebaseConfig as any).firestoreDatabaseId);
 
 const provider = new GoogleAuthProvider();
 // Escopo de menor privilégio para ver, gerenciar e ler ficheiros criados pela própria aplicação

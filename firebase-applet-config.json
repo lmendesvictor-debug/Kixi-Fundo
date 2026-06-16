@@ -3,6 +3,7 @@
   "appId": "1:350443679202:web:c4249325ededc5e2b49dbb",
   "apiKey": "AIzaSyCLvua5_LqaQ7US7gpn9Op-J3Cj0jimTOg",
   "authDomain": "peak-science-qk91c.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-086d6e60-54ad-4fba-9428-b682fe16005d",
   "storageBucket": "peak-science-qk91c.firebasestorage.app",
   "messagingSenderId": "350443679202",
   "measurementId": ""

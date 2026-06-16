@@ -27,6 +27,9 @@ import {
   Cloud,
   CloudOff,
   RefreshCw,
+  Search,
+  X,
+  ChevronDown,
 } from 'lucide-react';
 
 import { Member, KixLog, CarouselSlide, getMemberIdCode } from './types';
@@ -107,12 +110,44 @@ const DEFAULT_CAROUSEL_SLIDES: CarouselSlide[] = [
 ];
 
 export default function App() {
-  const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
-  const [isLoadingDb, setIsLoadingDb] = useState<boolean>(true);
-  const [currentMonth, setCurrentMonth] = useState<number>(1);
-  const [members, setMembers] = useState<Member[]>([]);
-  const [logs, setLogs] = useState<KixLog[]>([]);
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(() => {
+    const saved = localStorage.getItem('kix_current_user');
+    if (saved) {
+      try { return JSON.parse(saved); } catch {}
+    }
+    return null;
+  });
+  const [isLoadingDb, setIsLoadingDb] = useState<boolean>(() => {
+    const saved = localStorage.getItem('kix_members');
+    return !saved; // If cached database exists, bypass blocking loading screen completely
+  });
+  const [currentMonth, setCurrentMonth] = useState<number>(() => {
+    return Number(localStorage.getItem('kix_current_month') || '1');
+  });
+  const [members, setMembers] = useState<Member[]>(() => {
+    const saved = localStorage.getItem('kix_members');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch {}
+    }
+    return INITIAL_MEMBERS;
+  });
+  const [logs, setLogs] = useState<KixLog[]>(() => {
+    const saved = localStorage.getItem('kix_logs');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      } catch {}
+    }
+    return INITIAL_LOGS;
+  });
   const [activeTab, setActiveTab] = useState<string>('inicio');
+  const [isDbSyncing, setIsDbSyncing] = useState<boolean>(false);
+  const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
+  const [menuSearchQuery, setMenuSearchQuery] = useState<string>('');
   const [cyclesSubTab, setCyclesSubTab] = useState<'ledger' | 'planner'>('ledger');
   const [simulatedMemberId, setSimulatedMemberId] = useState<number | null>(null);
   const [exitConfirm, setExitConfirm] = useState<boolean>(false);
@@ -235,6 +270,28 @@ export default function App() {
 
   const allowedNavigationItems = allNavigationItems.filter(item => isAllowed(item.id));
 
+  const activeTabItem = allowedNavigationItems.find(item => item.id === activeTab);
+  const filteredNavigationItems = allowedNavigationItems.filter(item => {
+    const label = (item.id === 'membro-dashboard' ? 'Minha Área' : item.label).toLowerCase();
+    return label.includes(menuSearchQuery.toLowerCase());
+  });
+
+  // Close mobile dropdown menu dynamically when clicking outside
+  useEffect(() => {
+    if (!isMenuOpen) return;
+    const handleOutsideClick = (event: MouseEvent) => {
+      const container = document.getElementById('kix-mobile-nav-container');
+      if (container && !container.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+        setMenuSearchQuery('');
+      }
+    };
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [isMenuOpen]);
+
   // Redireciona para o primeiro link permitido se o separador atual for bloqueado administrativamente
   useEffect(() => {
     if (currentUser) {
@@ -312,14 +369,18 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('kix_app_config', JSON.stringify(appConfig));
     if (!isLoadingDb) {
+      setIsDbSyncing(true);
       saveStateToFirestore({
         members,
         logs,
         payoutsCompleted,
         currentMonth,
         appConfig
+      }).then(() => {
+        setIsDbSyncing(false);
       }).catch((err) => {
         console.error("Firestore appConfig sync failed: ", err);
+        setIsDbSyncing(false);
       });
     }
   }, [appConfig]);
@@ -423,8 +484,8 @@ export default function App() {
   useEffect(() => {
     let active = true;
     const fetchDB = async () => {
+      setIsDbSyncing(true);
       try {
-        await testFirestoreConnection();
         const dbState = await loadStateFromFirestore();
         if (dbState && active) {
           console.log("Dados carregados da Base de Dados Cloud com Sucesso!");
@@ -447,7 +508,7 @@ export default function App() {
           localStorage.setItem('kix_current_month', String(dbState.currentMonth));
           localStorage.setItem('kix_app_config', JSON.stringify(dbState.appConfig));
         } else if (active) {
-          console.log("Base de dados vazia. Inicializando persistência cloud com valores padrão...");
+          console.log("Base de dados vazia. Sincronizando com cache...");
           const defaultPayouts = {
             1: false,
             2: false,
@@ -480,40 +541,12 @@ export default function App() {
           setCurrentMonth(finalMonth);
         }
       } catch (err) {
-        console.error("Incapaz de ler da Cloud. Carregando dados cache do Browser...", err);
-        let savedMembers = localStorage.getItem('kix_members');
-        let savedLogs = localStorage.getItem('kix_logs');
-        let savedPayouts = localStorage.getItem('kix_payouts');
-        let savedMonth = localStorage.getItem('kix_current_month');
-        
-        if (savedMembers) {
-          try {
-            setMembers(JSON.parse(savedMembers));
-          } catch { setMembers(INITIAL_MEMBERS); }
-        } else {
-          setMembers(INITIAL_MEMBERS);
-        }
-
-        if (savedLogs) {
-          try { setLogs(JSON.parse(savedLogs)); } catch { setLogs(INITIAL_LOGS); }
-        } else {
-          setLogs(INITIAL_LOGS);
-        }
-
-        if (savedPayouts) {
-          try { setPayoutsCompleted(JSON.parse(savedPayouts)); } catch { 
-            setPayoutsCompleted({1: false, 2: false, 3: false, 4: false, 5: false, 6: false}); 
-          }
-        } else {
-          setPayoutsCompleted({1: false, 2: false, 3: false, 4: false, 5: false, 6: false});
-        }
-
-        if (savedMonth) {
-          setCurrentMonth(Number(savedMonth));
-        }
+        console.warn("Leitura em segundo plano da Cloud falhou (operando offline):", err);
+        // Fallback is already initialized synchronously in useState so user has 0 interruption!
       } finally {
         if (active) {
           setIsLoadingDb(false);
+          setIsDbSyncing(false);
           const savedUser = localStorage.getItem('kix_current_user');
           if (savedUser) {
             try {
@@ -540,14 +573,18 @@ export default function App() {
     localStorage.setItem('kix_current_month', String(newMonth));
 
     // Save to Firestore Cloud database to run app outside of standard isolated browser
+    setIsDbSyncing(true);
     saveStateToFirestore({
       members: newMembers,
       logs: newLogs,
       payoutsCompleted: newPayouts,
       currentMonth: newMonth,
       appConfig: appConfig
+    }).then(() => {
+      setIsDbSyncing(false);
     }).catch((err) => {
       console.error("Firestore database write sync failed:", err);
+      setIsDbSyncing(false);
     });
 
     // Backup offline local automático redundante
@@ -1119,29 +1156,23 @@ export default function App() {
       <nav className="w-full bg-[#0284c7] border-b border-sky-600 shadow-md sticky top-0 z-40 select-none">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-20 gap-4">
-            
             {/* Left side brand details with Stacked coin emblem */}
             <div className="flex items-center gap-2.5 cursor-pointer hover:scale-[1.02] active:scale-95 transition-all duration-300 shrink-0" onClick={() => setActiveTab('inicio')}>
               <div className="w-9 h-9 sm:w-10 sm:h-10 bg-amber-400 text-[#0284c7] rounded-full flex items-center justify-center font-black text-lg sm:text-xl shadow-md border-2 border-white leading-none">
                 $
               </div>
-              <div className="hidden sm:block">
+              <div>
                 <span className="text-base sm:text-lg font-black text-white leading-none tracking-tight font-display block">
                   Kixi-Fundo
                 </span>
                 <span className="text-[7.5px] sm:text-[8px] font-bold text-sky-100/90 tracking-wider font-sans leading-none mt-1 uppercase block">
-                  Gestão de Finanças Comparticipadas
-                </span>
-              </div>
-              <div className="block sm:hidden">
-                <span className="text-sm font-black text-white leading-none tracking-tight font-display block">
-                  Kix
+                  Gestão de Finanças
                 </span>
               </div>
             </div>
 
-            {/* Middle responsive capsule buttons - aligned on a single row, scrollable on very small screens, fits beautifully */}
-            <div className="flex items-center gap-1 px-1 py-1 overflow-x-auto scrollbar-none whitespace-nowrap lg:overflow-visible flex-1 justify-center max-w-4xl">
+            {/* Desktop Navigation Row (hidden on mobile, flex on desktop) */}
+            <div className="hidden md:flex items-center gap-1 px-1 py-1 overflow-x-auto scrollbar-none whitespace-nowrap lg:overflow-visible flex-1 justify-center max-w-4xl">
               {allowedNavigationItems.map((item) => {
                 const isActive = activeTab === item.id;
                 
@@ -1162,8 +1193,100 @@ export default function App() {
               })}
             </div>
 
+            {/* Mobile Navigation Dropdown Box (flex on mobile, hidden on desktop) */}
+            <div className="flex md:hidden flex-1 justify-center max-w-[200px] relative" id="kix-mobile-nav-container">
+              <button
+                onClick={() => setIsMenuOpen(!isMenuOpen)}
+                className="flex items-center justify-between w-full bg-white/10 hover:bg-white/15 text-white active:scale-95 transition-all duration-200 rounded-xl px-2.5 py-1.5 text-[11px] font-bold border border-white/10 cursor-pointer shadow-inner gap-1"
+                id="kix-mobile-toggle-btn"
+              >
+                <div className="flex items-center gap-1.5 overflow-hidden truncate">
+                  {activeTabItem ? (
+                    <>
+                      <span className="shrink-0 text-amber-300">{activeTabItem.icon}</span>
+                      <span className="truncate">{activeTabItem.id === 'membro-dashboard' ? 'Minha Área' : activeTabItem.label}</span>
+                    </>
+                  ) : (
+                    <span>Menu</span>
+                  )}
+                </div>
+                <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-80" />
+              </button>
+
+              {/* Mobile searchable menu panel */}
+              {isMenuOpen && (
+                <div 
+                  className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 w-56 rounded-2xl p-3 shadow-2xl border backdrop-blur-md z-50 flex flex-col gap-2 bg-white dark:bg-slate-900 border-slate-250 dark:border-slate-800 text-slate-800 dark:text-slate-100"
+                  id="kix-mobile-nav-dropdown"
+                >
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Pesquisar menu..."
+                      value={menuSearchQuery}
+                      onChange={(e) => setMenuSearchQuery(e.target.value)}
+                      className="w-full pl-8 pr-7 py-1 text-xs rounded-xl border border-slate-250 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 focus:outline-none focus:ring-1.5 focus:ring-sky-500 text-slate-950 dark:text-slate-50 placeholder:text-slate-400 font-sans"
+                      id="kix-menu-search-input"
+                      autoFocus
+                    />
+                    {menuSearchQuery && (
+                      <button
+                        onClick={() => setMenuSearchQuery('')}
+                        className="absolute right-2 top-1.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="max-h-52 overflow-y-auto space-y-1 mt-1 pr-0.5">
+                    {filteredNavigationItems.length === 0 ? (
+                      <div className="text-center text-[11px] text-slate-500 py-4 font-sans">Menu não encontrado</div>
+                    ) : (
+                      filteredNavigationItems.map((item) => {
+                        const isActive = activeTab === item.id;
+                        return (
+                          <button
+                            key={item.id}
+                            onClick={() => {
+                              setActiveTab(item.id);
+                              setIsMenuOpen(false);
+                              setMenuSearchQuery('');
+                            }}
+                            className={`w-full text-left px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all duration-200 cursor-pointer ${
+                              isActive
+                                ? 'bg-sky-500/10 text-sky-700 dark:text-sky-450 border border-sky-500/10'
+                                : 'hover:bg-slate-55 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300'
+                            }`}
+                            id={`kix-mobile-nav-item-${item.id}`}
+                          >
+                            <span className={`${isActive ? 'text-sky-600 dark:text-sky-400' : 'text-slate-450 dark:text-slate-550'}`}>{item.icon}</span>
+                            <span>{item.id === 'membro-dashboard' ? 'Minha Área' : item.label}</span>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Right side status instruments - extremely compact */}
             <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+
+              {/* Cloud DB Sync Status Badge */}
+              <div 
+                className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[8px] font-black leading-none ${
+                  isDbSyncing 
+                    ? 'bg-emerald-500/10 text-emerald-400 animate-pulse' 
+                    : 'bg-emerald-500/5 text-emerald-500/60'
+                }`}
+                title={isDbSyncing ? 'A sincronizar dados com o servidor...' : 'Dados Sincronizados na Cloud'}
+              >
+                <Cloud className={`w-3 h-3 ${isDbSyncing ? 'animate-spin' : ''}`} />
+                <span className="hidden md:inline">{isDbSyncing ? 'A SINCRONIZAR' : 'G-CLOUD ACTIVA'}</span>
+              </div>
 
               {/* Connection Status Badge (Compact dot) */}
               <div 
@@ -1740,7 +1863,7 @@ export default function App() {
             
             {/* Left Column: Essential copyright and info */}
             <div className="flex flex-col items-center md:items-start text-center md:text-left gap-0.5">
-              <p className="font-extrabold text-slate-850 dark:text-slate-100 flex items-center gap-1.5 leading-none">
+              <p className="font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5 leading-none text-[10px]">
                 <span>🛡️</span> Todos os direitos reservados a kurkita software e desenvolvimento copyright @2026
               </p>
               <div className="flex flex-wrap items-center justify-center md:justify-start gap-x-3 gap-y-1 text-[10px] text-slate-500 dark:text-slate-400 font-bold mt-1">
@@ -1767,8 +1890,6 @@ export default function App() {
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => setShowRegulations(true)} className="hover:text-emerald-500 dark:hover:text-emerald-400 border border-slate-205 dark:border-slate-800 text-[10px] font-bold px-2 py-1 rounded-md bg-slate-50 dark:bg-slate-800/40 hover:bg-slate-100 transition-colors cursor-pointer">Normativos do Kix</button>
-                <span>•</span>
-                <button onClick={handleResetData} className="hover:text-rose-500 text-rose-500/90 text-[10px] font-bold cursor-pointer transition-colors">Restaurar Simulador</button>
               </div>
             </div>
             
