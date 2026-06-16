@@ -1,6 +1,6 @@
 import { doc, getDoc, setDoc, getDocFromServer } from 'firebase/firestore';
 import { db, auth } from './driveBackup';
-import { Member, KixLog } from './types';
+import { Member, KixLog, Loan } from './types';
 
 export enum OperationType {
   CREATE = 'create',
@@ -52,6 +52,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 export interface SavedStatePayload {
   members: Member[];
   logs: KixLog[];
+  loans?: Loan[];
   payoutsCompleted: { [month: string]: boolean };
   currentMonth: number;
   appConfig: any;
@@ -93,7 +94,8 @@ export async function saveStateToFirestore(payload: Omit<SavedStatePayload, 'upd
       ...payload,
       updatedAt: new Date().toISOString()
     };
-    await setDoc(docRef, fullPayload);
+    const sanitizedPayload = JSON.parse(JSON.stringify(fullPayload));
+    await setDoc(docRef, sanitizedPayload);
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, STATE_DOC_PATH);
   }

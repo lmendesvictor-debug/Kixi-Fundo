@@ -84,6 +84,10 @@ export default function UserManagement({
   const [adminPrivilegeCanDelete, setAdminPrivilegeCanDelete] = useState<boolean>(appConfig.adminPrivilegeCanDelete !== false);
   const [adminPrivilegeCanRefund, setAdminPrivilegeCanRefund] = useState<boolean>(appConfig.adminPrivilegeCanRefund !== false);
   const [adminPrivilegeCanForcePayout, setAdminPrivilegeCanForcePayout] = useState<boolean>(appConfig.adminPrivilegeCanForcePayout === true);
+  const [contractClauseJuros, setContractClauseJuros] = useState(appConfig.contractClauseJuros || '');
+  const [contractClauseMultas, setContractClauseMultas] = useState(appConfig.contractClauseMultas || '');
+  const [contractClauseGarantias, setContractClauseGarantias] = useState(appConfig.contractClauseGarantias || '');
+  const [contractTemplateWhole, setContractTemplateWhole] = useState(appConfig.contractTemplateWhole || '');
   const [appConfigSuccess, setAppConfigSuccess] = useState('');
 
   const handleSaveAppConfig = (e: React.FormEvent) => {
@@ -103,7 +107,11 @@ export default function UserManagement({
       primaryColorTheme,
       adminPrivilegeCanDelete,
       adminPrivilegeCanRefund,
-      adminPrivilegeCanForcePayout
+      adminPrivilegeCanForcePayout,
+      contractClauseJuros: contractClauseJuros.trim(),
+      contractClauseMultas: contractClauseMultas.trim(),
+      contractClauseGarantias: contractClauseGarantias.trim(),
+      contractTemplateWhole: contractTemplateWhole.trim()
     };
     setAppConfig(updatedConfig);
 
@@ -824,6 +832,85 @@ export default function UserManagement({
             </div>
           </div>
 
+          {/* SECÇÃO EXTRA: PARAMETRIA E TEMPLATES DE CONTRATO JURÍDICO (COOPNET-STANDARDS) */}
+          <div className="border-t border-dashed border-slate-200 dark:border-slate-800 pt-4">
+            <h3 className="text-slate-500 dark:text-slate-400 font-bold mb-1 uppercase tracking-wider text-[10px] flex items-center gap-1.5">
+              📜 Gestão Regulatória e Configuração do Template de Contrato
+            </h3>
+            <p className="text-[10px] text-slate-400 dark:text-slate-500 mb-4 leading-relaxed leading-normal">
+              Configure as cláusulas gerais do contrato para faturamento de juros ordinários, moratórios de atraso (multas) e termos de recepção de garantias colaterais. O sistema gerará dinamicamente os novos contratos usando as definições oficiais de políticas vigentes parametrizadas abaixo.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-2 text-left">
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-slate-505 dark:text-slate-350 font-bold mb-1 uppercase tracking-wider text-[9px] flex items-center gap-1">
+                    💸 Cláusula de Juros (Cláusula Segunda)
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={contractClauseJuros}
+                    onChange={(e) => setContractClauseJuros(e.target.value)}
+                    placeholder="Texto regulatório para cálculo e amortização de juro cooperativo..."
+                    className={`w-full text-xs p-2.5 rounded-xl border focus:outline-none focus:border-emerald-500 leading-normal ${
+                      theme === 'dark' ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-100 border-slate-200 text-slate-750'
+                    }`}
+                  />
+                  <span className="text-[8px] text-slate-405 dark:text-slate-505 block mt-1">Macros válidas: <code className="font-mono">{`{PRAZO_MESES}, {TAXA_JUROS}, {MENSALIDADE}, {DATA_PRIMEIRA_PARCELA}`}</code></span>
+                </div>
+
+                <div>
+                  <label className="block text-slate-550 dark:text-slate-350 font-bold mb-1 uppercase tracking-wider text-[9px]">
+                    ⚠️ Cláusula de Multas e Mora (Cláusula Quarta)
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={contractClauseMultas}
+                    onChange={(e) => setContractClauseMultas(e.target.value)}
+                    placeholder="Regulamentação jurídica sobre atrasos de parcelas e juros moratórios diários..."
+                    className={`w-full text-xs p-2.5 rounded-xl border focus:outline-none focus:border-emerald-500 leading-normal ${
+                      theme === 'dark' ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-100 border-slate-200 text-slate-750'
+                    }`}
+                  />
+                  <span className="text-[8px] text-slate-405 dark:text-slate-505 block mt-1">Texto oficial de penalidade em caso de insolvência ou atrasos.</span>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-slate-550 dark:text-slate-350 font-bold mb-1 uppercase tracking-wider text-[9px]">
+                    🔐 Cláusula de Garantias de Penhor (Cláusula Terceira)
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={contractClauseGarantias}
+                    onChange={(e) => setContractClauseGarantias(e.target.value)}
+                    placeholder="Disposições regulatórias, penhor e direito de adjudicação de bens colaterais de penhor..."
+                    className={`w-full text-xs p-2.5 rounded-xl border focus:outline-none focus:border-emerald-500 leading-normal ${
+                      theme === 'dark' ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-100 border-slate-200 text-slate-750'
+                    }`}
+                  />
+                  <span className="text-[8px] text-slate-405 dark:text-slate-505 block mt-1">Macros válidas: <code className="font-mono">{`{GARANTIAS}`}</code></span>
+                </div>
+
+                <div>
+                  <label className="block text-slate-550 dark:text-slate-350 font-bold mb-1 uppercase tracking-wider text-[9px]">
+                    📊 Layout Estrutural Inteiro do Contrato (Minuta Geral)
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={contractTemplateWhole}
+                    onChange={(e) => setContractTemplateWhole(e.target.value)}
+                    placeholder="Minuta completa contendo os cabeçalhos e as demais cláusulas..."
+                    className={`w-full text-xs p-2.5 rounded-xl border focus:outline-none focus:border-emerald-500 leading-normal font-mono text-[10px] ${
+                      theme === 'dark' ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-100 border-slate-200 text-slate-755'
+                    }`}
+                  />
+                  <span className="text-[8px] text-slate-405 dark:text-slate-505 block mt-1">Espaços reservados: <code className="font-mono">{`{CLAUSULA_JUROS}, {CLAUSULA_GARANTIAS}, {CLAUSULA_MULTAS}`}</code>, além de macros como <code className="font-mono">{`{REPRESENTANTE}, {BENEFICIARIO}, {DOCUMENTO_ID}, {TELEFONE}, {EMAIL}, {VALOR_EMPRESTIMO}`}</code></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="border-t border-dashed border-slate-200 dark:border-slate-800 pt-4 flex justify-end">
             <button
               type="submit"
@@ -1006,12 +1093,12 @@ export default function UserManagement({
                           : 'bg-slate-50 border-slate-200'
                       }`}
                     >
-                      <option value="1">Mês 01 (Dezembro)</option>
-                      <option value="2">Mês 02 (Março)</option>
-                      <option value="3">Mês 03 (Junho)</option>
-                      <option value="4">Mês 04 (Setembro)</option>
-                      <option value="5">Mês 05 (Dezembro)</option>
-                      <option value="6">Mês 06 (Março)</option>
+                      <option value="1">Mês 01 (Março)</option>
+                      <option value="2">Mês 02 (Abril)</option>
+                      <option value="3">Mês 03 (Maio)</option>
+                      <option value="4">Mês 04 (Junho)</option>
+                      <option value="5">Mês 05 (Julho)</option>
+                      <option value="6">Mês 06 (Agosto)</option>
                     </select>
                   </div>
                 </div>

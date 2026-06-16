@@ -43,7 +43,7 @@ export default function PaymentsLedger({
       'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
       'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
     ];
-    const index = (currentMonth - 1) % 12;
+    const index = (currentMonth - 1 + 2) % 12;
     return monthNamesPortuguese[index] || 'all';
   });
   const [filterYear, setFilterYear] = useState<string>('2026');
@@ -76,8 +76,8 @@ export default function PaymentsLedger({
   ];
 
   const getMonthName = (monthNum: number) => {
-    // 1 to 6 represent months, we can map to Janeiro-Junho or map standard months
-    const index = (monthNum - 1) % 12;
+    // 1 to 6 represent months, we can map with +2 offset to start in March
+    const index = (monthNum - 1 + 2) % 12;
     return monthNamesPortuguese[index];
   };
 

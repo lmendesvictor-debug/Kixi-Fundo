@@ -32,7 +32,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 
-import { Member, KixLog, CarouselSlide, getMemberIdCode } from './types';
+import { Member, KixLog, CarouselSlide, getMemberIdCode, Loan } from './types';
 import { INITIAL_MEMBERS, INITIAL_LOGS } from './data';
 import MetricCards from './components/MetricCards';
 import SchedulesGrid from './components/SchedulesGrid';
@@ -50,6 +50,7 @@ import InteractiveCharts from './components/InteractiveCharts';
 import UserManagement from './components/UserManagement';
 import AdminModule from './components/AdminModule';
 import RegulationsModal from './components/RegulationsModal';
+import CreditManagement from './components/CreditManagement';
 
 import { 
   testFirestoreConnection, 
@@ -144,6 +145,75 @@ export default function App() {
     }
     return INITIAL_LOGS;
   });
+  
+  const [loans, setLoans] = useState<Loan[]>(() => {
+    const saved = localStorage.getItem('kix_loans');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      } catch {}
+    }
+    return [
+      {
+        id: 'L-7482-SOC',
+        borrowerName: 'Mendes Victor (Admin)',
+        borrowerType: 'socio',
+        memberId: 1,
+        documentId: '003429LA081',
+        phone: '+244 923 000 000',
+        email: 'lmendesvictor@gmail.com',
+        amountRequested: 500000,
+        interestRate: 6,
+        durationMonths: 6,
+        guarantees: 'Rúbrica e fiança sobre quotas pagas ativas no faturamento Kixi.',
+        status: 'active',
+        contractDate: '15/05/2026',
+        payments: Array.from({ length: 6 }, (_, i) => {
+          const m = i + 1;
+          const principalPaid = 500000 / 6;
+          const interestPaid = 500000 * 0.06;
+          return {
+            month: m,
+            dueDate: `15/${String(5 + m).padStart(2, '0')}/2026`,
+            amount: principalPaid + interestPaid,
+            interestPaid,
+            principalPaid,
+            paid: m <= 1,
+            paidAt: m <= 1 ? '15/06/2026' : undefined
+          };
+        }),
+      },
+      {
+        id: 'L-1296-SIN',
+        borrowerName: 'Sebastião Gabriel',
+        borrowerType: 'singular',
+        documentId: '009841BE095',
+        phone: '+244 912 345 678',
+        email: 'sgabriel@gmail.com',
+        amountRequested: 250000,
+        interestRate: 14,
+        durationMonths: 3,
+        guarantees: 'Custódia preventiva de Gerador Elétrico Kipor 5KVA provido com fatura e BI anexo.',
+        status: 'active',
+        contractDate: '01/06/2026',
+        payments: Array.from({ length: 3 }, (_, i) => {
+          const m = i + 1;
+          const principalPaid = 250000 / 3;
+          const interestPaid = 250000 * 0.14;
+          return {
+            month: m,
+            dueDate: `01/${String(6 + m).padStart(2, '0')}/2026`,
+            amount: principalPaid + interestPaid,
+            interestPaid,
+            principalPaid,
+            paid: false
+          };
+        }),
+      }
+    ];
+  });
+
   const [activeTab, setActiveTab] = useState<string>('inicio');
   const [isDbSyncing, setIsDbSyncing] = useState<boolean>(false);
   const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
@@ -240,22 +310,27 @@ export default function App() {
     
     // Role-based defaults: admin always has access to administrative pages
     if (currentUser.role === 'admin') {
-      return ['inicio', 'membro-dashboard', 'members', 'cycles', 'reports', 'dashboard', 'admin-module'].includes(tabId);
+      return ['inicio', 'membro-dashboard', 'members', 'cycles', 'reports', 'dashboard', 'admin-module', 'credit-management'].includes(tabId);
     }
 
-    // Início, Pagamentos, Relatórios are open for all authorized profiles to guarantee top navbar transparency
-    if (tabId === 'inicio') return true;
-    if (tabId === 'reports') return true;
-    if (tabId === 'cycles') return true;
+    // O modulo de creditos de momento só deve estar disponivel para o administrador por estar em desenvolvimento.
+    if (tabId === 'credit-management') return false;
 
+    // Minha Área (membro-dashboard) não é parametrizável, está sempre disponível para membros comuns
+    if (tabId === 'membro-dashboard') return true;
+
+    // Todos os outros módulos são parametrizáveis
     const m = loggedInMember;
     if (m && m.permissions) {
-      if (tabId === 'dashboard') return !!m.permissions.accessDashboard;
-      if (tabId === 'membro-dashboard') return currentUser.role !== 'admin' || !!m.permissions.accessDashboard;
+      if (tabId === 'inicio') return m.permissions.accessInicio !== false;
       if (tabId === 'members') return !!m.permissions.accessMembersList;
+      if (tabId === 'cycles') return m.permissions.accessCycles !== false;
+      if (tabId === 'reports') return m.permissions.accessReports !== false;
       if (tabId === 'admin-module') return !!m.permissions.accessAdminModule;
+      if (tabId === 'dashboard') return !!m.permissions.accessDashboard;
     }
 
+    // Lista padrão de fallback para membros comuns sem registo explícito de permissões
     return ['inicio', 'membro-dashboard', 'cycles', 'reports'].includes(tabId);
   };
 
@@ -264,8 +339,9 @@ export default function App() {
     { id: 'membro-dashboard', label: 'Minha Área', icon: <Users className="w-3.5 h-3.5" /> },
     { id: 'members', label: 'Cadastro', icon: <Users className="w-3.5 h-3.5" /> },
     { id: 'cycles', label: 'Pagamentos', icon: <Coins className="w-3.5 h-3.5" /> },
+    { id: 'credit-management', label: 'Créditos', icon: <Coins className="w-3.5 h-3.5" /> },
     { id: 'reports', label: 'Relatórios', icon: <FileText className="w-3.5 h-3.5" /> },
-    { id: 'admin-module', label: 'Administração', icon: <ShieldCheck className="w-3.5 h-3.5" /> },
+    { id: 'admin-module', label: 'Administração', icon: <ShieldCheck className="w-3.5 h-3.5 text-rose-500 font-bold" /> },
   ];
 
   const allowedNavigationItems = allNavigationItems.filter(item => isAllowed(item.id));
@@ -335,6 +411,10 @@ export default function App() {
     adminPrivilegeCanDelete?: boolean;
     adminPrivilegeCanRefund?: boolean;
     adminPrivilegeCanForcePayout?: boolean;
+    contractClauseJuros?: string;
+    contractClauseMultas?: string;
+    contractClauseGarantias?: string;
+    contractTemplateWhole?: string;
   }
 
   const [appConfig, setAppConfig] = useState<AppConfig>(() => {
@@ -343,7 +423,7 @@ export default function App() {
       bankName: 'Banco BIC Angola',
       bankIban: 'AO06 0040 0000 7834 8291 1014 9',
       phone: '925204065',
-      email: 'geral.kurkita.ao',
+      email: 'geral@kixfundo.ao',
       showFlowChart: true,
       showAllocationChart: true,
       showStatsCards: true,
@@ -355,6 +435,35 @@ export default function App() {
       adminPrivilegeCanDelete: true,
       adminPrivilegeCanRefund: true,
       adminPrivilegeCanForcePayout: false,
+      contractClauseJuros: 'O montante principal do empréstimo será reembolsado no prazo improrrogável de {PRAZO_MESES} meses, computados juros ordinários prefixados à taxa de {TAXA_JUROS}% ao mês (revertendo os rendimentos de juro integralmente para o fundo colectivo de interajuda). A amortização far-se-á em {PRAZO_MESES} prestações mensais, sucessivas e indivisíveis no montante exato de {MENSALIDADE} cada uma, vencendo a primeira parcela em {DATA_PRIMEIRA_PARCELA} e as demais em igual dia dos meses subsequentes.',
+      contractClauseMultas: 'O atraso no pagamento de qualquer prestação mensal ativará juros de mora acumuláveis de 2% (dois por cento) ao dia sobre o montante da parcela em atraso, contados a partir do dia seguinte ao do vencimento, sem prejuízo da cobrança coerciva do saldo global.',
+      contractClauseGarantias: 'Como garantia incondicional de pagamento do principal, juros e sanções aplicáveis, o DEVEDOR oferece na modalidade de penhor mercantil ou custódia fiduciária preventiva os seguintes bens e colaterais: {GARANTIAS}. O devedor declara de livre e espontânea vontade que os bens descritos possuem valor comercial condizente com a dívida e autoriza e outorga expressamente e sem reservas o CREDOR "KIXI-FUNDO" a proceder à apreensão, adjudicação judicial ou venda extrajudicial do bem acima descrito para liquidar o saldo devedor e cobrir os custos operacionais caso o inadimplemento ultrapasse 30 (trinta) dias de atraso.',
+      contractTemplateWhole: `CONTRATO DE MÚTUO FINANCEIRO COM JUROS E PENHOR DE GARANTIA
+
+Por este instrumento particular de contrato, de um lado:
+CREDOR: KIXI-FUNDO - Associação Cooperativa de Poupança e Interajuda Coletiva, doravante denominado "KIXI-FUNDO", representado neste ato pelo(a) Gestor(a) de Turno / Representante do Fundo logado no sistema: {REPRESENTANTE}.
+
+Do outro lado:
+DEVEDOR(A): {BENEFICIARIO}, titular do BI/NIF nº {DOCUMENTO_ID}, residente e domiciliado em Angola, com o contacto telefónico nº {TELEFONE} e e-mail {EMAIL}.
+
+As partes devidamente identificadas e qualificadas resolvem celebrar o presente contrato de mútuo com garantia de penhor de comum acordo, em conformidade com o código civil em vigor em Angola e pelas cláusulas e condições seguintes:
+
+CLÁUSULA PRIMEIRA - DO OBJETO E CAPITAL
+O CREDOR concede nesta data ao DEVEDOR uma operação de microcrédito sob a forma de empréstimo (mútuo) do montante principal de {VALOR_EMPRESTIMO}, cujo capital é desembolsado nesta data para aplicação empresarial ou familiar.
+
+CLÁUSULA SEGUNDA - DOS JUROS, AMORTIZAÇÃO E ENCARGOS
+{CLAUSULA_JUROS}
+
+CLÁUSULA TERCEIRA - DA GARANTIA REAL (PENHOR FIDUCIÁRIO)
+{CLAUSULA_GARANTIAS}
+
+CLÁUSULA QUARTA - DOS RISCOS E MORA JURÍDICA
+{CLAUSULA_MULTAS}
+
+CLÁUSULA QUINTA - FORO E ASSINATURAS
+Para dirimir quaisquer controvérsias decorrentes da interpretação ou execução deste instrumento de crédito, as partes de comum acordo elegem o foro da Comarca de Luanda, Angola, com renúncia expressa a qualquer outro.
+
+E, por estarem de pleno acordo, as partes celebram e validam eletromagneticamente o presente contrato que passa a reger os direitos mútuos.`,
     };
     if (saved) {
       try {
@@ -375,7 +484,8 @@ export default function App() {
         logs,
         payoutsCompleted,
         currentMonth,
-        appConfig
+        appConfig,
+        loans
       }).then(() => {
         setIsDbSyncing(false);
       }).catch((err) => {
@@ -491,6 +601,10 @@ export default function App() {
           console.log("Dados carregados da Base de Dados Cloud com Sucesso!");
           if (dbState.members) setMembers(dbState.members);
           if (dbState.logs) setLogs(dbState.logs);
+          if (dbState.loans) {
+            setLoans(dbState.loans);
+            localStorage.setItem('kix_loans', JSON.stringify(dbState.loans));
+          }
           if (dbState.payoutsCompleted) {
             const parsedPayouts: { [month: number]: boolean } = {};
             Object.entries(dbState.payoutsCompleted).forEach(([k, v]) => {
@@ -521,24 +635,28 @@ export default function App() {
           const savedLogs = localStorage.getItem('kix_logs');
           const savedPayouts = localStorage.getItem('kix_payouts');
           const savedCurrentMonth = localStorage.getItem('kix_current_month');
+          const savedLoans = localStorage.getItem('kix_loans');
 
           const finalMembers = savedMembers ? JSON.parse(savedMembers) : INITIAL_MEMBERS;
           const finalLogs = savedLogs ? JSON.parse(savedLogs) : INITIAL_LOGS;
           const finalPayouts = savedPayouts ? JSON.parse(savedPayouts) : defaultPayouts;
           const finalMonth = savedCurrentMonth ? Number(savedCurrentMonth) : 1;
+          const finalLoans = savedLoans ? JSON.parse(savedLoans) : loans;
 
           await saveStateToFirestore({
             members: finalMembers,
             logs: finalLogs,
             payoutsCompleted: finalPayouts,
             currentMonth: finalMonth,
-            appConfig: appConfig
+            appConfig: appConfig,
+            loans: finalLoans
           });
           
           setMembers(finalMembers);
           setLogs(finalLogs);
           setPayoutsCompleted(finalPayouts);
           setCurrentMonth(finalMonth);
+          setLoans(finalLoans);
         }
       } catch (err) {
         console.warn("Leitura em segundo plano da Cloud falhou (operando offline):", err);
@@ -554,7 +672,7 @@ export default function App() {
               setCurrentUser(parsed);
               setActiveTab('inicio');
             } catch (err) {
-              // Safe fail
+               // Safe fail
             }
           }
         }
@@ -566,11 +684,12 @@ export default function App() {
   }, []);
 
   // Sync to local storage and Cloud database on changes
-  const saveState = (newMembers: Member[], newLogs: KixLog[], newPayouts = payoutsCompleted, newMonth = currentMonth) => {
+  const saveState = (newMembers: Member[], newLogs: KixLog[], newPayouts = payoutsCompleted, newMonth = currentMonth, newLoans = loans) => {
     localStorage.setItem('kix_members', JSON.stringify(newMembers));
     localStorage.setItem('kix_logs', JSON.stringify(newLogs));
     localStorage.setItem('kix_payouts', JSON.stringify(newPayouts));
     localStorage.setItem('kix_current_month', String(newMonth));
+    localStorage.setItem('kix_loans', JSON.stringify(newLoans));
 
     // Save to Firestore Cloud database to run app outside of standard isolated browser
     setIsDbSyncing(true);
@@ -579,7 +698,8 @@ export default function App() {
       logs: newLogs,
       payoutsCompleted: newPayouts,
       currentMonth: newMonth,
-      appConfig: appConfig
+      appConfig: appConfig,
+      loans: newLoans
     }).then(() => {
       setIsDbSyncing(false);
     }).catch((err) => {
@@ -708,6 +828,24 @@ export default function App() {
     const updatedLogs = [newLog, ...logs];
     setLogs(updatedLogs);
     saveState(members, updatedLogs, payoutsCompleted, monthNum);
+  };
+
+  // Update members and month schedules
+  const handleUpdateMembersFromSchedules = (updatedMembers: Member[], changedMonth: number) => {
+    setMembers(updatedMembers);
+    
+    const newLog: KixLog = {
+      id: `log-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      type: 'member_management',
+      amount: 0,
+      description: `ADMINISTRADOR reorganizou os beneficiários de faturamento do Mês ${changedMonth}.`,
+      month: changedMonth,
+    };
+    
+    const updatedLogs = [newLog, ...logs];
+    setLogs(updatedLogs);
+    saveState(updatedMembers, updatedLogs, payoutsCompleted, currentMonth);
   };
 
   // Toggle contribution status of a member for the current active month
@@ -852,6 +990,77 @@ export default function App() {
     setMembers(updatedMembers);
     setLogs(updatedLogs);
     saveState(updatedMembers, updatedLogs);
+  };
+
+  // Credit loan event handlers
+  const handleAddLoan = (newLoan: Loan) => {
+    const updatedLoans = [...loans, newLoan];
+    setLoans(updatedLoans);
+
+    const newLog: KixLog = {
+      id: `loan-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      type: 'policy_change',
+      amount: newLoan.amountRequested,
+      memberName: newLoan.borrowerName,
+      description: `CRÉDITO ADERIDO: Sócio/Cliente ${newLoan.borrowerName} celebrou contrato de crédito nº ${newLoan.id}. Montante: ${formatCurrency(newLoan.amountRequested)} com taxa de juro de ${newLoan.interestRate}%. Garantia: ${newLoan.guarantees}.`,
+      month: currentMonth,
+    };
+
+    const updatedLogs = [newLog, ...logs];
+    setLogs(updatedLogs);
+    saveState(members, updatedLogs, payoutsCompleted, currentMonth, updatedLoans);
+  };
+
+  const handlePayInstallment = (loanId: string, paymentMonth: number) => {
+    const targetLoan = loans.find(l => l.id === loanId);
+    if (!targetLoan) return;
+
+    const updatedLoans = loans.map((loan) => {
+      if (loan.id === loanId) {
+        const updatedPayments = loan.payments.map((p) => {
+          if (p.month === paymentMonth) {
+            const hasPaid = p.paid;
+            return {
+              ...p,
+              paid: !hasPaid,
+              paidAt: !hasPaid ? new Date().toISOString() : undefined,
+            };
+          }
+          return p;
+        });
+
+        const allPaid = updatedPayments.every(p => p.paid);
+        const status = allPaid ? 'completed' : 'active';
+
+        return {
+          ...loan,
+          status,
+          payments: updatedPayments,
+        };
+      }
+      return loan;
+    }) as Loan[];
+
+    const payment = targetLoan.payments.find(p => p.month === paymentMonth);
+    const wasPaid = payment ? payment.paid : false;
+
+    const newLog: KixLog = {
+      id: `pay-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      type: 'contribution',
+      memberName: targetLoan.borrowerName,
+      amount: payment ? payment.amount : 0,
+      month: currentMonth,
+      description: !wasPaid
+        ? `AMORTIZAÇÃO EFECTUADA: Prestação nº ${paymentMonth} recebida de ${targetLoan.borrowerName} (${targetLoan.borrowerType === 'socio' ? 'sócio' : 'singular'}). Montante Total: ${formatCurrency(payment ? payment.amount : 0)} (Amortização: ${formatCurrency(payment ? payment.principalPaid : 0)} • Juros auferidos: ${formatCurrency(payment ? payment.interestPaid : 0)}).`
+        : `AMORTIZAÇÃO ANULADA: Pagamento da prestação nº ${paymentMonth} de ${targetLoan.borrowerName} foi cancelado administrativamente.`,
+    };
+
+    const updatedLogs = [newLog, ...logs];
+    setLoans(updatedLoans);
+    setLogs(updatedLogs);
+    saveState(members, updatedLogs, payoutsCompleted, currentMonth, updatedLoans);
   };
 
   // Core Math Calculations
@@ -1193,87 +1402,178 @@ export default function App() {
               })}
             </div>
 
-            {/* Mobile Navigation Dropdown Box (flex on mobile, hidden on desktop) */}
-            <div className="flex md:hidden flex-1 justify-center max-w-[200px] relative" id="kix-mobile-nav-container">
+            {/* Mobile Actions and Controls Row (visible only on mobile) */}
+            <div className="flex md:hidden items-center gap-2 shrink-0">
+              {/* Moon / Sun minimal theme selector for quick access on mobile */}
               <button
-                onClick={() => setIsMenuOpen(!isMenuOpen)}
-                className="flex items-center justify-between w-full bg-white/10 hover:bg-white/15 text-white active:scale-95 transition-all duration-200 rounded-xl px-2.5 py-1.5 text-[11px] font-bold border border-white/10 cursor-pointer shadow-inner gap-1"
-                id="kix-mobile-toggle-btn"
+                onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+                title={theme === 'light' ? 'Mudar para Escuro' : 'Mudar para Claro'}
+                className="p-2 rounded-xl bg-white/10 hover:bg-white/15 text-white transition-all cursor-pointer flex items-center justify-center shrink-0 w-8.5 h-8.5 border border-white/10"
               >
-                <div className="flex items-center gap-1.5 overflow-hidden truncate">
-                  {activeTabItem ? (
-                    <>
-                      <span className="shrink-0 text-amber-300">{activeTabItem.icon}</span>
-                      <span className="truncate">{activeTabItem.id === 'membro-dashboard' ? 'Minha Área' : activeTabItem.label}</span>
-                    </>
-                  ) : (
-                    <span>Menu</span>
-                  )}
-                </div>
-                <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-80" />
+                {theme === 'light' ? (
+                  <Moon className="w-4 h-4 text-white" />
+                ) : (
+                  <Sun className="w-4 h-4 text-amber-300 animate-pulse" />
+                )}
               </button>
 
-              {/* Mobile searchable menu panel */}
-              {isMenuOpen && (
-                <div 
-                  className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 w-56 rounded-2xl p-3 shadow-2xl border backdrop-blur-md z-50 flex flex-col gap-2 bg-white dark:bg-slate-900 border-slate-250 dark:border-slate-800 text-slate-800 dark:text-slate-100"
-                  id="kix-mobile-nav-dropdown"
+              {/* Mobile Navigation Dropdown Trigger Box */}
+              <div className="relative" id="kix-mobile-nav-container">
+                <button
+                  onClick={() => setIsMenuOpen(!isMenuOpen)}
+                  className="flex items-center justify-between bg-white/10 hover:bg-white/15 text-white active:scale-95 transition-all duration-200 rounded-xl px-3 py-2 text-[11.5px] font-extrabold border border-white/10 cursor-pointer shadow-inner gap-1.5 h-8.5"
+                  id="kix-mobile-toggle-btn"
                 >
-                  <div className="relative">
-                    <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
-                    <input
-                      type="text"
-                      placeholder="Pesquisar menu..."
-                      value={menuSearchQuery}
-                      onChange={(e) => setMenuSearchQuery(e.target.value)}
-                      className="w-full pl-8 pr-7 py-1 text-xs rounded-xl border border-slate-250 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 focus:outline-none focus:ring-1.5 focus:ring-sky-500 text-slate-950 dark:text-slate-50 placeholder:text-slate-400 font-sans"
-                      id="kix-menu-search-input"
-                      autoFocus
-                    />
-                    {menuSearchQuery && (
-                      <button
-                        onClick={() => setMenuSearchQuery('')}
-                        className="absolute right-2 top-1.5 text-slate-400 hover:text-slate-600 cursor-pointer"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="max-h-52 overflow-y-auto space-y-1 mt-1 pr-0.5">
-                    {filteredNavigationItems.length === 0 ? (
-                      <div className="text-center text-[11px] text-slate-500 py-4 font-sans">Menu não encontrado</div>
+                  <div className="flex items-center gap-1.5 overflow-hidden max-w-[84px] truncate">
+                    {activeTabItem ? (
+                      <>
+                        <span className="shrink-0 text-amber-300">{activeTabItem.icon}</span>
+                        <span className="truncate">{activeTabItem.id === 'membro-dashboard' ? 'Minha Área' : activeTabItem.label}</span>
+                      </>
                     ) : (
-                      filteredNavigationItems.map((item) => {
-                        const isActive = activeTab === item.id;
-                        return (
-                          <button
-                            key={item.id}
-                            onClick={() => {
-                              setActiveTab(item.id);
-                              setIsMenuOpen(false);
-                              setMenuSearchQuery('');
-                            }}
-                            className={`w-full text-left px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all duration-200 cursor-pointer ${
-                              isActive
-                                ? 'bg-sky-500/10 text-sky-700 dark:text-sky-450 border border-sky-500/10'
-                                : 'hover:bg-slate-55 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300'
-                            }`}
-                            id={`kix-mobile-nav-item-${item.id}`}
-                          >
-                            <span className={`${isActive ? 'text-sky-600 dark:text-sky-400' : 'text-slate-450 dark:text-slate-550'}`}>{item.icon}</span>
-                            <span>{item.id === 'membro-dashboard' ? 'Minha Área' : item.label}</span>
-                          </button>
-                        );
-                      })
+                      <span>Menu</span>
                     )}
                   </div>
-                </div>
-              )}
-            </div>
+                  <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-80" />
+                </button>
 
-            {/* Right side status instruments - extremely compact */}
-            <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+                {/* Mobile searchable menu panel (properly right-aligned to fit smart screens perfectly without overflow) */}
+                {isMenuOpen && (
+                  <div 
+                    className="absolute right-0 top-full mt-2 w-64 rounded-2xl p-4 shadow-2xl border backdrop-blur-md z-50 flex flex-col gap-3 bg-white dark:bg-slate-900 border-slate-205 dark:border-slate-800 text-slate-800 dark:text-slate-100 animate-in fade-in slide-in-from-top-2 duration-150"
+                    id="kix-mobile-nav-dropdown"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Pesquisar menu..."
+                        value={menuSearchQuery}
+                        onChange={(e) => setMenuSearchQuery(e.target.value)}
+                        className="w-full pl-8 pr-7 py-1 text-xs rounded-xl border border-slate-250 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/80 focus:outline-none focus:ring-1.5 focus:ring-sky-500 text-slate-950 dark:text-slate-50 placeholder:text-slate-405 font-sans"
+                        id="kix-menu-search-input"
+                        autoFocus
+                      />
+                      {menuSearchQuery && (
+                        <button
+                          onClick={() => setMenuSearchQuery('')}
+                          className="absolute right-2 top-1.5 text-slate-450 hover:text-slate-600 cursor-pointer"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="max-h-52 overflow-y-auto space-y-1 mt-1 pr-0.5">
+                      {filteredNavigationItems.length === 0 ? (
+                        <div className="text-center text-[11px] text-slate-500 py-4 font-sans">Menu não encontrado</div>
+                      ) : (
+                        filteredNavigationItems.map((item) => {
+                          const isActive = activeTab === item.id;
+                          return (
+                            <button
+                              key={item.id}
+                              onClick={() => {
+                                setActiveTab(item.id);
+                                setIsMenuOpen(false);
+                                setMenuSearchQuery('');
+                              }}
+                              className={`w-full text-left px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-2 transition-all duration-200 cursor-pointer ${
+                                isActive
+                                  ? 'bg-sky-500/10 text-sky-700 dark:text-sky-400 border border-sky-500/10'
+                                  : 'hover:bg-slate-50 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300'
+                              }`}
+                              id={`kix-mobile-nav-item-${item.id}`}
+                            >
+                              <span className={`${isActive ? 'text-sky-600 dark:text-sky-450' : 'text-slate-400 dark:text-slate-500'}`}>{item.icon}</span>
+                              <span>{item.id === 'membro-dashboard' ? 'Minha Área' : item.label}</span>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+
+                    {/* Mobile Only: Status Metrics and Controls panel */}
+                    <div className="border-t border-slate-100 dark:border-slate-800/80 pt-3 mt-1.5 space-y-3">
+                      {/* Connection row */}
+                      <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                        <div 
+                          className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[8.5px] font-black leading-none ${
+                            isOnline 
+                              ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' 
+                              : 'bg-amber-500/10 text-amber-500'
+                          }`}
+                          title={isOnline ? 'Online' : 'Offline'}
+                        >
+                          <div className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-amber-400 animate-pulse'}`} />
+                          <span>{isOnline ? 'CONEXÃO EXCELENTE' : 'SINAL OFFLINE'}</span>
+                        </div>
+
+                        <div 
+                          className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[8.5px] font-black leading-none ${
+                            isDbSyncing 
+                              ? 'bg-emerald-500/15 text-emerald-500' 
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                          }`}
+                        >
+                          <Cloud className={`w-3 h-3 ${isDbSyncing ? 'animate-spin' : ''}`} />
+                          <span>DATABASE GLOBAL</span>
+                        </div>
+                      </div>
+
+                      {/* Pending Backup synchronizer bar inside Menu */}
+                      {appConfig.autoBackUpGDrive === true && pendingSyncCount > 0 && (
+                        <button
+                          onClick={() => {
+                            handleSyncPendingChanges(false);
+                            setIsMenuOpen(false);
+                          }}
+                          disabled={isSyncingPending}
+                          className="w-full flex items-center justify-between p-2 rounded-xl text-[10px] font-bold bg-amber-500/10 hover:bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-550/20 active:scale-95 transition-all cursor-pointer"
+                        >
+                          <div className="flex items-center gap-1.5">
+                            {isSyncingPending ? (
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-500" />
+                            ) : (
+                              <CloudOff className="w-3.5 h-3.5 shrink-0" />
+                            )}
+                            <span>Sincronizar Pendentes</span>
+                          </div>
+                          <span className="font-mono bg-amber-500/20 px-1.5 py-0.2 rounded-md font-black">{pendingSyncCount}</span>
+                        </button>
+                      )}
+
+                      {/* Regulations modal trigger */}
+                      <button
+                        onClick={() => {
+                          setShowRegulations(true);
+                          setIsMenuOpen(false);
+                        }}
+                        className="w-full bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 border-2 border-dashed border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 font-extrabold text-[10.5px] tracking-wider py-2.5 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 shrink-0"
+                      >
+                        <BookOpen className="w-4 h-4 text-emerald-500" />
+                        <span>NORMATIVOS DO KIX</span>
+                      </button>
+
+                      {/* Logout button */}
+                      <button
+                        onClick={() => {
+                          localStorage.removeItem('kix_current_user');
+                          setCurrentUser(null);
+                        }}
+                        className="w-full bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-[10.5px] uppercase tracking-wider py-2.5 rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        <span>Sair da Conta (Logout)</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            {/* Desktop Only status instruments - hidden on mobile, compact on desktop */}
+            <div className="hidden md:flex items-center gap-1.5 sm:gap-2.5 shrink-0">
 
               {/* Cloud DB Sync Status Badge */}
               <div 
@@ -1347,7 +1647,7 @@ export default function App() {
                 <span className="hidden sm:inline">NORMATIVOS</span>
               </button>
 
-              {/* Moon / Sun minimal theme selector */}
+              {/* Moon / Sun theme selector */}
               <button
                 onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
                 title={theme === 'light' ? 'Mudar para Escuro' : 'Mudar para Claro'}
@@ -1371,7 +1671,6 @@ export default function App() {
                 <LogOut className="w-3 h-3" />
                 <span className="hidden sm:inline">SAIR</span>
               </button>
-
             </div>
 
           </div>
@@ -1404,7 +1703,7 @@ export default function App() {
         </AnimatePresence>
 
         {/* Sidebar Tab Filter Switch Content panel */}
-        <main className="flex-1 p-6 pb-36 space-y-8 overflow-y-auto">
+        <main className="flex-1 p-4 sm:p-6 pb-36 space-y-8 overflow-y-auto">
           
           <AnimatePresence mode="wait">
             {activeTab === 'inicio' && (
@@ -1579,6 +1878,7 @@ export default function App() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
+                  className="space-y-6 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8"
                 >
                   {currentUser?.role === 'admin' && (
                     <div className="mb-6 p-5 bg-amber-500/10 dark:bg-amber-500/5 border border-amber-550/25 dark:border-amber-500/15 rounded-2xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
@@ -1636,6 +1936,7 @@ export default function App() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
+                className="space-y-6 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8"
               >
                 <MembersTable
                   currentMonth={currentMonth}
@@ -1779,6 +2080,7 @@ export default function App() {
                       onSelectCycle={handleSelectCycle}
                       payoutDoneMap={payoutsCompleted}
                       isAdmin={currentUser.role === 'admin'}
+                      onUpdateMembers={handleUpdateMembersFromSchedules}
                     />
                   </div>
                 )}
@@ -1791,6 +2093,7 @@ export default function App() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
+                className="space-y-6 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8"
               >
                 <SocialFundSection
                   members={members}
@@ -1808,6 +2111,7 @@ export default function App() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
+                className="space-y-6 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8"
               >
                 <AdminModule
                   currentMonth={currentMonth}
@@ -1830,12 +2134,33 @@ export default function App() {
               </motion.div>
             )}
 
+            {activeTab === 'credit-management' && (
+              <motion.div
+                key="credit-management"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="space-y-6 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8"
+              >
+                <CreditManagement
+                  loans={loans}
+                  members={members}
+                  onAddLoan={handleAddLoan}
+                  onPayInstallment={handlePayInstallment}
+                  currentUser={currentUser}
+                  currentMonth={currentMonth}
+                  appConfig={appConfig}
+                />
+              </motion.div>
+            )}
+
             {activeTab === 'reports' && (
               <motion.div
                 key="reports"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
+                className="space-y-6 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8"
               >
                 <ReportsSection
                   currentMonth={currentMonth}

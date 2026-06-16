@@ -74,13 +74,6 @@ export default function LoginScreen({ members, onLogin, userEmail, onResetPasswo
   const [identifiedUser, setIdentifiedUser] = useState('');
   const [showRegulations, setShowRegulations] = useState(false);
 
-  // Auto-fill user email from metadata if provided
-  useEffect(() => {
-    if (userEmail) {
-      setEmail(userEmail);
-    }
-  }, [userEmail]);
-
   // Rotates high contrast phrases in the carrossel every 8 seconds
   useEffect(() => {
     const timer = setInterval(() => {

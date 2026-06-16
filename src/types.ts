@@ -10,12 +10,14 @@ export interface Member {
   tempPassword?: string; // temporary password defined by administrator
   assignedMonth: number; // 1 to 6 (the month when they receive the 600,000.00)
   permissions?: {
+    accessInicio?: boolean;
     accessDashboard?: boolean;
     accessMembersList?: boolean;
     accessCycles?: boolean;
     accessSocial?: boolean;
     accessAudit?: boolean;
     accessAdminModule?: boolean;
+    accessReports?: boolean;
   };
   contributions: {
     [month: number]: {
@@ -97,4 +99,31 @@ export interface CarouselSlide {
   tag?: string;
 }
 
+export interface LoanPayment {
+  month: number; // e.g. Month 1, Month 2
+  dueDate: string;
+  amount: number; // total monthly installment
+  interestPaid: number;
+  principalPaid: number;
+  paid: boolean;
+  paidAt?: string;
+}
 
+export interface Loan {
+  id: string; // unique contract code L-XXXX
+  borrowerName: string;
+  borrowerType: 'socio' | 'singular';
+  memberId?: number; // linked member ID if borrowerType is 'socio'
+  documentId: string; // BI / NIF
+  phone: string;
+  email: string;
+  amountRequested: number;
+  interestRate: number; // monthly interest rate (e.g. 6%)
+  durationMonths: number; // duration (1 to 12 months)
+  guarantees: string; // collateral or physical guarantee
+  status: 'active' | 'completed' | 'overdue';
+  contractDate: string;
+  payments: LoanPayment[];
+  representativeName?: string;
+  customLegalTerms?: string;
+}

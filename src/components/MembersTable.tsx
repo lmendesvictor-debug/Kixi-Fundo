@@ -88,12 +88,14 @@ export default function MembersTable({
   const [errorMsg, setErrorMsg] = useState('');
 
   // Permission toggles state
+  const [permInicio, setPermInicio] = useState(true);
   const [permDashboard, setPermDashboard] = useState(false);
   const [permMembersList, setPermMembersList] = useState(false);
   const [permCycles, setPermCycles] = useState(true);
   const [permSocial, setPermSocial] = useState(true);
   const [permAudit, setPermAudit] = useState(false);
   const [permAdminModule, setPermAdminModule] = useState(false);
+  const [permReports, setPermReports] = useState(true);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeAdminUploadId, setActiveAdminUploadId] = useState<number | null>(null);
@@ -256,19 +258,23 @@ export default function MembersTable({
   const handleRoleChange = (newRole: 'admin' | 'membro') => {
     setRole(newRole);
     if (newRole === 'admin') {
+      setPermInicio(true);
       setPermDashboard(true);
       setPermMembersList(true);
       setPermCycles(true);
       setPermSocial(true);
       setPermAudit(true);
       setPermAdminModule(true);
+      setPermReports(true);
     } else {
+      setPermInicio(true);
       setPermDashboard(false);
       setPermMembersList(false);
       setPermCycles(true);
       setPermSocial(true);
       setPermAudit(false);
       setPermAdminModule(false);
+      setPermReports(true);
     }
   };
 
@@ -285,12 +291,14 @@ export default function MembersTable({
     setCurrentMonthState('pending');
     setAvatarImage('');
     setAvatarColor(AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)]);
+    setPermInicio(true);
     setPermDashboard(false);
     setPermMembersList(false);
     setPermCycles(true);
     setPermSocial(true);
     setPermAudit(false);
     setPermAdminModule(false);
+    setPermReports(true);
     setErrorMsg('');
     setShowFormModal(true);
   };
@@ -307,12 +315,14 @@ export default function MembersTable({
     setCurrentMonthState(m.contributions[currentMonth]?.paid ? 'paid' : 'pending');
     setAvatarImage(m.avatarImage || '');
     setAvatarColor(m.avatarColor);
+    setPermInicio(m.permissions?.accessInicio ?? true);
     setPermDashboard(m.permissions?.accessDashboard ?? (m.role === 'admin'));
     setPermMembersList(m.permissions?.accessMembersList ?? (m.role === 'admin'));
     setPermCycles(m.permissions?.accessCycles ?? true);
     setPermSocial(m.permissions?.accessSocial ?? true);
     setPermAudit(m.permissions?.accessAudit ?? (m.role === 'admin'));
     setPermAdminModule(m.permissions?.accessAdminModule ?? (m.role === 'admin'));
+    setPermReports(m.permissions?.accessReports ?? true);
     setErrorMsg('');
     setShowFormModal(true);
   };
@@ -357,12 +367,14 @@ export default function MembersTable({
             avatarImage,
             bankIban: bankIban.trim(),
             permissions: {
+              accessInicio: permInicio,
               accessDashboard: permDashboard,
               accessMembersList: permMembersList,
               accessCycles: permCycles,
               accessSocial: permSocial,
               accessAudit: permAudit,
               accessAdminModule: permAdminModule,
+              accessReports: permReports,
             },
             contributions: {
               ...m.contributions,
@@ -410,12 +422,14 @@ export default function MembersTable({
         assignedMonth,
         bankIban: bankIban.trim(),
         permissions: {
+          accessInicio: permInicio,
           accessDashboard: permDashboard,
           accessMembersList: permMembersList,
           accessCycles: permCycles,
           accessSocial: permSocial,
           accessAudit: permAudit,
           accessAdminModule: permAdminModule,
+          accessReports: permReports,
         },
         contributions: {
           1: { paid: false },
@@ -583,12 +597,12 @@ export default function MembersTable({
             className="w-full px-2.5 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-white font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500"
           >
             <option value="all">Mês Contemplação: Todos</option>
-            <option value="1">Mês 01 (Janeiro)</option>
-            <option value="2">Mês 02 (Fevereiro)</option>
-            <option value="3">Mês 03 (Março)</option>
-            <option value="4">Mês 04 (Abril)</option>
-            <option value="5">Mês 05 (Maio)</option>
-            <option value="6">Mês 06 (Junho)</option>
+            <option value="1">Mês 01 (Março)</option>
+            <option value="2">Mês 02 (Abril)</option>
+            <option value="3">Mês 03 (Maio)</option>
+            <option value="4">Mês 04 (Junho)</option>
+            <option value="5">Mês 05 (Julho)</option>
+            <option value="6">Mês 06 (Agosto)</option>
           </select>
         </div>
       </div>
@@ -1147,6 +1161,138 @@ export default function MembersTable({
                           onChange={(e) => setTempPassword(e.target.value)}
                           className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 focus:outline-none font-mono font-medium"
                         />
+                      </div>
+                    </div>
+
+                    {/* Checkboxes de permissões de módulos */}
+                    <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 space-y-3 mt-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black uppercase text-slate-500 tracking-wider">
+                          🛠️ Permissões de Acesso por Módulo (Membro Comum)
+                        </span>
+                        {role === 'admin' && (
+                          <span className="text-[8px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full font-bold">Administrador tem acesso irrestrito</span>
+                        )}
+                      </div>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {/* Tab Início */}
+                        <label className="flex items-start gap-2.5 p-2 bg-white rounded-lg border border-slate-100 hover:border-indigo-100 transition cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={role === 'admin' ? true : permInicio}
+                            disabled={role === 'admin'}
+                            onChange={(e) => setPermInicio(e.target.checked)}
+                            className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <div>
+                            <p className="font-bold text-slate-800 text-[10.5px]">Módulo Início</p>
+                            <p className="text-[9px] text-[#2563EB] font-medium leading-tight">Painel inicial geral e boas-vindas do fundo.</p>
+                          </div>
+                        </label>
+
+                        {/* Tab Minha Área (Excepted) */}
+                        <div className="flex items-start gap-2.5 p-2 bg-slate-100/50 rounded-lg border border-slate-200 select-none">
+                          <input
+                            type="checkbox"
+                            checked={true}
+                            disabled={true}
+                            className="mt-0.5 rounded border-slate-300 text-slate-400"
+                          />
+                          <div>
+                            <p className="font-bold text-slate-650 text-[10.5px]">Minha Área</p>
+                            <span className="inline-block text-[8px] font-black text-[#10B981] bg-emerald-50 px-1.5 py-0.5 rounded uppercase mt-0.5">Acesso Permanente</span>
+                          </div>
+                        </div>
+
+                        {/* Tab Cadastro */}
+                        <label className="flex items-start gap-2.5 p-2 bg-white rounded-lg border border-slate-100 hover:border-indigo-100 transition cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={role === 'admin' ? true : permMembersList}
+                            disabled={role === 'admin'}
+                            onChange={(e) => setPermMembersList(e.target.checked)}
+                            className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <div>
+                            <p className="font-bold text-slate-800 text-[10.5px]">Módulo Cadastro</p>
+                            <p className="text-[9px] text-[#2563EB] font-medium leading-tight">Visualizar e gerir perfis da lista de membros.</p>
+                          </div>
+                        </label>
+
+                        {/* Tab Pagamentos */}
+                        <label className="flex items-start gap-2.5 p-2 bg-white rounded-lg border border-slate-100 hover:border-indigo-100 transition cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={role === 'admin' ? true : permCycles}
+                            disabled={role === 'admin'}
+                            onChange={(e) => setPermCycles(e.target.checked)}
+                            className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <div>
+                            <p className="font-bold text-slate-800 text-[10.5px]">Módulo Pagamentos</p>
+                            <p className="text-[9px] text-[#2563EB] font-medium leading-tight">Preencher e liquidar quotas e ver sorteios.</p>
+                          </div>
+                        </label>
+
+                        {/* Tab Relatórios */}
+                        <label className="flex items-start gap-2.5 p-2 bg-white rounded-lg border border-slate-100 hover:border-indigo-100 transition cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={role === 'admin' ? true : permReports}
+                            disabled={role === 'admin'}
+                            onChange={(e) => setPermReports(e.target.checked)}
+                            className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <div>
+                            <p className="font-bold text-slate-800 text-[10.5px]">Módulo Relatórios</p>
+                            <p className="text-[9px] text-[#2563EB] font-medium leading-tight">Relatórios financeiros, balanços e extractos.</p>
+                          </div>
+                        </label>
+
+                        {/* Tab Administração */}
+                        <label className="flex items-start gap-2.5 p-2 bg-white rounded-lg border border-slate-100 hover:border-indigo-100 transition cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={role === 'admin' ? true : permAdminModule}
+                            disabled={role === 'admin'}
+                            onChange={(e) => setPermAdminModule(e.target.checked)}
+                            className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <div>
+                            <p className="font-bold text-slate-800 text-[10.5px]">Módulo Administração</p>
+                            <p className="text-[9px] text-[#2563EB] font-medium leading-tight">Acesso ao menu de configurações globais.</p>
+                          </div>
+                        </label>
+
+                        {/* Tab Créditos (Restricted in Dev for non-admin) */}
+                        <div className="flex items-start gap-2.5 p-2 bg-slate-100/50 rounded-lg border border-slate-200 select-none">
+                          <input
+                            type="checkbox"
+                            checked={role === 'admin'}
+                            disabled={true}
+                            className="mt-0.5 rounded border-slate-300 text-slate-400"
+                          />
+                          <div>
+                            <p className="font-bold text-slate-500 text-[10.5px]">Módulo Créditos</p>
+                            <span className="inline-block text-[8px] font-black text-rose-500 bg-rose-50 px-1.5 py-0.5 rounded uppercase mt-0.5 font-sans">Só Admin (Em Desenv.)</span>
+                          </div>
+                        </div>
+
+                        {/* Tab Outros (Painel Visual) */}
+                        <label className="flex items-start gap-2.5 p-2 bg-white rounded-lg border border-slate-100 hover:border-indigo-100 transition cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={role === 'admin' ? true : permDashboard}
+                            disabled={role === 'admin'}
+                            onChange={(e) => setPermDashboard(e.target.checked)}
+                            className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <div>
+                            <p className="font-bold text-slate-800 text-[10.5px]">Painel Visual de Gráficos</p>
+                            <p className="text-[9px] text-[#2563EB] font-medium leading-tight">Visualização analítica de fluxos e alocação.</p>
+                          </div>
+                        </label>
                       </div>
                     </div>
 

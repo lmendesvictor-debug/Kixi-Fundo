@@ -32,7 +32,7 @@ export default function FinanceEvolutionTimeline() {
   const timelineData: TimelineMonth[] = [
     {
       month: 1,
-      label: 'Mês 01 (Abril)',
+      label: 'Mês 01 (Março)',
       retained: 240000,
       disbursed: 0,
       balance: 240000,
@@ -41,7 +41,7 @@ export default function FinanceEvolutionTimeline() {
     },
     {
       month: 2,
-      label: 'Mês 02 (Maio)',
+      label: 'Mês 02 (Abril)',
       retained: 240000,
       disbursed: 50000,
       balance: 430000,
@@ -50,7 +50,7 @@ export default function FinanceEvolutionTimeline() {
     },
     {
       month: 3,
-      label: 'Mês 03 (Ciclo Ativo)',
+      label: 'Mês 03 (Maio - Ativo)',
       retained: 240000,
       disbursed: 0,
       balance: 670000,
@@ -59,7 +59,7 @@ export default function FinanceEvolutionTimeline() {
     },
     {
       month: 4,
-      label: 'Mês 04 (Julho)',
+      label: 'Mês 04 (Junho)',
       retained: 240000,
       disbursed: 0,
       balance: 910000,
@@ -68,7 +68,7 @@ export default function FinanceEvolutionTimeline() {
     },
     {
       month: 5,
-      label: 'Mês 05 (Agosto)',
+      label: 'Mês 05 (Julho)',
       retained: 240000,
       disbursed: 0,
       balance: 1150000,
@@ -77,7 +77,7 @@ export default function FinanceEvolutionTimeline() {
     },
     {
       month: 6,
-      label: 'Mês 06 (Setembro)',
+      label: 'Mês 06 (Agosto)',
       retained: 240000,
       disbursed: 0,
       balance: 1390000,
