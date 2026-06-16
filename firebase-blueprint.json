@@ -1,0 +1,49 @@
+{
+  "entities": {
+    "KixFundoState": {
+      "title": "KixFundoState",
+      "description": "Estojo completo do estado operacional e financeiro do Kixi-Fundo",
+      "type": "object",
+      "properties": {
+        "currentMonth": {
+          "type": "integer",
+          "description": "Mês operacional corrente"
+        },
+        "payoutsCompleted": {
+          "type": "object",
+          "description": "Mapa dos pagamentos/contemplações mensais efetuadas"
+        },
+        "members": {
+          "type": "array",
+          "description": "Lista de cooperantes e suas respetivas quotas deduzidas"
+        },
+        "logs": {
+          "type": "array",
+          "description": "Audit trail de transações"
+        },
+        "appConfig": {
+          "type": "object",
+          "description": "Parâmetros globais de configuração do Painel"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Instante do último sincronismo na cloud"
+        }
+      },
+      "required": [
+        "currentMonth",
+        "payoutsCompleted",
+        "members",
+        "logs",
+        "appConfig"
+      ]
+    }
+  },
+  "firestore": {
+    "/kix_fundo/state": {
+      "schema": "KixFundoState",
+      "description": "Registro central persistente fora do browser para o Kixi-Fundo"
+    }
+  }
+}

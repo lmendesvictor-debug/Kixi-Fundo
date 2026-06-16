@@ -389,27 +389,40 @@ export default function ReportsSection({
   const getSimulatedMessage = () => {
     if (!matchedMember) return '';
     if (notificationType === 'receipt') {
-      return `Olá, *${matchedMember.name}*! A Direção do Kixi-Fundo confirma a validação da sua quota do *Mês de Referência 0${currentMonth}*. 
-
-💵 *Valor Pago:* 120.000,00 KZs
-🛡 *Retenção p/ Fundo de Apoio Social:* 20.000,00 KZs
-🏦 *Canal de Depósito:* Banco BIC Angola (IBAN AO06...10149)
-
-Pode consultar o seu comprovativo oficial em pdf no portal da associação: https://kixi-fundo.ao/recibos/m${currentMonth}/#id-${matchedMember.id}`;
+      return `Olá, *${matchedMember.name}*! A Direção do Kixi-Fundo confirma a validação da sua quota do *Mês de Referência 0${currentMonth}*. \n\n💵 *Valor Pago:* 120.000,00 KZs\n🛡 *Retenção p/ Fundo de Apoio Social:* 20.000,00 KZs\n🏦 *Canal de Depósito:* Banco BIC Angola (IBAN AO06...10149)\n\nPode consultar o seu comprovativo oficial em pdf no portal da associação: https://kixi-fundo.ao/recibos/m${currentMonth}/#id-${matchedMember.id}`;
     } else {
-      return `Olá, de Angola! Grande novidade, cooperante *${matchedMember.name}*! É com enorme prazer que informamos que o seu Mês de Recebimento de Rotação chegou (*Mês ${matchedMember.assignedMonth}*).
+      return `Olá, de Angola! Grande novidade, cooperante *${matchedMember.name}*! É com enorme prazer que informamos que o seu Mês de Recebimento de Rotação chegou (*Mês ${matchedMember.assignedMonth}*).\n\n💰 *Mês Contemplado:* Mês 0${matchedMember.assignedMonth}\n💸 *Benefício do Ciclo:* 600.000,00 KZs (Arrecadação Coletiva Transparente)\n🧾 *Comprovativo Fiscal:* BIC AO06_PAG_CONCORD_${matchedMember.id}.pdf\n📱 *Apoio WhatsApp:* +244 923 456 789\n\nAs verbas já estão depositadas e disponíveis! Agradecemos o contributo de todos!`;
+    }
+  };
 
-💰 *Mês Contemplado:* Mês 0${matchedMember.assignedMonth}
-💸 *Benefício do Ciclo:* 600.000,00 KZs (Arrecadação Coletiva Transparente)
-🧾 *Comprovativo Fiscal:* BIC AO06_PAG_CONCORD_${matchedMember.id}.pdf
-📱 *Apoio WhatsApp:* +244 923 456 789
-
-As verbas já estão depositadas e disponíveis! Agradecemos o contributo de todos!`;
+  // Get communication URL for real launching
+  const getSimulatedUrl = () => {
+    if (!matchedMember) return '';
+    const message = getSimulatedMessage();
+    if (notificationChannel === 'whatsapp') {
+      const cleanPhone = matchedMember.phone.replace(/\D/g, '');
+      return `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(message)}`;
+    } else {
+      const subject = notificationType === 'receipt' 
+        ? 'Confirmado: Comprovativo de Quota Kixi-Fundo' 
+        : `Aviso Importante: Benefício Kixi-Fundo (Mês ${matchedMember.assignedMonth})`;
+      return `mailto:${matchedMember.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
     }
   };
 
   const handleSendSimulate = () => {
     if (!matchedMember) return;
+    
+    // Open communication channel synchronously during the click handler so browser won't block popups
+    const openUrl = getSimulatedUrl();
+    if (openUrl) {
+      try {
+        window.open(openUrl, '_blank');
+      } catch (err) {
+        console.warn("Abertura automática de link bloqueada:", err);
+      }
+    }
+    
     setIsSendingNotification(true);
     
     setTimeout(() => {
@@ -428,10 +441,10 @@ As verbas já estão depositadas e disponíveis! Agradecemos o contributo de tod
       
       setNotificationLog([newLogItem, ...notificationLog]);
 
-      // Hide success notification after 4s
+      // Keep success message visible on screen so they can click fallbacks as needed
       setTimeout(() => {
         setShowNotifySuccess(false);
-      }, 4000);
+      }, 12000);
 
     }, 1200);
   };
@@ -974,14 +987,36 @@ As verbas já estão depositadas e disponíveis! Agradecemos o contributo de tod
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, scale: 0.9 }}
-                  className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl flex items-start gap-3"
+                  className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl flex flex-col gap-3"
                 >
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5 animate-bounce" />
-                  <div>
-                    <h4 className="text-xs font-bold text-emerald-800 uppercase tracking-wider">Comunicação Confirmada!</h4>
-                    <p className="text-[11px] text-emerald-700 mt-0.5 leading-relaxed">
-                      O ficheiro comprovativo BIC de quota do mês e o seu histórico no portal foram remetidos com sucesso para o cooperador <strong>{matchedMember?.name}</strong>.
-                    </p>
+                  <div className="flex items-start gap-3">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5 animate-bounce" />
+                    <div>
+                      <h4 className="text-xs font-bold text-emerald-800 uppercase tracking-wider">Comunicação Confirmada!</h4>
+                      <p className="text-[11px] text-emerald-700 mt-0.5 leading-relaxed">
+                        O alerta de quota do mês e o seu histórico no portal foram processados com sucesso para o cooperador <strong>{matchedMember?.name}</strong>.
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {/* Action Link inside Success Card */}
+                  <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-emerald-250/30">
+                    <a
+                      href={getSimulatedUrl()}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg shadow-sm transition-all"
+                    >
+                      <span>💬</span>
+                      <span>{notificationChannel === 'whatsapp' ? 'Abrir conversa no WhatsApp' : 'Abrir no E-mail'}</span>
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => setShowNotifySuccess(false)}
+                      className="text-[10px] text-slate-500 hover:text-slate-800 underline ml-auto cursor-pointer"
+                    >
+                      Fechar aviso
+                    </button>
                   </div>
                 </motion.div>
               )}

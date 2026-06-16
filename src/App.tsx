@@ -48,6 +48,12 @@ import UserManagement from './components/UserManagement';
 import AdminModule from './components/AdminModule';
 import RegulationsModal from './components/RegulationsModal';
 
+import { 
+  testFirestoreConnection, 
+  loadStateFromFirestore, 
+  saveStateToFirestore 
+} from './firebaseSync';
+
 interface AppUser {
   email: string;
   role: 'admin' | 'membro';
@@ -102,6 +108,7 @@ const DEFAULT_CAROUSEL_SLIDES: CarouselSlide[] = [
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
+  const [isLoadingDb, setIsLoadingDb] = useState<boolean>(true);
   const [currentMonth, setCurrentMonth] = useState<number>(1);
   const [members, setMembers] = useState<Member[]>([]);
   const [logs, setLogs] = useState<KixLog[]>([]);
@@ -304,6 +311,17 @@ export default function App() {
 
   useEffect(() => {
     localStorage.setItem('kix_app_config', JSON.stringify(appConfig));
+    if (!isLoadingDb) {
+      saveStateToFirestore({
+        members,
+        logs,
+        payoutsCompleted,
+        currentMonth,
+        appConfig
+      }).catch((err) => {
+        console.error("Firestore appConfig sync failed: ", err);
+      });
+    }
   }, [appConfig]);
 
   useEffect(() => {
@@ -314,6 +332,11 @@ export default function App() {
       document.documentElement.classList.remove('dark');
     }
   }, [theme]);
+
+  // Enforce browser window title strictly to Kixi-Fundo avoiding AI platform prefixes/suffixes
+  useEffect(() => {
+    document.title = "Kixi-Fundo | Gestão de Finanças Comparticipadas";
+  }, []);
 
   // Trigger backup upload to drive in the background
   const triggerAutoBackupGDrive = async (newMembers: Member[], newLogs: KixLog[], newPayouts = payoutsCompleted, newMonth = currentMonth) => {
@@ -396,112 +419,136 @@ export default function App() {
     }
   }, [isOnline]);
 
-  // Load from local storage on mount
+  // Load from Firestore Database on mount (operando fora do browser)
   useEffect(() => {
-    let savedMembers = localStorage.getItem('kix_members');
-    let savedLogs = localStorage.getItem('kix_logs');
-    let savedPayouts = localStorage.getItem('kix_payouts');
-    let savedMonth = localStorage.getItem('kix_current_month');
-    const savedUser = localStorage.getItem('kix_current_user');
-    const redundantBackup = localStorage.getItem('kix_redundant_autobackup');
-
-    if (!savedMembers && redundantBackup) {
+    let active = true;
+    const fetchDB = async () => {
       try {
-        const parsed = JSON.parse(redundantBackup);
-        if (parsed && parsed.members) {
-          const fictionalNames = ['Ana Paula Gouveia', 'Carlos Alberto Silva', 'Filomena da Costa', 'João Kiala', 'Teresa de Jesus'];
-          const cleanedMembers = parsed.members.filter((m: any) => !fictionalNames.includes(m.name));
+        await testFirestoreConnection();
+        const dbState = await loadStateFromFirestore();
+        if (dbState && active) {
+          console.log("Dados carregados da Base de Dados Cloud com Sucesso!");
+          if (dbState.members) setMembers(dbState.members);
+          if (dbState.logs) setLogs(dbState.logs);
+          if (dbState.payoutsCompleted) {
+            const parsedPayouts: { [month: number]: boolean } = {};
+            Object.entries(dbState.payoutsCompleted).forEach(([k, v]) => {
+              parsedPayouts[Number(k)] = v;
+            });
+            setPayoutsCompleted(parsedPayouts);
+          }
+          if (dbState.currentMonth) setCurrentMonth(dbState.currentMonth);
+          if (dbState.appConfig) setAppConfig(dbState.appConfig);
+
+          // Local redundancy caching
+          localStorage.setItem('kix_members', JSON.stringify(dbState.members));
+          localStorage.setItem('kix_logs', JSON.stringify(dbState.logs));
+          localStorage.setItem('kix_payouts', JSON.stringify(dbState.payoutsCompleted));
+          localStorage.setItem('kix_current_month', String(dbState.currentMonth));
+          localStorage.setItem('kix_app_config', JSON.stringify(dbState.appConfig));
+        } else if (active) {
+          console.log("Base de dados vazia. Inicializando persistência cloud com valores padrão...");
+          const defaultPayouts = {
+            1: false,
+            2: false,
+            3: false,
+            4: false,
+            5: false,
+            6: false,
+          };
+          const savedMembers = localStorage.getItem('kix_members');
+          const savedLogs = localStorage.getItem('kix_logs');
+          const savedPayouts = localStorage.getItem('kix_payouts');
+          const savedCurrentMonth = localStorage.getItem('kix_current_month');
+
+          const finalMembers = savedMembers ? JSON.parse(savedMembers) : INITIAL_MEMBERS;
+          const finalLogs = savedLogs ? JSON.parse(savedLogs) : INITIAL_LOGS;
+          const finalPayouts = savedPayouts ? JSON.parse(savedPayouts) : defaultPayouts;
+          const finalMonth = savedCurrentMonth ? Number(savedCurrentMonth) : 1;
+
+          await saveStateToFirestore({
+            members: finalMembers,
+            logs: finalLogs,
+            payoutsCompleted: finalPayouts,
+            currentMonth: finalMonth,
+            appConfig: appConfig
+          });
           
-          savedMembers = JSON.stringify(cleanedMembers);
-          savedLogs = JSON.stringify(parsed.logs);
-          savedPayouts = JSON.stringify(parsed.payoutsCompleted);
-          savedMonth = String(parsed.currentMonth);
-          
-          localStorage.setItem('kix_members', savedMembers);
-          localStorage.setItem('kix_logs', savedLogs || '[]');
-          localStorage.setItem('kix_payouts', savedPayouts || '{}');
-          localStorage.setItem('kix_current_month', savedMonth || '1');
+          setMembers(finalMembers);
+          setLogs(finalLogs);
+          setPayoutsCompleted(finalPayouts);
+          setCurrentMonth(finalMonth);
         }
-      } catch (e) {
-        console.error("Erro ao carregar do backup de emergência cache:", e);
-      }
-    }
-
-    if (savedMembers) {
-      try {
-        const parsedMembers: Member[] = JSON.parse(savedMembers);
-        const fictionalNames = ['Ana Paula Gouveia', 'Carlos Alberto Silva', 'Filomena da Costa', 'João Kiala', 'Teresa de Jesus'];
-        const cleanedMembers = parsedMembers.filter(m => !fictionalNames.includes(m.name));
-
-        setMembers(cleanedMembers);
-        if (cleanedMembers.length !== parsedMembers.length) {
-          localStorage.setItem('kix_members', JSON.stringify(cleanedMembers));
-        }
-      } catch (e) {
-        console.error("Erro ao analisar kix_members:", e);
-        setMembers(INITIAL_MEMBERS);
-      }
-    } else {
-      setMembers(INITIAL_MEMBERS);
-    }
-
-    if (savedLogs) {
-      try {
-        setLogs(JSON.parse(savedLogs));
-      } catch (e) {
-        console.error("Erro ao analisar kix_logs:", e);
-        setLogs(INITIAL_LOGS);
-      }
-    } else {
-      setLogs(INITIAL_LOGS);
-    }
-
-    if (savedPayouts) {
-      try {
-        setPayoutsCompleted(JSON.parse(savedPayouts));
-      } catch (e) {
-        console.error("Erro ao analisar kix_payouts:", e);
-        setPayoutsCompleted({
-          1: false,
-          2: false,
-          3: false,
-          4: false,
-          5: false,
-          6: false,
-        });
-      }
-    } else {
-      setPayoutsCompleted({
-        1: false,
-        2: false,
-        3: false,
-        4: false,
-        5: false,
-        6: false,
-      });
-    }
-
-    if (savedMonth) {
-      setCurrentMonth(Number(savedMonth));
-    }
-
-    if (savedUser) {
-      try {
-        const parsed = JSON.parse(savedUser);
-        setCurrentUser(parsed);
-        setActiveTab('inicio');
       } catch (err) {
-        // Safe fail
+        console.error("Incapaz de ler da Cloud. Carregando dados cache do Browser...", err);
+        let savedMembers = localStorage.getItem('kix_members');
+        let savedLogs = localStorage.getItem('kix_logs');
+        let savedPayouts = localStorage.getItem('kix_payouts');
+        let savedMonth = localStorage.getItem('kix_current_month');
+        
+        if (savedMembers) {
+          try {
+            setMembers(JSON.parse(savedMembers));
+          } catch { setMembers(INITIAL_MEMBERS); }
+        } else {
+          setMembers(INITIAL_MEMBERS);
+        }
+
+        if (savedLogs) {
+          try { setLogs(JSON.parse(savedLogs)); } catch { setLogs(INITIAL_LOGS); }
+        } else {
+          setLogs(INITIAL_LOGS);
+        }
+
+        if (savedPayouts) {
+          try { setPayoutsCompleted(JSON.parse(savedPayouts)); } catch { 
+            setPayoutsCompleted({1: false, 2: false, 3: false, 4: false, 5: false, 6: false}); 
+          }
+        } else {
+          setPayoutsCompleted({1: false, 2: false, 3: false, 4: false, 5: false, 6: false});
+        }
+
+        if (savedMonth) {
+          setCurrentMonth(Number(savedMonth));
+        }
+      } finally {
+        if (active) {
+          setIsLoadingDb(false);
+          const savedUser = localStorage.getItem('kix_current_user');
+          if (savedUser) {
+            try {
+              const parsed = JSON.parse(savedUser);
+              setCurrentUser(parsed);
+              setActiveTab('inicio');
+            } catch (err) {
+              // Safe fail
+            }
+          }
+        }
       }
-    }
+    };
+
+    fetchDB();
+    return () => { active = false; };
   }, []);
 
-  // Sync to local storage on changes
+  // Sync to local storage and Cloud database on changes
   const saveState = (newMembers: Member[], newLogs: KixLog[], newPayouts = payoutsCompleted, newMonth = currentMonth) => {
     localStorage.setItem('kix_members', JSON.stringify(newMembers));
     localStorage.setItem('kix_logs', JSON.stringify(newLogs));
     localStorage.setItem('kix_payouts', JSON.stringify(newPayouts));
     localStorage.setItem('kix_current_month', String(newMonth));
+
+    // Save to Firestore Cloud database to run app outside of standard isolated browser
+    saveStateToFirestore({
+      members: newMembers,
+      logs: newLogs,
+      payoutsCompleted: newPayouts,
+      currentMonth: newMonth,
+      appConfig: appConfig
+    }).catch((err) => {
+      console.error("Firestore database write sync failed:", err);
+    });
 
     // Backup offline local automático redundante
     try {
@@ -1011,6 +1058,29 @@ export default function App() {
       ${colorOverridesCSS}
     `}</style>
   );
+
+  if (isLoadingDb) {
+    return (
+      <div className="min-h-screen w-full flex flex-col items-center justify-center bg-slate-950 text-white font-sans p-6 relative">
+        <div 
+          className="absolute inset-0 bg-cover bg-center select-none pointer-events-none opacity-5" 
+          style={{ backgroundImage: `url('https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?auto=format&fit=crop&q=80&w=2000')` }} 
+        />
+        {appStylesElement}
+        <div className="relative text-center max-w-md w-full p-8 border border-slate-800 bg-slate-900/80 rounded-2xl backdrop-blur-md shadow-2xl flex flex-col items-center gap-6">
+          <div className="w-16 h-16 rounded-full border-4 border-emerald-500 border-t-transparent animate-spin" />
+          <div className="flex flex-col gap-2">
+            <h1 className="text-xl font-bold tracking-tight text-white">Kixi-Fundo</h1>
+            <p className="text-sm text-slate-400">A obter informação da Base de Dados Cloud...</p>
+          </div>
+          <div className="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+            <div className="bg-emerald-500 h-full w-2/3 animate-pulse rounded-full" />
+          </div>
+          <p className="text-[10px] text-slate-500 font-mono tracking-wider uppercase">Operando fora do browser para segurança de depósitos</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!currentUser) {
     return (
