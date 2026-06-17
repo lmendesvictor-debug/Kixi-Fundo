@@ -770,13 +770,6 @@ export default function PaymentsLedger({
                   <div className="flex gap-2.5 mt-1.5">
                     <button
                       type="button"
-                      onClick={() => setFormAmount(3000)}
-                      className="text-[9px] font-black bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 px-2 py-1 rounded"
-                    >
-                      3.000 Kz (Mock Demo)
-                    </button>
-                    <button
-                      type="button"
                       onClick={() => setFormAmount(120000)}
                       className="text-[9px] font-black bg-emerald-50 hover:bg-emerald-100 text-emerald-700 px-2 py-1 rounded"
                     >

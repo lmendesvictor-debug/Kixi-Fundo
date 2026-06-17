@@ -1098,6 +1098,18 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
     return acc + paidInMember;
   }, 0);
 
+  // Dynamic sum of all paid contributions (handles custom amount per contribution if any)
+  const totalQuotasCollected = members.reduce((acc, m) => {
+    return acc + Object.keys(m.contributions).reduce((monthAcc, monthKey) => {
+      const contr = m.contributions[Number(monthKey)];
+      if (contr?.paid) {
+        const amt = (contr as any).amount !== undefined ? (contr as any).amount : 120000;
+        return monthAcc + amt;
+      }
+      return monthAcc;
+    }, 0);
+  }, 0);
+
   // Fundo de Interajuda logic:
   // Each paid contribution deposits 20,000.00 automatically
   const totalSocialRetained = totalPaidContributionsCount * 20000;
@@ -1107,6 +1119,11 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
     .reduce((acc, log) => acc + log.amount, 0);
 
   const socialBalance = totalSocialRetained - totalSocialDisbursed;
+
+  // Global Financial Distribution calculations
+  const totalBeneficiaryDestined = totalQuotasCollected - totalSocialRetained;
+  const totalBeneficiaryPaid = Object.values(payoutsCompleted).filter((v) => v === true).length * 1200000;
+  const totalBeneficiaryPending = totalBeneficiaryDestined - totalBeneficiaryPaid;
 
   // Current month collectors
   const currentMonthPaidCount = members.filter((m) => m.contributions[currentMonth]?.paid).length;
@@ -1786,6 +1803,13 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                   totalMembersCount={12}
                   beneficiaries={getBeneficiariesList()}
                   isPayoutDone={isCurrentMonthPayoutDone}
+                  totalQuotasCollected={totalQuotasCollected}
+                  totalSocialRetained={totalSocialRetained}
+                  totalSocialDisbursed={totalSocialDisbursed}
+                  totalBeneficiaryDestined={totalBeneficiaryDestined}
+                  totalBeneficiaryPaid={totalBeneficiaryPaid}
+                  totalBeneficiaryPending={totalBeneficiaryPending}
+                  payoutsCompleted={payoutsCompleted}
                 />
 
                 {/* Subtitle / Quote Section */}
