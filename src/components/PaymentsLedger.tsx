@@ -24,7 +24,7 @@ interface PaymentsLedgerProps {
   setMembers: React.Dispatch<React.SetStateAction<Member[]>>;
   logs: KixLog[];
   setLogs: React.Dispatch<React.SetStateAction<KixLog[]>>;
-  saveState: (newMembers: Member[], newLogs: KixLog[]) => void;
+  saveState: (newMembers: Member[], newLogs: KixLog[]) => any;
   formatCurrency: (amount: number) => string;
 }
 
@@ -69,6 +69,8 @@ export default function PaymentsLedger({
   const [formDate, setFormDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [formAmount, setFormAmount] = useState<number>(120000); // Standard quota Kz
   const [formStatus, setFormStatus] = useState<'pago' | 'pendente'>('pago');
+  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [errorMsg, setErrorMsg] = useState<string>('');
 
   const monthNamesPortuguese = [
     'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -184,7 +186,7 @@ export default function PaymentsLedger({
     setShowRegisterModal(true);
   };
 
-  const handleDeletePayment = (row: PaymentRow) => {
+  const handleDeletePayment = async (row: PaymentRow) => {
     if (window.confirm(`Tem a certeza que deseja ELIMINAR/ANULAR o pagamento de ${row.memberName} para o mês de ${row.monthName}?`)) {
       const updatedMembers = members.map((m) => {
         if (m.id === row.memberId) {
@@ -214,11 +216,16 @@ export default function PaymentsLedger({
       const updatedLogs = [newLog, ...logs];
       setMembers(updatedMembers);
       setLogs(updatedLogs);
-      saveState(updatedMembers, updatedLogs);
+      
+      try {
+        await saveState(updatedMembers, updatedLogs);
+      } catch (err) {
+        alert("Erro ao remover pagamento: " + err);
+      }
     }
   };
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const selectedMember = members.find((m) => m.id === formMemberId);
@@ -263,10 +270,18 @@ export default function PaymentsLedger({
     const updatedLogs = [newLog, ...logs];
     setMembers(updatedMembers);
     setLogs(updatedLogs);
-    saveState(updatedMembers, updatedLogs);
 
-    setShowRegisterModal(false);
-    setEditingRecord(null);
+    setIsSaving(true);
+    setErrorMsg('');
+    try {
+      await saveState(updatedMembers, updatedLogs);
+      setShowRegisterModal(false);
+      setEditingRecord(null);
+    } catch (err: any) {
+      setErrorMsg('Falha ao gravar pagamento na nuvem: ' + err);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Exports
@@ -801,20 +816,35 @@ export default function PaymentsLedger({
                   </div>
                 </div>
 
+                {errorMsg && (
+                  <p className="text-rose-500 dark:text-rose-400 text-[11px] font-bold py-1 text-center shrink-0">
+                    ⚠ {errorMsg}
+                  </p>
+                )}
+
                 {/* Submit button */}
                 <div className="pt-2 flex gap-3">
                   <button
                     type="button"
+                    disabled={isSaving}
                     onClick={() => setShowRegisterModal(false)}
-                    className="flex-1 py-3 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 transition-colors cursor-pointer"
+                    className="flex-1 py-3 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 py-3 bg-[#0284c7] hover:bg-sky-600 text-white rounded-xl text-xs font-bold shadow-md transition-colors cursor-pointer"
+                    disabled={isSaving}
+                    className="flex-1 py-3 bg-[#0284c7] hover:bg-sky-600 text-white rounded-xl text-xs font-bold shadow-md transition-colors cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-85 disabled:cursor-not-allowed"
                   >
-                    Confirmar
+                    {isSaving ? (
+                      <>
+                        <div className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                        <span>A gravar...</span>
+                      </>
+                    ) : (
+                      <span>Confirmar</span>
+                    )}
                   </button>
                 </div>
 

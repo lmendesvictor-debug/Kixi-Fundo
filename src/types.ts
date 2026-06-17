@@ -18,6 +18,7 @@ export interface Member {
     accessAudit?: boolean;
     accessAdminModule?: boolean;
     accessReports?: boolean;
+    accessContracts?: boolean;
   };
   contributions: {
     [month: number]: {
@@ -126,4 +127,27 @@ export interface Loan {
   payments: LoanPayment[];
   representativeName?: string;
   customLegalTerms?: string;
+}
+
+export interface AppConfig {
+  bankName: string;
+  bankIban: string;
+  phone: string;
+  email: string;
+  showFlowChart?: boolean;
+  showAllocationChart?: boolean;
+  showStatsCards?: boolean;
+  chartColorTheme?: 'teal' | 'indigo' | 'coral' | 'amber';
+  customDashboardMessage?: string;
+  fontFamily?: 'inter' | 'outfit' | 'mono' | 'playfair' | 'space';
+  fontSize?: 'compact' | 'normal' | 'medium' | 'large' | 'xlarge';
+  primaryColorTheme?: 'emerald' | 'indigo' | 'slate' | 'teal' | 'coral' | 'amber' | 'violet' | 'bordeaux' | 'royal_plum' | 'fire_coral' | 'dark_zinc' | 'solid_navy' | 'sky_frost' | 'ocean_teal';
+  adminPrivilegeCanDelete?: boolean;
+  adminPrivilegeCanRefund?: boolean;
+  adminPrivilegeCanForcePayout?: boolean;
+  contractClauseJuros?: string;
+  contractClauseMultas?: string;
+  contractClauseGarantias?: string;
+  contractTemplateWhole?: string;
+  contractRepresentativeName?: string;
 }

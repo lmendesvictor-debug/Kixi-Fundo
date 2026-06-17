@@ -50,7 +50,7 @@ const getActiveContractTemplate = (appConfig?: any) => {
 interface CreditManagementProps {
   loans: Loan[];
   members: Member[];
-  onAddLoan: (newLoan: Loan) => void;
+  onAddLoan: (newLoan: Loan) => any;
   onPayInstallment: (loanId: string, paymentMonth: number) => void;
   currentUser: { email: string; role: 'admin' | 'membro'; name: string; memberId?: number } | null;
   currentMonth: number;
@@ -99,6 +99,7 @@ export default function CreditManagement({
   const [representativeName, setRepresentativeName] = useState<string>(currentUser?.name || '');
   const [legalTemplate, setLegalTemplate] = useState<string>(DEFAULT_LEGAL_TEMPLATE);
   const [isAdjustingTerms, setIsAdjustingTerms] = useState<boolean>(false);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
 
   // Sync active appConfig template
   useEffect(() => {
@@ -216,7 +217,7 @@ export default function CreditManagement({
   const selectedLoan = loans.find(l => l.id === selectedLoanId);
 
   // Submit Logic for new Loan Contract
-  const handleGenerateContract = (e: React.FormEvent) => {
+  const handleGenerateContract = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!readTerms) {
       alert('É necessário aceitar as cláusulas de concordância e garantias jurídicas para prosseguir.');
@@ -355,18 +356,25 @@ export default function CreditManagement({
       customLegalTerms: finalLegalText
     };
 
-    onAddLoan(newLoan);
-    alert(`Contrato de Crédito ${contractCode} gerado e assinado com sucesso absoluto! Principal de ${formatCurrency(amountRequested)} desembolsado.`);
-    
-    // Clear form inputs
-    setBorrowerName('');
-    setDocumentId('');
-    setPhone('');
-    setEmail('');
-    setGuarantees('');
-    setReadTerms(false);
-    setActiveSubTab('portfolio');
-    setSelectedLoanId(contractCode);
+    setIsSaving(true);
+    try {
+      await onAddLoan(newLoan);
+      alert(`Contrato de Crédito ${contractCode} gerado e assinado com sucesso absoluto! Principal de ${formatCurrency(amountRequested)} desembolsado.`);
+      
+      // Clear form inputs
+      setBorrowerName('');
+      setDocumentId('');
+      setPhone('');
+      setEmail('');
+      setGuarantees('');
+      setReadTerms(false);
+      setActiveSubTab('portfolio');
+      setSelectedLoanId(contractCode);
+    } catch (err) {
+      alert("Erro ao gravar os dados: " + err);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -917,14 +925,24 @@ export default function CreditManagement({
 
               <button
                 type="submit"
-                disabled={!readTerms}
+                disabled={!readTerms || isSaving}
                 className={`w-full py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md ${
-                  readTerms
+                  readTerms && !isSaving
                     ? 'bg-sky-600 hover:bg-sky-700 text-white font-black scale-[1.01] hover:shadow-lg hover:shadow-sky-500/10'
                     : 'bg-slate-100 dark:bg-slate-850 text-slate-400 dark:text-slate-550 cursor-not-allowed border border-slate-200 dark:border-slate-800'
                 }`}
               >
-                <ShieldCheck className="w-4 h-4" /> Assinar & Desembolsar Crédito Ativo
+                {isSaving ? (
+                  <>
+                    <div className="w-4 h-4 rounded-full border-2 border-slate-300 border-t-transparent animate-spin" />
+                    <span>A Gravar Contrato na Nuvem...</span>
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>Assinar & Desembolsar Crédito Ativo</span>
+                  </>
+                )}
               </button>
             </div>
 

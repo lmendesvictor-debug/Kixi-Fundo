@@ -24,7 +24,7 @@ import { Member, getMemberIdCode } from '../types';
 interface UserManagementProps {
   members: Member[];
   setMembers: React.Dispatch<React.SetStateAction<Member[]>>;
-  saveState: (newMembers: Member[], newLogs: any[]) => void;
+  saveState: (newMembers: Member[], newLogs: any[]) => any;
   logs: any[];
   setLogs: React.Dispatch<React.SetStateAction<any[]>>;
   currentUserEmail: string;
@@ -68,6 +68,8 @@ export default function UserManagement({
 
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSavingConfig, setIsSavingConfig] = useState(false);
 
   // Local state for app settings editable by admin
   const [appBankIban, setAppBankIban] = useState(appConfig.bankIban);
@@ -127,12 +129,18 @@ export default function UserManagement({
 
     const updatedLogs = [newLog, ...logs];
     setLogs(updatedLogs);
-    saveState(members, updatedLogs);
 
-    setAppConfigSuccess('Parâmetros estratégicos, tipografia, escala visual e privilégios regulatórios salvos com sucesso!');
-    setTimeout(() => {
-      setAppConfigSuccess('');
-    }, 4000);
+    setIsSavingConfig(true);
+    saveState(members, updatedLogs).then(() => {
+      setIsSavingConfig(false);
+      setAppConfigSuccess('Parâmetros estratégicos, tipografia, escala visual e privilégios regulatórios salvos com sucesso!');
+      setTimeout(() => {
+        setAppConfigSuccess('');
+      }, 4000);
+    }).catch((err: any) => {
+      setIsSavingConfig(false);
+      alert("Falha ao gravar configurações: " + err);
+    });
   };
 
   // Search matches
@@ -311,11 +319,17 @@ export default function UserManagement({
 
     const updatedLogs = [newLog, ...logs];
     setLogs(updatedLogs);
-    saveState(updatedMembers, updatedLogs);
-
-    setShowAddModal(false);
-    setSuccessMsg(editingMember ? 'Dados do utilizador atualizados!' : 'Novo utilizador adicionado com sucesso!');
-    setTimeout(() => setSuccessMsg(''), 3000);
+    
+    setIsSaving(true);
+    saveState(updatedMembers, updatedLogs).then(() => {
+      setIsSaving(false);
+      setShowAddModal(false);
+      setSuccessMsg(editingMember ? 'Dados do utilizador atualizados!' : 'Novo utilizador adicionado com sucesso!');
+      setTimeout(() => setSuccessMsg(''), 3000);
+    }).catch((err: any) => {
+      setIsSaving(false);
+      setErrorMsg("Falha ao salvar dados de utilizador: " + err);
+    });
   };
 
   return (
@@ -914,9 +928,17 @@ export default function UserManagement({
           <div className="border-t border-dashed border-slate-200 dark:border-slate-800 pt-4 flex justify-end">
             <button
               type="submit"
-              className="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-500/15 cursor-pointer transition-all active:scale-98"
+              disabled={isSavingConfig}
+              className={`px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-500/15 cursor-pointer transition-all active:scale-98 flex items-center gap-2 ${isSavingConfig ? 'opacity-80 cursor-not-allowed' : ''}`}
             >
-              Gravar Parâmetros Estratégicos & Privilégios do Administrador
+              {isSavingConfig ? (
+                <>
+                  <div className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                  <span>A Gravar Parâmetros...</span>
+                </>
+              ) : (
+                <span>Gravar Parâmetros Estratégicos & Privilégios do Administrador</span>
+              )}
             </button>
           </div>
         </form>
@@ -1157,22 +1179,31 @@ export default function UserManagement({
                   </div>
                 </div>
 
-                {/* Footer buttons */}
+                 {/* Footer buttons */}
                 <div className={`flex justify-end gap-3 pt-3 border-t ${
                   theme === 'dark' ? 'border-slate-800' : 'border-slate-100'
                 }`}>
                   <button
                     type="button"
+                    disabled={isSaving}
                     onClick={() => setShowAddModal(false)}
-                    className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300 rounded-xl text-xs hover:bg-slate-200 font-bold cursor-pointer"
+                    className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300 rounded-xl text-xs hover:bg-slate-200 font-bold cursor-pointer disabled:opacity-55 disabled:cursor-not-allowed"
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
-                    className="px-4.5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-md shadow-teal-500/10 cursor-pointer"
+                    disabled={isSaving}
+                    className="px-4.5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-md shadow-teal-500/10 cursor-pointer flex items-center gap-1.5 disabled:opacity-80 disabled:cursor-not-allowed"
                   >
-                    {editingMember ? 'Gravar Alterações' : 'Criar Utilizador'}
+                    {isSaving ? (
+                      <>
+                        <div className="w-3.5 h-3.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                        <span>A gravar...</span>
+                      </>
+                    ) : (
+                      <span>{editingMember ? 'Gravar Alterações' : 'Criar Utilizador'}</span>
+                    )}
                   </button>
                 </div>
 

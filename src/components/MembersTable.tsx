@@ -24,7 +24,7 @@ interface MembersTableProps {
   onToggleContribution: (memberId: number) => void;
   beneficiariesIds: number[];
   setMembers: React.Dispatch<React.SetStateAction<Member[]>>;
-  saveState: (newMembers: Member[], newLogs: any[]) => void;
+  saveState: (newMembers: Member[], newLogs: any[]) => any;
   logs: any[];
   setLogs: React.Dispatch<React.SetStateAction<any[]>>;
   theme?: string;
@@ -86,6 +86,7 @@ export default function MembersTable({
   const [avatarImage, setAvatarImage] = useState<string>('');
   const [avatarColor, setAvatarColor] = useState('bg-emerald-600');
   const [errorMsg, setErrorMsg] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   // Permission toggles state
   const [permInicio, setPermInicio] = useState(true);
@@ -96,6 +97,7 @@ export default function MembersTable({
   const [permAudit, setPermAudit] = useState(false);
   const [permAdminModule, setPermAdminModule] = useState(false);
   const [permReports, setPermReports] = useState(true);
+  const [permContracts, setPermContracts] = useState(true);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [activeAdminUploadId, setActiveAdminUploadId] = useState<number | null>(null);
@@ -266,6 +268,7 @@ export default function MembersTable({
       setPermAudit(true);
       setPermAdminModule(true);
       setPermReports(true);
+      setPermContracts(true);
     } else {
       setPermInicio(true);
       setPermDashboard(false);
@@ -275,6 +278,7 @@ export default function MembersTable({
       setPermAudit(false);
       setPermAdminModule(false);
       setPermReports(true);
+      setPermContracts(true);
     }
   };
 
@@ -299,6 +303,7 @@ export default function MembersTable({
     setPermAudit(false);
     setPermAdminModule(false);
     setPermReports(true);
+    setPermContracts(true);
     setErrorMsg('');
     setShowFormModal(true);
   };
@@ -323,12 +328,13 @@ export default function MembersTable({
     setPermAudit(m.permissions?.accessAudit ?? (m.role === 'admin'));
     setPermAdminModule(m.permissions?.accessAdminModule ?? (m.role === 'admin'));
     setPermReports(m.permissions?.accessReports ?? true);
+    setPermContracts(m.permissions?.accessContracts ?? true);
     setErrorMsg('');
     setShowFormModal(true);
   };
 
   // Submit create or edit form
-  const handleSubmitForm = (e: React.FormEvent) => {
+  const handleSubmitForm = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
@@ -375,6 +381,7 @@ export default function MembersTable({
               accessAudit: permAudit,
               accessAdminModule: permAdminModule,
               accessReports: permReports,
+              accessContracts: permContracts,
             },
             contributions: {
               ...m.contributions,
@@ -404,7 +411,16 @@ export default function MembersTable({
       const updatedLogs = [newLog, ...logs];
       setMembers(updatedMembers);
       setLogs(updatedLogs);
-      saveState(updatedMembers, updatedLogs);
+      
+      setIsSaving(true);
+      try {
+        await saveState(updatedMembers, updatedLogs);
+        setShowFormModal(false);
+      } catch (err: any) {
+        setErrorMsg('Falha ao gravar alterações do integrador: ' + err);
+      } finally {
+        setIsSaving(false);
+      }
     } else {
       // Create new member
       // Note: Consórcio rotativo features exactly 12 members. Let's warn but allow creation for extreme flexibility
@@ -430,6 +446,7 @@ export default function MembersTable({
           accessAudit: permAudit,
           accessAdminModule: permAdminModule,
           accessReports: permReports,
+          accessContracts: permContracts,
         },
         contributions: {
           1: { paid: false },
@@ -457,14 +474,21 @@ export default function MembersTable({
       const updatedLogs = [newLog, ...logs];
       setMembers(updatedMembers);
       setLogs(updatedLogs);
-      saveState(updatedMembers, updatedLogs);
+      
+      setIsSaving(true);
+      try {
+        await saveState(updatedMembers, updatedLogs);
+        setShowFormModal(false);
+      } catch (err: any) {
+        setErrorMsg('Falha ao registar novo membro: ' + err);
+      } finally {
+        setIsSaving(false);
+      }
     }
-
-    setShowFormModal(false);
   };
 
   // Delete member helper
-  const handleDeleteMember = (memberId: number, name: string) => {
+  const handleDeleteMember = async (memberId: number, name: string) => {
     if (window.confirm(`Tem a certeza que deseja excluir permanentemente o integrador ${name} do Kix Fundo? Esta ação não pode ser desfeita.`)) {
       const updatedMembers = members.filter((m) => m.id !== memberId);
       
@@ -480,7 +504,12 @@ export default function MembersTable({
       const updatedLogs = [newLog, ...logs];
       setMembers(updatedMembers);
       setLogs(updatedLogs);
-      saveState(updatedMembers, updatedLogs);
+      
+      try {
+        await saveState(updatedMembers, updatedLogs);
+      } catch (err) {
+        alert("Erro ao remover membro da base de dados: " + err);
+      }
     }
   };
 
@@ -1250,6 +1279,21 @@ export default function MembersTable({
                           </div>
                         </label>
 
+                        {/* Tab Contratos */}
+                        <label className="flex items-start gap-2.5 p-2 bg-white rounded-lg border border-slate-100 hover:border-indigo-100 transition cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={role === 'admin' ? true : permContracts}
+                            disabled={role === 'admin'}
+                            onChange={(e) => setPermContracts(e.target.checked)}
+                            className="mt-0.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <div>
+                            <p className="font-bold text-slate-800 text-[10.5px]">Módulo Contratos</p>
+                            <p className="text-[9px] text-[#2563EB] font-medium leading-tight">Consultar e imprimir minutas e contratos vigentes.</p>
+                          </div>
+                        </label>
+
                         {/* Tab Administração */}
                         <label className="flex items-start gap-2.5 p-2 bg-white rounded-lg border border-slate-100 hover:border-indigo-100 transition cursor-pointer select-none">
                           <input
@@ -1312,16 +1356,25 @@ export default function MembersTable({
                 <div className="p-5 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-3 shrink-0">
                   <button
                     type="button"
+                    disabled={isSaving}
                     onClick={() => setShowFormModal(false)}
-                    className="px-5 py-2.5 text-slate-500 border border-slate-200 bg-white rounded-lg hover:bg-slate-50 hover:text-slate-700 font-semibold transition"
+                    className="px-5 py-2.5 text-slate-500 border border-slate-200 bg-white rounded-lg hover:bg-slate-50 hover:text-slate-700 font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     Mudar de Ideia
                   </button>
                   <button
                     type="submit"
-                    className="px-5 py-2.5 bg-slate-900 border border-slate-800 text-white font-black rounded-lg hover:bg-slate-800 transition shadow-sm"
+                    disabled={isSaving}
+                    className="px-5 py-2.5 bg-slate-900 border border-slate-800 text-white font-black rounded-lg hover:bg-slate-800 transition shadow-sm flex items-center gap-1.5 disabled:opacity-85 disabled:cursor-not-allowed"
                   >
-                    Guardar Informações
+                    {isSaving ? (
+                      <>
+                        <div className="w-4 h-4 rounded-full border-2 border-slate-300 border-t-transparent animate-spin" />
+                        <span>A gravar na nuvem...</span>
+                      </>
+                    ) : (
+                      <span>Guardar Informações</span>
+                    )}
                   </button>
                 </div>
 

@@ -32,7 +32,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 
-import { Member, KixLog, CarouselSlide, getMemberIdCode, Loan } from './types';
+import { Member, KixLog, CarouselSlide, getMemberIdCode, Loan, AppConfig } from './types';
 import { INITIAL_MEMBERS, INITIAL_LOGS } from './data';
 import MetricCards from './components/MetricCards';
 import SchedulesGrid from './components/SchedulesGrid';
@@ -51,6 +51,7 @@ import UserManagement from './components/UserManagement';
 import AdminModule from './components/AdminModule';
 import RegulationsModal from './components/RegulationsModal';
 import CreditManagement from './components/CreditManagement';
+import ContractsTab from './components/ContractsTab';
 
 import { 
   testFirestoreConnection, 
@@ -122,6 +123,8 @@ export default function App() {
     const saved = localStorage.getItem('kix_members');
     return !saved; // If cached database exists, bypass blocking loading screen completely
   });
+  const [isInitialLoadCompleted, setIsInitialLoadCompleted] = useState<boolean>(false);
+  const [dbLoadedSuccessfully, setDbLoadedSuccessfully] = useState<boolean>(false);
   const [currentMonth, setCurrentMonth] = useState<number>(() => {
     return Number(localStorage.getItem('kix_current_month') || '1');
   });
@@ -130,7 +133,20 @@ export default function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const FICTITIOUS_EMAILS = [
+            'sgabriel@gmail.com',
+            'delfina.antonio@gmail.com',
+            'carlos.silva@gmail.com',
+            'ana.vicente@gmail.com'
+          ];
+          const filtered = parsed.filter(
+            (m: any) => !FICTITIOUS_EMAILS.includes((m.email || '').trim().toLowerCase())
+          );
+          if (filtered.length > 0) {
+            return filtered;
+          }
+        }
       } catch {}
     }
     return INITIAL_MEMBERS;
@@ -148,10 +164,18 @@ export default function App() {
   
   const [loans, setLoans] = useState<Loan[]>(() => {
     const saved = localStorage.getItem('kix_loans');
+    const FICTITIOUS_EMAILS = [
+      'sgabriel@gmail.com',
+      'delfina.antonio@gmail.com',
+      'carlos.silva@gmail.com',
+      'ana.vicente@gmail.com'
+    ];
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
+        if (Array.isArray(parsed)) {
+          return parsed.filter(l => !FICTITIOUS_EMAILS.includes((l.email || '').trim().toLowerCase()));
+        }
       } catch {}
     }
     return [
@@ -181,33 +205,6 @@ export default function App() {
             principalPaid,
             paid: m <= 1,
             paidAt: m <= 1 ? '15/06/2026' : undefined
-          };
-        }),
-      },
-      {
-        id: 'L-1296-SIN',
-        borrowerName: 'Sebastião Gabriel',
-        borrowerType: 'singular',
-        documentId: '009841BE095',
-        phone: '+244 912 345 678',
-        email: 'sgabriel@gmail.com',
-        amountRequested: 250000,
-        interestRate: 14,
-        durationMonths: 3,
-        guarantees: 'Custódia preventiva de Gerador Elétrico Kipor 5KVA provido com fatura e BI anexo.',
-        status: 'active',
-        contractDate: '01/06/2026',
-        payments: Array.from({ length: 3 }, (_, i) => {
-          const m = i + 1;
-          const principalPaid = 250000 / 3;
-          const interestPaid = 250000 * 0.14;
-          return {
-            month: m,
-            dueDate: `01/${String(6 + m).padStart(2, '0')}/2026`,
-            amount: principalPaid + interestPaid,
-            interestPaid,
-            principalPaid,
-            paid: false
           };
         }),
       }
@@ -310,7 +307,7 @@ export default function App() {
     
     // Role-based defaults: admin always has access to administrative pages
     if (currentUser.role === 'admin') {
-      return ['inicio', 'membro-dashboard', 'members', 'cycles', 'reports', 'dashboard', 'admin-module', 'credit-management'].includes(tabId);
+      return ['inicio', 'membro-dashboard', 'members', 'cycles', 'reports', 'dashboard', 'admin-module', 'credit-management', 'contratos'].includes(tabId);
     }
 
     // O modulo de creditos de momento só deve estar disponivel para o administrador por estar em desenvolvimento.
@@ -326,12 +323,13 @@ export default function App() {
       if (tabId === 'members') return !!m.permissions.accessMembersList;
       if (tabId === 'cycles') return m.permissions.accessCycles !== false;
       if (tabId === 'reports') return m.permissions.accessReports !== false;
+      if (tabId === 'contratos') return m.permissions.accessContracts !== false;
       if (tabId === 'admin-module') return !!m.permissions.accessAdminModule;
       if (tabId === 'dashboard') return !!m.permissions.accessDashboard;
     }
 
     // Lista padrão de fallback para membros comuns sem registo explícito de permissões
-    return ['inicio', 'membro-dashboard', 'cycles', 'reports'].includes(tabId);
+    return ['inicio', 'membro-dashboard', 'cycles', 'reports', 'contratos'].includes(tabId);
   };
 
   const allNavigationItems = [
@@ -340,6 +338,7 @@ export default function App() {
     { id: 'members', label: 'Cadastro', icon: <Users className="w-3.5 h-3.5" /> },
     { id: 'cycles', label: 'Pagamentos', icon: <Coins className="w-3.5 h-3.5" /> },
     { id: 'credit-management', label: 'Créditos', icon: <Coins className="w-3.5 h-3.5" /> },
+    { id: 'contratos', label: 'Contratos', icon: <FileText className="w-3.5 h-3.5" /> },
     { id: 'reports', label: 'Relatórios', icon: <FileText className="w-3.5 h-3.5" /> },
     { id: 'admin-module', label: 'Administração', icon: <ShieldCheck className="w-3.5 h-3.5 text-rose-500 font-bold" /> },
   ];
@@ -394,28 +393,6 @@ export default function App() {
     const saved = localStorage.getItem('kix_theme');
     return (saved === 'dark' || saved === 'light') ? saved : 'light';
   });
-
-  interface AppConfig {
-    bankName: string;
-    bankIban: string;
-    phone: string;
-    email: string;
-    showFlowChart?: boolean;
-    showAllocationChart?: boolean;
-    showStatsCards?: boolean;
-    chartColorTheme?: 'teal' | 'indigo' | 'coral' | 'amber';
-    customDashboardMessage?: string;
-    fontFamily?: 'inter' | 'outfit' | 'mono' | 'playfair' | 'space';
-    fontSize?: 'compact' | 'normal' | 'medium' | 'large' | 'xlarge';
-    primaryColorTheme?: 'emerald' | 'indigo' | 'slate' | 'teal' | 'coral' | 'amber' | 'violet' | 'bordeaux' | 'royal_plum' | 'fire_coral' | 'dark_zinc' | 'solid_navy' | 'sky_frost' | 'ocean_teal';
-    adminPrivilegeCanDelete?: boolean;
-    adminPrivilegeCanRefund?: boolean;
-    adminPrivilegeCanForcePayout?: boolean;
-    contractClauseJuros?: string;
-    contractClauseMultas?: string;
-    contractClauseGarantias?: string;
-    contractTemplateWhole?: string;
-  }
 
   const [appConfig, setAppConfig] = useState<AppConfig>(() => {
     const saved = localStorage.getItem('kix_app_config');
@@ -477,7 +454,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
 
   useEffect(() => {
     localStorage.setItem('kix_app_config', JSON.stringify(appConfig));
-    if (!isLoadingDb) {
+    if (isInitialLoadCompleted && !isLoadingDb && dbLoadedSuccessfully) {
       setIsDbSyncing(true);
       saveStateToFirestore({
         members,
@@ -493,7 +470,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
         setIsDbSyncing(false);
       });
     }
-  }, [appConfig]);
+  }, [appConfig, isInitialLoadCompleted, isLoadingDb, dbLoadedSuccessfully]);
 
   useEffect(() => {
     localStorage.setItem('kix_theme', theme);
@@ -599,7 +576,33 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
         const dbState = await loadStateFromFirestore();
         if (dbState && active) {
           console.log("Dados carregados da Base de Dados Cloud com Sucesso!");
-          if (dbState.members) setMembers(dbState.members);
+          let finalMembers = dbState.members || [];
+          
+          // Filtrar quaisquer membros fictícios que tenham sido adicionados acidentalmente à nuvem
+          const FICTITIOUS_EMAILS = [
+            'sgabriel@gmail.com',
+            'delfina.antonio@gmail.com',
+            'carlos.silva@gmail.com',
+            'ana.vicente@gmail.com'
+          ];
+          const originalCount = finalMembers.length;
+          finalMembers = finalMembers.filter(
+            m => !FICTITIOUS_EMAILS.includes((m.email || '').trim().toLowerCase())
+          );
+
+          if (finalMembers.length === 0) {
+            finalMembers = [...INITIAL_MEMBERS];
+          }
+
+          if (finalMembers.length !== originalCount) {
+            console.log("Removendo membros fictícios detectados na base de dados...");
+            saveStateToFirestore({
+              ...dbState,
+              members: finalMembers
+            }).catch(e => console.error("Falha ao salvar a base de dados após remover membros fictícios:", e));
+          }
+
+          setMembers(finalMembers);
           if (dbState.logs) setLogs(dbState.logs);
           if (dbState.loans) {
             setLoans(dbState.loans);
@@ -616,11 +619,13 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
           if (dbState.appConfig) setAppConfig(dbState.appConfig);
 
           // Local redundancy caching
-          localStorage.setItem('kix_members', JSON.stringify(dbState.members));
-          localStorage.setItem('kix_logs', JSON.stringify(dbState.logs));
-          localStorage.setItem('kix_payouts', JSON.stringify(dbState.payoutsCompleted));
-          localStorage.setItem('kix_current_month', String(dbState.currentMonth));
-          localStorage.setItem('kix_app_config', JSON.stringify(dbState.appConfig));
+          localStorage.setItem('kix_members', JSON.stringify(finalMembers));
+          localStorage.setItem('kix_logs', JSON.stringify(dbState.logs || []));
+          localStorage.setItem('kix_payouts', JSON.stringify(dbState.payoutsCompleted || {}));
+          localStorage.setItem('kix_current_month', String(dbState.currentMonth || 1));
+          localStorage.setItem('kix_app_config', JSON.stringify(dbState.appConfig || {}));
+          
+          setDbLoadedSuccessfully(true);
         } else if (active) {
           console.log("Base de dados vazia. Sincronizando com cache...");
           const defaultPayouts = {
@@ -637,7 +642,19 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
           const savedCurrentMonth = localStorage.getItem('kix_current_month');
           const savedLoans = localStorage.getItem('kix_loans');
 
-          const finalMembers = savedMembers ? JSON.parse(savedMembers) : INITIAL_MEMBERS;
+          let finalMembers = savedMembers ? JSON.parse(savedMembers) : INITIAL_MEMBERS;
+          const FICTITIOUS_EMAILS = [
+            'sgabriel@gmail.com',
+            'delfina.antonio@gmail.com',
+            'carlos.silva@gmail.com',
+            'ana.vicente@gmail.com'
+          ];
+          finalMembers = finalMembers.filter(
+            (m: any) => !FICTITIOUS_EMAILS.includes((m.email || '').trim().toLowerCase())
+          );
+          if (finalMembers.length === 0) {
+            finalMembers = [...INITIAL_MEMBERS];
+          }
           const finalLogs = savedLogs ? JSON.parse(savedLogs) : INITIAL_LOGS;
           const finalPayouts = savedPayouts ? JSON.parse(savedPayouts) : defaultPayouts;
           const finalMonth = savedCurrentMonth ? Number(savedCurrentMonth) : 1;
@@ -657,6 +674,8 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
           setPayoutsCompleted(finalPayouts);
           setCurrentMonth(finalMonth);
           setLoans(finalLoans);
+          
+          setDbLoadedSuccessfully(true);
         }
       } catch (err) {
         console.warn("Leitura em segundo plano da Cloud falhou (operando offline):", err);
@@ -665,6 +684,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
         if (active) {
           setIsLoadingDb(false);
           setIsDbSyncing(false);
+          setIsInitialLoadCompleted(true);
           const savedUser = localStorage.getItem('kix_current_user');
           if (savedUser) {
             try {
@@ -684,28 +704,35 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
   }, []);
 
   // Sync to local storage and Cloud database on changes
-  const saveState = (newMembers: Member[], newLogs: KixLog[], newPayouts = payoutsCompleted, newMonth = currentMonth, newLoans = loans) => {
+  const saveState = async (newMembers: Member[], newLogs: KixLog[], newPayouts = payoutsCompleted, newMonth = currentMonth, newLoans = loans): Promise<void> => {
     localStorage.setItem('kix_members', JSON.stringify(newMembers));
     localStorage.setItem('kix_logs', JSON.stringify(newLogs));
     localStorage.setItem('kix_payouts', JSON.stringify(newPayouts));
     localStorage.setItem('kix_current_month', String(newMonth));
     localStorage.setItem('kix_loans', JSON.stringify(newLoans));
 
-    // Save to Firestore Cloud database to run app outside of standard isolated browser
-    setIsDbSyncing(true);
-    saveStateToFirestore({
-      members: newMembers,
-      logs: newLogs,
-      payoutsCompleted: newPayouts,
-      currentMonth: newMonth,
-      appConfig: appConfig,
-      loans: newLoans
-    }).then(() => {
-      setIsDbSyncing(false);
-    }).catch((err) => {
-      console.error("Firestore database write sync failed:", err);
-      setIsDbSyncing(false);
-    });
+    let firestorePromise = Promise.resolve();
+
+    if (dbLoadedSuccessfully) {
+      // Save to Firestore Cloud database to run app outside of standard isolated browser
+      setIsDbSyncing(true);
+      firestorePromise = saveStateToFirestore({
+        members: newMembers,
+        logs: newLogs,
+        payoutsCompleted: newPayouts,
+        currentMonth: newMonth,
+        appConfig: appConfig,
+        loans: newLoans
+      }).then(() => {
+        setIsDbSyncing(false);
+      }).catch((err) => {
+        console.error("Firestore database write sync failed:", err);
+        setIsDbSyncing(false);
+        // Do not crash or block the application main thread, keeping the service functional
+      });
+    } else {
+      console.warn("Sincronização com Cloud suspensa para evitar sobrescrever a base de dados principal.");
+    }
 
     // Backup offline local automático redundante
     try {
@@ -726,6 +753,9 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
 
     // Auto-backup para Google Drive se o token e configuração estiverem ativos
     triggerAutoBackupGDrive(newMembers, newLogs, newPayouts, newMonth);
+
+    // Wait for Firestore promise to resolve to ensure data integrity before proceeding
+    await firestorePromise;
   };
 
   const handleResetData = () => {
@@ -993,7 +1023,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
   };
 
   // Credit loan event handlers
-  const handleAddLoan = (newLoan: Loan) => {
+  const handleAddLoan = async (newLoan: Loan): Promise<void> => {
     const updatedLoans = [...loans, newLoan];
     setLoans(updatedLoans);
 
@@ -1009,7 +1039,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
 
     const updatedLogs = [newLog, ...logs];
     setLogs(updatedLogs);
-    saveState(members, updatedLogs, payoutsCompleted, currentMonth, updatedLoans);
+    await saveState(members, updatedLogs, payoutsCompleted, currentMonth, updatedLoans);
   };
 
   const handlePayInstallment = (loanId: string, paymentMonth: number) => {
@@ -2150,6 +2180,27 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                   currentUser={currentUser}
                   currentMonth={currentMonth}
                   appConfig={appConfig}
+                />
+              </motion.div>
+            )}
+
+             {activeTab === 'contratos' && (
+              <motion.div
+                key="contratos"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="space-y-6 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 pb-10"
+              >
+                <ContractsTab
+                  loans={loans}
+                  members={members}
+                  currentUser={currentUser}
+                  currentMonth={currentMonth}
+                  appConfig={appConfig}
+                  setAppConfig={setAppConfig}
+                  saveState={saveState}
+                  logs={logs}
                 />
               </motion.div>
             )}
