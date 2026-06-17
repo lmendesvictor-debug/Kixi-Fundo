@@ -307,11 +307,8 @@ export default function App() {
     
     // Role-based defaults: admin always has access to administrative pages
     if (currentUser.role === 'admin') {
-      return ['inicio', 'membro-dashboard', 'members', 'cycles', 'reports', 'dashboard', 'admin-module', 'credit-management', 'contratos'].includes(tabId);
+      return ['inicio', 'membro-dashboard', 'members', 'cycles', 'reports', 'dashboard', 'admin-module', 'credit-management'].includes(tabId);
     }
-
-    // O modulo de creditos de momento só deve estar disponivel para o administrador por estar em desenvolvimento.
-    if (tabId === 'credit-management') return false;
 
     // Minha Área (membro-dashboard) não é parametrizável, está sempre disponível para membros comuns
     if (tabId === 'membro-dashboard') return true;
@@ -323,13 +320,13 @@ export default function App() {
       if (tabId === 'members') return !!m.permissions.accessMembersList;
       if (tabId === 'cycles') return m.permissions.accessCycles !== false;
       if (tabId === 'reports') return m.permissions.accessReports !== false;
-      if (tabId === 'contratos') return m.permissions.accessContracts !== false;
+      if (tabId === 'credit-management') return m.permissions.accessContracts !== false;
       if (tabId === 'admin-module') return !!m.permissions.accessAdminModule;
       if (tabId === 'dashboard') return !!m.permissions.accessDashboard;
     }
 
     // Lista padrão de fallback para membros comuns sem registo explícito de permissões
-    return ['inicio', 'membro-dashboard', 'cycles', 'reports', 'contratos'].includes(tabId);
+    return ['inicio', 'membro-dashboard', 'cycles', 'reports', 'credit-management'].includes(tabId);
   };
 
   const allNavigationItems = [
@@ -338,7 +335,6 @@ export default function App() {
     { id: 'members', label: 'Cadastro', icon: <Users className="w-3.5 h-3.5" /> },
     { id: 'cycles', label: 'Pagamentos', icon: <Coins className="w-3.5 h-3.5" /> },
     { id: 'credit-management', label: 'Créditos', icon: <Coins className="w-3.5 h-3.5" /> },
-    { id: 'contratos', label: 'Contratos', icon: <FileText className="w-3.5 h-3.5" /> },
     { id: 'reports', label: 'Relatórios', icon: <FileText className="w-3.5 h-3.5" /> },
     { id: 'admin-module', label: 'Administração', icon: <ShieldCheck className="w-3.5 h-3.5 text-rose-500 font-bold" /> },
   ];
@@ -2170,31 +2166,13 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
-                className="space-y-6 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8"
+                className="space-y-6 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 pb-10"
               >
                 <CreditManagement
                   loans={loans}
                   members={members}
                   onAddLoan={handleAddLoan}
                   onPayInstallment={handlePayInstallment}
-                  currentUser={currentUser}
-                  currentMonth={currentMonth}
-                  appConfig={appConfig}
-                />
-              </motion.div>
-            )}
-
-             {activeTab === 'contratos' && (
-              <motion.div
-                key="contratos"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="space-y-6 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 pb-10"
-              >
-                <ContractsTab
-                  loans={loans}
-                  members={members}
                   currentUser={currentUser}
                   currentMonth={currentMonth}
                   appConfig={appConfig}

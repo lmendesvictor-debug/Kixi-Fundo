@@ -7,6 +7,7 @@ import {
   Printer, X, Edit, Settings, FileText as FileIcon, Sparkles, CheckSquare
 } from 'lucide-react';
 import { Loan, Member, KixLog, LoanPayment } from '../types';
+import ContractsTab from './ContractsTab';
 
 const DEFAULT_LEGAL_TEMPLATE = `CONTRATO DE MÚTUO FINANCEIRO COM JUROS E PENHOR DE GARANTIA
 
@@ -55,6 +56,9 @@ interface CreditManagementProps {
   currentUser: { email: string; role: 'admin' | 'membro'; name: string; memberId?: number } | null;
   currentMonth: number;
   appConfig?: any;
+  setAppConfig?: React.Dispatch<React.SetStateAction<any>>;
+  saveState?: (newMembers: Member[], newLogs: any[], newPayouts?: any, newMonth?: number, newLoans?: Loan[]) => any;
+  logs?: any[];
 }
 
 export default function CreditManagement({
@@ -65,11 +69,25 @@ export default function CreditManagement({
   currentUser,
   currentMonth,
   appConfig,
+  setAppConfig = () => {},
+  saveState = () => {},
+  logs = [],
 }: CreditManagementProps) {
   const isAdmin = currentUser?.role === 'admin';
   
-  // Tab states: 'dashboard' | 'simulate' | 'portfolio' | 'debtors'
-  const [activeSubTab, setActiveSubTab] = useState<'dashboard' | 'simulate' | 'portfolio' | 'debtors'>('dashboard');
+  // Tab states: 'dashboard' | 'simulate' | 'portfolio' | 'debtors' | 'contracts'
+  const [activeSubTab, setActiveSubTab] = useState<'dashboard' | 'simulate' | 'portfolio' | 'debtors' | 'contracts'>(() => {
+    return isAdmin ? 'dashboard' : 'portfolio';
+  });
+
+  useEffect(() => {
+    if (!isAdmin) {
+      if (activeSubTab === 'dashboard' || activeSubTab === 'simulate' || activeSubTab === 'debtors') {
+        setActiveSubTab('portfolio');
+      }
+    }
+  }, [isAdmin, activeSubTab]);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | 'socio' | 'singular'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'completed' | 'overdue'>('all');
@@ -396,16 +414,18 @@ export default function CreditManagement({
 
         {/* Tab switch control */}
         <div className="flex border border-slate-200/65 dark:border-slate-805 p-0.8 bg-slate-50 dark:bg-[#0e1320] rounded-xl flex-wrap">
-          <button
-            onClick={() => setActiveSubTab('dashboard')}
-            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeSubTab === 'dashboard'
-                ? 'bg-white dark:bg-slate-850 text-sky-700 dark:text-sky-305 shadow-sm'
-                : 'text-slate-450 hover:text-slate-700 dark:hover:text-slate-200'
-            }`}
-          >
-            <TrendingUp className="w-3.5 h-3.5" /> Métricas
-          </button>
+          {isAdmin && (
+            <button
+              onClick={() => setActiveSubTab('dashboard')}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeSubTab === 'dashboard'
+                  ? 'bg-white dark:bg-slate-850 text-sky-700 dark:text-sky-305 shadow-sm'
+                  : 'text-slate-450 hover:text-slate-700 dark:hover:text-slate-200'
+              }`}
+            >
+              <TrendingUp className="w-3.5 h-3.5" /> Métricas
+            </button>
+          )}
           
           {isAdmin && (
             <button
@@ -432,15 +452,28 @@ export default function CreditManagement({
           </button>
 
           <button
-            onClick={() => setActiveSubTab('debtors')}
+            onClick={() => setActiveSubTab('contracts')}
             className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeSubTab === 'debtors'
+              activeSubTab === 'contracts'
                 ? 'bg-white dark:bg-slate-850 text-sky-700 dark:text-sky-305 shadow-sm'
                 : 'text-slate-450 hover:text-slate-700 dark:hover:text-slate-200'
             }`}
           >
-            <User className="w-3.5 h-3.5" /> Diretório Jurídico
+            <FileIcon className="w-3.5 h-3.5" /> Contratos
           </button>
+
+          {isAdmin && (
+            <button
+              onClick={() => setActiveSubTab('debtors')}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                activeSubTab === 'debtors'
+                  ? 'bg-white dark:bg-slate-850 text-sky-700 dark:text-sky-305 shadow-sm'
+                  : 'text-slate-450 hover:text-slate-700 dark:hover:text-slate-200'
+              }`}
+            >
+              <User className="w-3.5 h-3.5" /> Diretório Jurídico
+            </button>
+          )}
         </div>
       </div>
 
@@ -1300,6 +1333,20 @@ export default function CreditManagement({
             )}
           </div>
         </div>
+      )}
+
+      {/* CONTRACTS SUB-TAB RENDERING */}
+      {activeSubTab === 'contracts' && (
+        <ContractsTab
+          loans={loans}
+          members={members}
+          currentUser={currentUser}
+          currentMonth={currentMonth}
+          appConfig={appConfig}
+          setAppConfig={setAppConfig}
+          saveState={saveState}
+          logs={logs}
+        />
       )}
 
       {/* PRINT WORKSPACE AND CUSTOMIZABLE LEGAL CONTRACT MODAL OVERLAY */}
