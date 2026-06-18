@@ -73,7 +73,16 @@ export default function ReportsSection({
     return acc + paidInMember;
   }, 0);
 
-  const totalGrossCollected = totalPaidContributionsCount * 120000;
+  const totalGrossCollected = members.reduce((acc, m) => {
+    return acc + Object.keys(m.contributions).reduce((monthAcc, monthKey) => {
+      const contr = m.contributions[Number(monthKey)];
+      if (contr?.paid) {
+        const amt = (contr as any).amount !== undefined ? (contr as any).amount : 120000;
+        return monthAcc + amt;
+      }
+      return monthAcc;
+    }, 0);
+  }, 0);
   const totalSocialRetained = totalPaidContributionsCount * 20000;
   const totalSocialDisbursed = logs
     .filter((log) => log.type === 'social_aid')
@@ -89,7 +98,13 @@ export default function ReportsSection({
   // Compile monthly bank details
   const monthlyData = [1, 2, 3, 4, 5, 6].map((m) => {
     const paidInMonth = members.filter((member) => member.contributions[m]?.paid).length;
-    const grossCollected = paidInMonth * 120000;
+    const grossCollected = members.reduce((sum, member) => {
+      const contr = member.contributions[m];
+      if (contr?.paid) {
+        return sum + ((contr as any).amount !== undefined ? (contr as any).amount : 120000);
+      }
+      return sum;
+    }, 0);
     const socialRetained = paidInMonth * 20000;
     const beneficiariesInMonth = members.filter((member) => member.assignedMonth === m);
     const payoutExecuted = payoutsCompleted[m] ? 1200000 : 0;

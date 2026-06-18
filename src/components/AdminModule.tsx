@@ -28,6 +28,7 @@ import {
 import UserManagement from './UserManagement';
 import ReceiptsAutomation from './ReceiptsAutomation';
 import BankingReport from './BankingReport';
+import PrivilegesManagement from './PrivilegesManagement';
 
 interface AdminModuleProps {
   currentMonth: number;
@@ -66,7 +67,14 @@ export default function AdminModule({
   setCarouselSlides,
   onRestoreBackup,
 }: AdminModuleProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'users' | 'receipts' | 'banking' | 'carousel' | 'audit' | 'backup'>('users');
+  const [activeSubTab, setActiveSubTab] = useState<'users' | 'receipts' | 'banking' | 'carousel' | 'audit' | 'backup' | 'privileges'>('users');
+
+  const loggedInMember = currentUser 
+    ? members.find(m => m.id === currentUser.memberId || m.email?.trim().toLowerCase() === currentUser.email?.trim().toLowerCase())
+    : null;
+  const isSuperAdmin = currentUser?.email?.trim().toLowerCase() === 'lmendesvictor@gmail.com';
+  const canManageSlides = isSuperAdmin || loggedInMember?.permissions?.actionManageSlides !== false;
+  const canManageBackups = isSuperAdmin || loggedInMember?.permissions?.actionManageBackups !== false;
 
   const [showCarouselForm, setShowCarouselForm] = useState(false);
   const [editingSlideId, setEditingSlideId] = useState<string | null>(null);
@@ -161,6 +169,10 @@ export default function AdminModule({
   };
 
   const handleCreateGDriveBackup = async () => {
+    if (!canManageBackups) {
+      alert('Acesso Negado: Não possui privilégios de gestor para criar cópias de segurança.');
+      return;
+    }
     if (!googleToken) return;
     setBackupActionLoading('create');
     try {
@@ -186,6 +198,10 @@ export default function AdminModule({
   };
 
   const handleRestoreGDriveBackup = async (fileId: string, fileName: string) => {
+    if (!canManageBackups) {
+      alert('Acesso Negado: Não possui privilégios de gestor para restaurar cópias de segurança.');
+      return;
+    }
     if (!googleToken) return;
     if (window.confirm(`Tem a certeza ABSOLUTA que deseja restaurar a cópia de segurança "${fileName}"? \n\nAtenção: Esta acção irá substituir e reescrever todos os dados do dispositivo actuel.`)) {
       setBackupActionLoading(`restore_${fileId}`);
@@ -205,6 +221,10 @@ export default function AdminModule({
   };
 
   const handleDeleteGDriveBackup = async (fileId: string, fileName: string) => {
+    if (!canManageBackups) {
+      alert('Acesso Negado: Não possui privilégios de gestor para eliminar backups do seu Google Drive.');
+      return;
+    }
     if (!googleToken) return;
     if (window.confirm(`Tem a certeza que deseja eliminar PERMANENTEMENTE o backup "${fileName}" do seu Google Drive?`)) {
       setBackupActionLoading(`delete_${fileId}`);
@@ -222,6 +242,11 @@ export default function AdminModule({
   };
 
   const handleJSONFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canManageBackups) {
+      alert('Acesso Negado: Não possui privilégios de gestor para importar ficheiros de segurança.');
+      e.target.value = '';
+      return;
+    }
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -244,6 +269,10 @@ export default function AdminModule({
   };
 
   const handleRestoreRedundantBackupLocal = () => {
+    if (!canManageBackups) {
+      alert('Acesso Negado: Não possui privilégios de gestor para restaurar backups a partir do cofre redundante local.');
+      return;
+    }
     const redundant = localStorage.getItem('kix_redundant_autobackup');
     if (!redundant) {
       alert("Nenhum backup automático offline enquadrado em cache!");
@@ -287,6 +316,12 @@ export default function AdminModule({
       label: 'Tabela Utilizadores & Membros',
       icon: <Users className="w-4 h-4 shrink-0 transition-colors" />,
       description: 'Gestão de contas, atribuições, IBANs privados e acessos ao portal.',
+    },
+    {
+      id: 'privileges' as const,
+      label: 'Outorga de Privilégios (Gestores)',
+      icon: <ShieldAlert className="w-4 h-4 text-rose-500 shrink-0 transition-colors" />,
+      description: 'Configure acessos de telas e acções críticas permitidas ao grupo de gestores.',
     },
     {
       id: 'receipts' as const,
@@ -410,6 +445,26 @@ export default function AdminModule({
           </motion.div>
         )}
 
+        {activeSubTab === 'privileges' && (
+          <motion.div
+            key="admin_privileges"
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+          >
+            <PrivilegesManagement
+              members={members}
+              setMembers={setMembers}
+              saveState={saveState}
+              logs={logs}
+              setLogs={setLogs}
+              currentUserEmail={currentUser?.email || ''}
+              theme={theme}
+            />
+          </motion.div>
+        )}
+
         {activeSubTab === 'receipts' && (
           <motion.div
             key="admin_receipts"
@@ -474,6 +529,10 @@ export default function AdminModule({
                 {!showCarouselForm && (
                   <button
                     onClick={() => {
+                      if (!canManageSlides) {
+                        alert('Acesso Negado: Não possui privilégios de gestor para gerir ou criar slides e destaques de comunicação.');
+                        return;
+                      }
                       setSlideFormTitle('');
                       setSlideFormDesc('');
                       setSlideFormImg('https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=1200&h=600&q=80');
@@ -670,6 +729,10 @@ export default function AdminModule({
                       <button
                         type="button"
                         onClick={() => {
+                          if (!canManageSlides) {
+                            alert('Acesso Negado: Não possui privilégios de gestor para gerir ou editar slides e destaques de comunicação.');
+                            return;
+                          }
                           setEditingSlideId(slide.id);
                           setSlideFormTitle(slide.title);
                           setSlideFormDesc(slide.description);
@@ -685,6 +748,10 @@ export default function AdminModule({
                       <button
                         type="button"
                         onClick={() => {
+                          if (!canManageSlides) {
+                            alert('Acesso Negado: Não possui privilégios de gestor para remover slides e destaques de comunicação.');
+                            return;
+                          }
                           if (carouselSlides.length <= 1) {
                             alert('É necessário manter pelo menos um slide activo no carrossel.');
                             return;

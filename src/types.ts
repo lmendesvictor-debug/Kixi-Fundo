@@ -19,6 +19,12 @@ export interface Member {
     accessAdminModule?: boolean;
     accessReports?: boolean;
     accessContracts?: boolean;
+    actionRegisterPayments?: boolean;
+    actionGrantSocialAid?: boolean;
+    actionIssueCredits?: boolean;
+    actionManageSlides?: boolean;
+    actionManageBackups?: boolean;
+    actionResetPasswords?: boolean;
   };
   contributions: {
     [month: number]: {
@@ -27,6 +33,7 @@ export interface Member {
       receiptFileName?: string;
       receiptFileSize?: string;
       receiptUploadedAt?: string;
+      amount?: number;
     };
   };
   benefits: {
@@ -47,6 +54,7 @@ export interface KixLog {
   amount: number;
   description: string;
   month: number;
+  transactionCode?: string; // codificaçao automatica ex. DEP.01, PAG.01, AJUDA.01 (Imutável)
 }
 
 export interface KixState {
@@ -90,6 +98,14 @@ export function getMemberIdCode(name: string, phone: string): string {
   const checksum = hash.toString(16).toUpperCase().padStart(4, '0');
   
   return `KIX-${initials.toUpperCase()}-${phoneSuffix}-${checksum}`;
+}
+
+/**
+ * Retorna o ID de formato simplificado e imutável do acto de cadastro do membro.
+ */
+export function getMemberDisplayCode(id: number): string {
+  if (!id) return 'MEMB.00';
+  return `MEMB.${String(id).padStart(2, '0')}`;
 }
 
 export interface CarouselSlide {

@@ -128,7 +128,7 @@ export default function App() {
   const [currentMonth, setCurrentMonth] = useState<number>(() => {
     return Number(localStorage.getItem('kix_current_month') || '1');
   });
-  const [members, setMembers] = useState<Member[]>(() => {
+  const [members, _setMembers] = useState<Member[]>(() => {
     const saved = localStorage.getItem('kix_members');
     if (saved) {
       try {
@@ -151,6 +151,62 @@ export default function App() {
     }
     return INITIAL_MEMBERS;
   });
+
+  const reconcileMembers = (prevMembers: Member[], nextMembers: Member[]): Member[] => {
+    return nextMembers.map((nextM: Member) => {
+      const prevM = prevMembers.find((p) => p.id === nextM.id);
+      if (!prevM) return nextM;
+      
+      const nextContribs = { ...nextM.contributions };
+      let loanEarningsBalance = (nextM as any).loanEarningsBalance || 0;
+      
+      for (let mNum = 1; mNum <= 6; mNum++) {
+        const prevPaid = prevM.contributions[mNum]?.paid || false;
+        const nextPaid = nextM.contributions[mNum]?.paid || false;
+        
+        if (!prevPaid && nextPaid) {
+          if (loanEarningsBalance > 0) {
+            const currentAmount = nextContribs[mNum]?.amount !== undefined 
+              ? (nextContribs[mNum] as any).amount 
+              : 120000;
+              
+            nextContribs[mNum] = {
+              ...nextContribs[mNum],
+              paid: true,
+              amount: currentAmount + loanEarningsBalance
+            };
+            loanEarningsBalance = 0;
+          }
+        } else if (prevPaid && !nextPaid) {
+          const prevAmount = prevM.contributions[mNum]?.amount !== undefined 
+            ? (prevM.contributions[mNum] as any).amount 
+            : 120000;
+            
+          const extra = prevAmount - 120000;
+          if (extra > 0) {
+            loanEarningsBalance += extra;
+          }
+          if (nextContribs[mNum]) {
+            const { amount, ...rest } = nextContribs[mNum] as any;
+            nextContribs[mNum] = { ...rest, paid: false };
+          }
+        }
+      }
+      
+      return {
+        ...nextM,
+        loanEarningsBalance,
+        contributions: nextContribs
+      };
+    });
+  };
+
+  const setMembers = (update: any) => {
+    _setMembers((prevMembers) => {
+      const nextMembersRaw = typeof update === 'function' ? update(prevMembers) : update;
+      return reconcileMembers(prevMembers, nextMembersRaw);
+    });
+  };
   const [logs, setLogs] = useState<KixLog[]>(() => {
     const saved = localStorage.getItem('kix_logs');
     if (saved) {
@@ -305,26 +361,36 @@ export default function App() {
   const isAllowed = (tabId: string): boolean => {
     if (!currentUser) return false;
     
-    // Role-based defaults: admin always has access to administrative pages
+    // 1. Super-administrador (lmendesvictor) has sovereign absolute power across all tabs/modules
+    const isSuperAdmin = currentUser.email.trim().toLowerCase() === 'lmendesvictor@gmail.com';
+    if (isSuperAdmin) return true;
+
+    // Minha Área (membro-dashboard) não é parametrizável, está sempre disponível para membros comuns e gestores
+    if (tabId === 'membro-dashboard') return true;
+
+    // 2. Custom permissions matrix (if initialized)
+    const m = loggedInMember;
+    if (m && m.permissions) {
+      const getPerm = (permVal: boolean | undefined, roleDefault: boolean) => {
+        return permVal !== undefined ? permVal : roleDefault;
+      };
+      
+      const isAdminRole = currentUser.role === 'admin';
+      
+      if (tabId === 'inicio') return getPerm(m.permissions.accessInicio, true);
+      if (tabId === 'members') return getPerm(m.permissions.accessMembersList, isAdminRole);
+      if (tabId === 'cycles') return getPerm(m.permissions.accessCycles, true);
+      if (tabId === 'reports') return getPerm(m.permissions.accessReports, true);
+      if (tabId === 'credit-management') return getPerm(m.permissions.accessContracts, true);
+      if (tabId === 'admin-module') return getPerm(m.permissions.accessAdminModule, isAdminRole);
+      if (tabId === 'dashboard') return getPerm(m.permissions.accessDashboard, isAdminRole);
+    }
+
+    // 3. Fallback defaults (if no custom permissions configured on this account yet)
     if (currentUser.role === 'admin') {
       return ['inicio', 'membro-dashboard', 'members', 'cycles', 'reports', 'dashboard', 'admin-module', 'credit-management'].includes(tabId);
     }
-
-    // Minha Área (membro-dashboard) não é parametrizável, está sempre disponível para membros comuns
-    if (tabId === 'membro-dashboard') return true;
-
-    // Todos os outros módulos são parametrizáveis
-    const m = loggedInMember;
-    if (m && m.permissions) {
-      if (tabId === 'inicio') return m.permissions.accessInicio !== false;
-      if (tabId === 'members') return !!m.permissions.accessMembersList;
-      if (tabId === 'cycles') return m.permissions.accessCycles !== false;
-      if (tabId === 'reports') return m.permissions.accessReports !== false;
-      if (tabId === 'credit-management') return m.permissions.accessContracts !== false;
-      if (tabId === 'admin-module') return !!m.permissions.accessAdminModule;
-      if (tabId === 'dashboard') return !!m.permissions.accessDashboard;
-    }
-
+    
     // Lista padrão de fallback para membros comuns sem registo explícito de permissões
     return ['inicio', 'membro-dashboard', 'cycles', 'reports', 'credit-management'].includes(tabId);
   };
@@ -701,7 +767,8 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
 
   // Sync to local storage and Cloud database on changes
   const saveState = async (newMembers: Member[], newLogs: KixLog[], newPayouts = payoutsCompleted, newMonth = currentMonth, newLoans = loans): Promise<void> => {
-    localStorage.setItem('kix_members', JSON.stringify(newMembers));
+    const reconciledMembers = reconcileMembers(members, newMembers);
+    localStorage.setItem('kix_members', JSON.stringify(reconciledMembers));
     localStorage.setItem('kix_logs', JSON.stringify(newLogs));
     localStorage.setItem('kix_payouts', JSON.stringify(newPayouts));
     localStorage.setItem('kix_current_month', String(newMonth));
@@ -713,7 +780,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
       // Save to Firestore Cloud database to run app outside of standard isolated browser
       setIsDbSyncing(true);
       firestorePromise = saveStateToFirestore({
-        members: newMembers,
+        members: reconciledMembers,
         logs: newLogs,
         payoutsCompleted: newPayouts,
         currentMonth: newMonth,
@@ -735,7 +802,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
       const redundantPayload = {
         version: 3,
         timestamp: new Date().toISOString(),
-        members: newMembers,
+        members: reconciledMembers,
         logs: newLogs,
         payoutsCompleted: newPayouts,
         currentMonth: newMonth,
@@ -748,7 +815,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
     }
 
     // Auto-backup para Google Drive se o token e configuração estiverem ativos
-    triggerAutoBackupGDrive(newMembers, newLogs, newPayouts, newMonth);
+    triggerAutoBackupGDrive(reconciledMembers, newLogs, newPayouts, newMonth);
 
     // Wait for Firestore promise to resolve to ensure data integrity before proceeding
     await firestorePromise;
@@ -876,6 +943,12 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
 
   // Toggle contribution status of a member for the current active month
   const handleToggleContribution = (memberId: number) => {
+    const isSuperAdmin = currentUser?.email.trim().toLowerCase() === 'lmendesvictor@gmail.com';
+    if (!isSuperAdmin && loggedInMember?.permissions?.actionRegisterPayments === false) {
+      alert('Acesso Negado: Não possui privilégios de gestor para registar ou alterar pagamentos de quotas de cooperantes.');
+      return;
+    }
+
     const isPayoutDone = payoutsCompleted[currentMonth];
     
     if (isPayoutDone) {
@@ -989,6 +1062,12 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
 
   // Social Aid grant
   const handleRequestAid = (memberId: number, amount: number, description: string) => {
+    const isSuperAdmin = currentUser?.email.trim().toLowerCase() === 'lmendesvictor@gmail.com';
+    if (!isSuperAdmin && loggedInMember?.permissions?.actionGrantSocialAid === false) {
+      alert('Acesso Negado: Não possui privilégios de gestor para conceder apoios financeiros de Interajuda Coletiva.');
+      return;
+    }
+
     const targetMember = members.find((m) => m.id === memberId);
     if (!targetMember) return;
 
@@ -1020,6 +1099,12 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
 
   // Credit loan event handlers
   const handleAddLoan = async (newLoan: Loan): Promise<void> => {
+    const isSuperAdmin = currentUser?.email.trim().toLowerCase() === 'lmendesvictor@gmail.com';
+    if (!isSuperAdmin && loggedInMember?.permissions?.actionIssueCredits === false) {
+      alert('Acesso Negado: Não possui privilégios de gestor para emitir ou celebrar contratos de microcréditos.');
+      return;
+    }
+
     const updatedLoans = [...loans, newLoan];
     setLoans(updatedLoans);
 
@@ -1039,6 +1124,12 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
   };
 
   const handlePayInstallment = (loanId: string, paymentMonth: number) => {
+    const isSuperAdmin = currentUser?.email.trim().toLowerCase() === 'lmendesvictor@gmail.com';
+    if (!isSuperAdmin && loggedInMember?.permissions?.actionIssueCredits === false) {
+      alert('Acesso Negado: Não possui privilégios de gestor para processar amortizações de créditos.');
+      return;
+    }
+
     const targetLoan = loans.find(l => l.id === loanId);
     if (!targetLoan) return;
 
@@ -1071,6 +1162,76 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
     const payment = targetLoan.payments.find(p => p.month === paymentMonth);
     const wasPaid = payment ? payment.paid : false;
 
+    // RULE: Automatically distribute reimbursed principal + earned interest back to members' contributions
+    const isAdding = !wasPaid;
+    const amountToDistribute = payment ? (payment.principalPaid + payment.interestPaid) : 0;
+    const share = amountToDistribute / (members.length || 1);
+
+    const updatedMembers = members.map((m) => {
+      const contributions = { ...m.contributions };
+      const paidMonths = Object.keys(contributions)
+        .map(Number)
+        .filter(mNum => contributions[mNum]?.paid)
+        .sort((a, b) => a - b);
+        
+      let loanEarningsBalance = (m as any).loanEarningsBalance || 0;
+      
+      if (isAdding) {
+        if (paidMonths.length > 0) {
+          // Add share to the first paid contribution
+          const targetMonth = paidMonths[0];
+          const currentAmount = contributions[targetMonth].amount !== undefined 
+            ? (contributions[targetMonth] as any).amount 
+            : 120000;
+          
+          contributions[targetMonth] = {
+            ...contributions[targetMonth],
+            amount: currentAmount + share
+          };
+        } else {
+          // Accrue to balance
+          loanEarningsBalance += share;
+        }
+      } else {
+        // Subtract or reduce back
+        if (paidMonths.length > 0) {
+          let remainingToSubtract = share;
+          for (const mNum of paidMonths) {
+            const currentAmount = contributions[mNum].amount !== undefined 
+              ? (contributions[mNum] as any).amount 
+              : 120000;
+              
+            const subtractable = currentAmount - 120000;
+            if (subtractable >= remainingToSubtract) {
+              contributions[mNum] = {
+                ...contributions[mNum],
+                amount: currentAmount - remainingToSubtract
+              };
+              remainingToSubtract = 0;
+              break;
+            } else {
+              contributions[mNum] = {
+                ...contributions[mNum],
+                amount: 120000
+              };
+              remainingToSubtract -= subtractable;
+            }
+          }
+          if (remainingToSubtract > 0) {
+            loanEarningsBalance = Math.max(0, loanEarningsBalance - remainingToSubtract);
+          }
+        } else {
+          loanEarningsBalance = Math.max(0, loanEarningsBalance - share);
+        }
+      }
+      
+      return {
+        ...m,
+        loanEarningsBalance,
+        contributions
+      };
+    });
+
     const newLog: KixLog = {
       id: `pay-${Date.now()}`,
       timestamp: new Date().toISOString(),
@@ -1079,14 +1240,15 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
       amount: payment ? payment.amount : 0,
       month: currentMonth,
       description: !wasPaid
-        ? `AMORTIZAÇÃO EFECTUADA: Prestação nº ${paymentMonth} recebida de ${targetLoan.borrowerName} (${targetLoan.borrowerType === 'socio' ? 'sócio' : 'singular'}). Montante Total: ${formatCurrency(payment ? payment.amount : 0)} (Amortização: ${formatCurrency(payment ? payment.principalPaid : 0)} • Juros auferidos: ${formatCurrency(payment ? payment.interestPaid : 0)}).`
-        : `AMORTIZAÇÃO ANULADA: Pagamento da prestação nº ${paymentMonth} de ${targetLoan.borrowerName} foi cancelado administrativamente.`,
+        ? `AMORTIZAÇÃO EFECTUADA: Prestação nº ${paymentMonth} recebida de ${targetLoan.borrowerName} (${targetLoan.borrowerType === 'socio' ? 'sócio' : 'singular'}). Montante Total de ${formatCurrency(payment ? payment.amount : 0)} redistribuído automaticamente aos cooperantes (+${formatCurrency(share)} cada).`
+        : `AMORTIZAÇÃO ANULADA: Pagamento da prestação nº ${paymentMonth} de ${targetLoan.borrowerName} cancelado e redistribuição estornada.`,
     };
 
     const updatedLogs = [newLog, ...logs];
     setLoans(updatedLoans);
+    setMembers(updatedMembers);
     setLogs(updatedLogs);
-    saveState(members, updatedLogs, payoutsCompleted, currentMonth, updatedLoans);
+    saveState(updatedMembers, updatedLogs, payoutsCompleted, currentMonth, updatedLoans);
   };
 
   // Core Math Calculations
@@ -1127,7 +1289,13 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
 
   // Current month collectors
   const currentMonthPaidCount = members.filter((m) => m.contributions[currentMonth]?.paid).length;
-  const currentMonthCollected = currentMonthPaidCount * 120000;
+  const currentMonthCollected = members.reduce((sum, m) => {
+    const contr = m.contributions[currentMonth];
+    if (contr?.paid) {
+      return sum + ((contr as any).amount !== undefined ? (contr as any).amount : 120000);
+    }
+    return sum;
+  }, 0);
   const currentMonthBeneficiaries = members.filter((m) => m.assignedMonth === currentMonth);
   const isCurrentMonthPayoutDone = payoutsCompleted[currentMonth];
 
@@ -1800,6 +1968,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                   currentMonth={currentMonth}
                   socialBalance={socialBalance}
                   currentPaidCount={currentMonthPaidCount}
+                  currentCollected={currentMonthCollected}
                   totalMembersCount={12}
                   beneficiaries={getBeneficiariesList()}
                   isPayoutDone={isCurrentMonthPayoutDone}
@@ -1970,6 +2139,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                       setMembers={setMembers}
                       setLogs={setLogs}
                       saveState={saveState}
+                      loans={loans}
                     />
                   ) : (
                     <div className="p-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-center">

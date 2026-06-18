@@ -17,9 +17,11 @@ import {
   Award,
   KeyRound,
   Download,
-  Calculator
+  Calculator,
+  Bell,
+  AlertTriangle
 } from 'lucide-react';
-import { Member, KixLog, getMemberIdCode } from '../types';
+import { Member, KixLog, getMemberIdCode, getMemberDisplayCode, Loan } from '../types';
 
 interface MemberProfileWorkspaceProps {
   member: Member;
@@ -30,6 +32,7 @@ interface MemberProfileWorkspaceProps {
   setMembers: React.Dispatch<React.SetStateAction<Member[]>>;
   setLogs: React.Dispatch<React.SetStateAction<KixLog[]>>;
   saveState: (newMembers: Member[], newLogs: KixLog[]) => void;
+  loans?: Loan[];
 }
 
 export default function MemberProfileWorkspace({
@@ -41,6 +44,7 @@ export default function MemberProfileWorkspace({
   setMembers,
   setLogs,
   saveState,
+  loans = [],
 }: MemberProfileWorkspaceProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -118,9 +122,15 @@ export default function MemberProfileWorkspace({
     (monthKey) => member.contributions[Number(monthKey)]?.paid
   ).map(Number);
   
-  const totalPaidAmount = paidMonths.length * 120000;
+  const totalPaidAmount = Object.keys(member.contributions).reduce((sum, monthKey) => {
+    const contr = member.contributions[Number(monthKey)];
+    if (contr?.paid) {
+      return sum + ((contr as any).amount !== undefined ? (contr as any).amount : 120000);
+    }
+    return sum;
+  }, 0);
   const individualSocialRetained = paidMonths.length * 20000;
-  const individualRotationDeposited = paidMonths.length * 100000;
+  const individualRotationDeposited = totalPaidAmount - individualSocialRetained;
 
   const isCurrentMonthPaid = member.contributions[currentMonth]?.paid;
   const isTargetMonthPaid = member.contributions[targetPaymentMonth]?.paid;
@@ -134,6 +144,121 @@ export default function MemberProfileWorkspace({
       .format(val)
       .replace('AOA', 'KZs');
   };
+
+  // 1. Safe date parsing function for PT-AO dates (dd/mm/yyyy)
+  const parsePtDate = (dateStr: string): Date | null => {
+    try {
+      const cleanStr = dateStr.split(' ')[0]; // remove any "(Prorrogado)" or tags
+      const parts = cleanStr.split('/');
+      if (parts.length === 3) {
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const year = parseInt(parts[2], 10);
+        return new Date(year, month, day);
+      }
+    } catch (e) {
+      console.error("Error parsing date:", dateStr, e);
+    }
+    return null;
+  };
+
+  // 2. Identify current date (using mock/current year 2026 based on state context)
+  const today = new Date("2026-06-18T00:00:00"); 
+  const todayMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+  // 3. Compile all alert objects
+  interface PaymentAlert {
+    id: string;
+    type: 'quota' | 'prestacao';
+    monthNum?: number;
+    loanId?: string;
+    title: string;
+    description: string;
+    dueDateStr: string;
+    amount: number;
+    diffDays: number;
+    urgency: 'high' | 'medium' | 'info';
+  }
+
+  const alertsList: PaymentAlert[] = [];
+
+  // Generate Quota Alerts
+  [1, 2, 3, 4, 5, 6].forEach((mNum) => {
+    const hasPaid = member.contributions[mNum]?.paid;
+    if (!hasPaid) {
+      const dueDateStr = `15/${String(5 + mNum).padStart(2, '0')}/2026`;
+      const dateObj = parsePtDate(dueDateStr);
+      if (dateObj) {
+        const diffTime = dateObj.getTime() - todayMidnight.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        let urgency: 'high' | 'medium' | 'info' = 'info';
+        if (diffDays < 0) urgency = 'high';
+        else if (diffDays <= 30) urgency = 'medium';
+
+        // Add to alert list if overdue or upcoming (due soon under 30 days)
+        if (diffDays < 0 || diffDays <= 30) {
+          alertsList.push({
+            id: `quota-${mNum}`,
+            type: 'quota',
+            monthNum: mNum,
+            title: `Quota de Poupança - Mês 0${mNum}`,
+            description: diffDays < 0 
+              ? `A sua contribuição social para o Mês 0${mNum} está vencida há ${Math.abs(diffDays)} ${Math.abs(diffDays) === 1 ? 'dia' : 'dias'}.` 
+              : `A quota regulamentar do Mês 0${mNum} vencerá em ${diffDays} ${diffDays === 1 ? 'dia' : 'dias'}.`,
+            dueDateStr,
+            amount: 120000,
+            diffDays,
+            urgency,
+          });
+        }
+      }
+    }
+  });
+
+  // Generate Credit / Loan Payment Alerts
+  const myActiveLoans = (loans || []).filter((l) => {
+    const isOwner = (l.memberId === member.id) || 
+                    (l.borrowerName && l.borrowerName.toLowerCase().trim() === member.name.toLowerCase().trim()) ||
+                    (l.documentId && member.email && l.email.toLowerCase().trim() === member.email.toLowerCase().trim());
+    return isOwner && (l.status === 'active' || l.status === 'overdue');
+  });
+
+  myActiveLoans.forEach((loan) => {
+    loan.payments.forEach((p) => {
+      if (!p.paid) {
+        const dateObj = parsePtDate(p.dueDate);
+        if (dateObj) {
+          const diffTime = dateObj.getTime() - todayMidnight.getTime();
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+          let urgency: 'high' | 'medium' | 'info' = 'info';
+          if (diffDays < 0) urgency = 'high';
+          else if (diffDays <= 30) urgency = 'medium';
+
+          if (diffDays < 0 || diffDays <= 30) {
+            alertsList.push({
+              id: `loan-${loan.id}-${p.month}`,
+              type: 'prestacao',
+              loanId: loan.id,
+              monthNum: p.month,
+              title: `Amortização de Crédito - Contrato ${loan.id} (Parcela ${p.month})`,
+              description: diffDays < 0
+                ? `A respectiva prestação (Capital + Juros) está vencida há ${Math.abs(diffDays)} ${Math.abs(diffDays) === 1 ? 'dia' : 'dias'}.`
+                : `A parcela contratual nº ${p.month} vencerá em ${diffDays} ${diffDays === 1 ? 'dia' : 'dias'}.`,
+              dueDateStr: p.dueDate,
+              amount: p.amount,
+              diffDays,
+              urgency,
+            });
+          }
+        }
+      }
+    });
+  });
+
+  // Sort alerts: most overdue first, then closest to due date
+  alertsList.sort((a, b) => a.diffDays - b.diffDays);
 
   // Drag and drop handlers
   const handleDrag = (e: React.DragEvent) => {
@@ -315,7 +440,9 @@ export default function MemberProfileWorkspace({
             </div>
             
             <p className="text-xs text-slate-400 flex flex-wrap items-center justify-center md:justify-start gap-x-2 gap-y-1.5">
-              <span>ID de Membro: <span className="font-mono font-extrabold text-emerald-400 bg-emerald-950/40 border border-emerald-800/35 px-1.5 py-0.5 rounded uppercase select-all">{getMemberIdCode(member.name, member.phone)}</span></span>
+              <span>ID de Membro: <span className="font-mono font-extrabold text-sky-400 bg-sky-950/40 border border-sky-800/35 px-1.5 py-0.5 rounded uppercase select-all" title="ID de Cadastro Cooperativo">{getMemberDisplayCode(member.id)}</span></span>
+              <span>•</span>
+              <span>Checksum: <span className="font-mono text-slate-400 select-all" title="Complemento Hash SHA-Código">{getMemberIdCode(member.name, member.phone)}</span></span>
               <span>•</span>
               <span>Seq: <span className="font-mono font-bold text-slate-300">#0{member.id}</span></span>
               <span>•</span>
@@ -387,6 +514,121 @@ export default function MemberProfileWorkspace({
           )}
         </div>
 
+      </div>
+
+      {/* 🔔 SISTEMA DE ALERTA VISUAL DE ASSIDUIDADE (QUOTAS E EMPRÉSTIMOS) */}
+      <div className="bg-white dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-800/80 p-5 shadow-sm space-y-4 text-left">
+        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-indigo-50 dark:bg-indigo-950/30 text-indigo-600 dark:text-indigo-400 rounded-lg">
+              <Bell className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="font-sans font-extrabold text-[#1e293b] dark:text-white text-xs uppercase tracking-wider text-left">
+                Notificações de Compromissos Fiduciários
+              </h3>
+              <p className="text-[10px] text-slate-400 font-sans text-left">
+                Monitorização contínua de prazos para proteção de score de crédito cooperativo.
+              </p>
+            </div>
+          </div>
+          {alertsList.length > 0 && (
+            <span className="text-[9px] font-black uppercase text-white bg-amber-500 hover:bg-amber-600 px-2.5 py-1 rounded-full select-none">
+              {alertsList.filter(a => a.urgency === 'high').length} Crítico(s)
+            </span>
+          )}
+        </div>
+
+        {alertsList.length === 0 ? (
+          <div className="flex items-center gap-3 bg-emerald-50/30 dark:bg-[#04211a]/20 border border-emerald-150/40 dark:border-[#04211a]/40 p-4 rounded-xl text-left">
+            <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+            <div>
+              <strong className="text-emerald-800 dark:text-emerald-450 font-extrabold block text-[11px] uppercase tracking-wide">Tudo em Conformidade!</strong>
+              <span className="text-[10px] text-slate-400 block mt-0.5 leading-relaxed font-sans">
+                Parabéns, {member.name}! O seu mapa de assiduidade de quotas de poupança interajuda e prestações de crédito amortizante encontra-se a 100% regularitário e sem pendências até à presente data.
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2.5">
+            {alertsList.map((alert) => {
+              const isOverdue = alert.diffDays < 0;
+              const isQuota = alert.type === 'quota';
+
+              return (
+                <div 
+                  key={alert.id}
+                  className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3.5 rounded-xl border transition-all text-left ${
+                    alert.urgency === 'high'
+                      ? 'bg-rose-50/35 dark:bg-rose-950/10 border-rose-200/40 text-rose-800 dark:text-rose-400'
+                      : 'bg-amber-50/35 dark:bg-amber-950/10 border-amber-200/40 text-amber-800 dark:text-amber-400'
+                  }`}
+                >
+                  <div className="flex items-start gap-2.5 min-w-0">
+                    <div className={`p-2 rounded-lg shrink-0 mt-0.5 ${
+                      alert.urgency === 'high'
+                        ? 'bg-rose-100/60 dark:bg-rose-950/40 text-rose-600'
+                        : 'bg-amber-100/60 dark:bg-amber-950/40 text-amber-600'
+                    }`}>
+                      <AlertTriangle className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                        <span className="text-[11px] font-black uppercase tracking-wide text-slate-800 dark:text-white block">
+                          {alert.title}
+                        </span>
+                        <span className={`text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded font-mono ${
+                          alert.urgency === 'high'
+                            ? 'bg-rose-100 dark:bg-rose-900/30 text-rose-700'
+                            : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700'
+                        }`}>
+                          {isOverdue 
+                            ? `Vencido há ${Math.abs(alert.diffDays)} ${Math.abs(alert.diffDays) === 1 ? 'dia' : 'dias'}` 
+                            : `Vence em ${alert.diffDays} ${alert.diffDays === 1 ? 'dia' : 'dias'}`
+                          }
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-1 leading-relaxed max-w-3xl font-sans">
+                        {alert.description} 
+                        {isQuota ? ' Regularizar carregando o respetivo comprovativo abaixo.' : ' Por favor, proceda à amortização e pagamento junto da gerência cooperativa.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 shrink-0 w-full sm:w-auto justify-end border-t sm:border-t-0 border-slate-100 pt-2.5 sm:pt-0">
+                    <div className="text-right">
+                      <span className="text-[9px] text-slate-400 block uppercase font-bold">Valor Total</span>
+                      <strong className="text-xs font-mono font-black text-slate-805 dark:text-white">
+                        {formatCurrency(alert.amount)}
+                      </strong>
+                    </div>
+                    {isQuota && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (alert.monthNum) {
+                            setTargetPaymentMonth(alert.monthNum);
+                            const element = document.getElementById('manual-pdf-upload') || document.getElementById('member-workspace-panel');
+                            if (element) {
+                              element.scrollIntoView({ behavior: 'smooth' });
+                            }
+                          }
+                        }}
+                        className={`px-3 py-1.5 text-[10px] font-bold uppercase rounded-lg transition-all focus:ring-2 cursor-pointer ${
+                          alert.urgency === 'high'
+                            ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-sm focus:ring-rose-500/35'
+                            : 'bg-amber-600 hover:bg-amber-750 text-white shadow-sm focus:ring-amber-500/35'
+                        }`}
+                      >
+                        Pagar Agora
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Body Core Workspace columns */}

@@ -1,6 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  Legend, 
+  ResponsiveContainer,
+  Cell
+} from 'recharts';
+import { 
   TrendingUp, Plus, ShieldCheck, FileText, Check, AlertTriangle, 
   Scale, Calendar, HelpCircle, CreditCard, ArrowUpRight, 
   User, Building, Search, DollarSign, Landmark, Phone, MessageSquare, Briefcase,
@@ -100,16 +111,54 @@ export default function CreditManagement({
   const [documentId, setDocumentId] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
+
+  const [fiadorMemberId, setFiadorMemberId] = useState<number>(() => {
+    const mActive = members.filter(m => m.role !== 'admin');
+    return mActive[0]?.id || members[0]?.id || 0;
+  });
+
+  const [moratoriumState, setMoratoriumState] = useState<{
+    loanId: string;
+    month: number;
+    days: number;
+    reason: string;
+    isActive: boolean;
+  }>({
+    loanId: '',
+    month: 0,
+    days: 30,
+    reason: 'Moratória por carência operacional de rendimentos',
+    isActive: false
+  });
+
+  const addDaysToPtDate = (dateStr: string, days: number): string => {
+    try {
+      const parts = dateStr.split('/');
+      if (parts.length === 3) {
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1; // 0-indexed
+        const year = parseInt(parts[2], 10);
+        const originalDate = new Date(year, month, day);
+        originalDate.setDate(originalDate.getDate() + days);
+        return originalDate.toLocaleDateString('pt-AO');
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    const fallbackDate = new Date();
+    fallbackDate.setDate(fallbackDate.getDate() + days);
+    return fallbackDate.toLocaleDateString('pt-AO');
+  };
   
   // Custom limits corresponding to Member vs External Client
   const limitSocio = 1500000;
   const limitSingular = 800000;
-  const defaultRateSocio = 6; // 6%
-  const defaultRateSingular = 14; // 14%
+  const defaultRateSocio = 10; // 10% flat
+  const defaultRateSingular = 25; // 25% flat
 
   const [amountRequested, setAmountRequested] = useState<number>(300000);
   const [durationMonths, setDurationMonths] = useState<number>(3);
-  const [interestRate, setInterestRate] = useState<number>(6);
+  const [interestRate, setInterestRate] = useState<number>(10);
   const [guarantees, setGuarantees] = useState('');
   const [readTerms, setReadTerms] = useState(false);
 
@@ -151,12 +200,12 @@ export default function CreditManagement({
     }
   };
 
-  // Dynamic calculations for preview
-  const monthlyPrincipal = amountRequested / durationMonths;
-  const monthlyInterest = amountRequested * (interestRate / 100);
-  const monthlyInstallment = monthlyPrincipal + monthlyInterest;
-  const totalInterestExpected = monthlyInterest * durationMonths;
+  // Dynamic calculations for preview (non-monthly flat interest rate over the total amount)
+  const totalInterestExpected = amountRequested * (interestRate / 100);
   const totalRepaymentExpected = amountRequested + totalInterestExpected;
+  const monthlyPrincipal = amountRequested / durationMonths;
+  const monthlyInterest = totalInterestExpected / durationMonths;
+  const monthlyInstallment = totalRepaymentExpected / durationMonths;
 
   // Format currency helpers
   const formatCurrency = (val: number) => {
@@ -205,8 +254,7 @@ export default function CreditManagement({
   const totalPrincipalDisbursed = loans.reduce((acc, l) => acc + l.amountRequested, 0);
   
   const totalInterestFundoExpected = loans.reduce((acc, l) => {
-    const montInter = l.amountRequested * (l.interestRate / 100);
-    return acc + (montInter * l.durationMonths);
+    return acc + l.payments.reduce((sum, p) => sum + p.interestPaid, 0);
   }, 0);
 
   const totalInterestFundoCollected = loans.reduce((acc, l) => {
@@ -221,6 +269,115 @@ export default function CreditManagement({
   const averageInterestRate = loans.length > 0
     ? loans.reduce((acc, l) => acc + l.interestRate, 0) / loans.length
     : 0;
+
+  // Prudential Rules & Solvency Calculations
+  const totalQuotasWithdrawn = members.reduce((acc, m) => {
+    return acc + Object.keys(m.contributions).reduce((monthAcc, monthKey) => {
+      const contr = m.contributions[Number(monthKey)];
+      if (contr?.paid) {
+        const amt = (contr as any).amount !== undefined ? (contr as any).amount : 120000;
+        return monthAcc + amt;
+      }
+      return monthAcc;
+    }, 0);
+  }, 0);
+
+  const liquidVaultBalance = Math.max(0, totalQuotasWithdrawn - activeAmortizingBalance);
+  const riskExposureRatio = totalQuotasWithdrawn > 0 ? (activeAmortizingBalance / totalQuotasWithdrawn) * 100 : 0;
+  
+  const overdueLoansCount = loans.filter(l => l.status === 'overdue').length;
+  const totalActiveLoansCount = loans.filter(l => l.status === 'active' || l.status === 'overdue').length;
+  const portfolioAtRiskPercent = totalActiveLoansCount > 0 ? (overdueLoansCount / totalActiveLoansCount) * 100 : 0;
+
+  // Duplicate identifiers list for fraud check
+  const duplicateBIList = loans
+    .filter(l => l.status === 'active' || l.status === 'overdue')
+    .map(l => l.documentId)
+    .filter((id, index, self) => id && self.indexOf(id) !== index);
+
+  // Rentabilidade por tipo de devedor (Sócio 10% vs Singular 25%)
+  const socioLoans = loans.filter(l => l.borrowerType === 'socio');
+  const singularLoans = loans.filter(l => l.borrowerType !== 'socio');
+
+  const socioPrincipal = socioLoans.reduce((acc, l) => acc + l.amountRequested, 0);
+  const socioInterestExpected = socioLoans.reduce((acc, l) => {
+    return acc + l.payments.reduce((sum, p) => sum + p.interestPaid, 0);
+  }, 0);
+  const socioInterestCollected = socioLoans.reduce((acc, l) => {
+    return acc + l.payments.filter(p => p.paid).reduce((sum, p) => sum + p.interestPaid, 0);
+  }, 0);
+
+  const singularPrincipal = singularLoans.reduce((acc, l) => acc + l.amountRequested, 0);
+  const singularInterestExpected = singularLoans.reduce((acc, l) => {
+    return acc + l.payments.reduce((sum, p) => sum + p.interestPaid, 0);
+  }, 0);
+  const singularInterestCollected = singularLoans.reduce((acc, l) => {
+    return acc + l.payments.filter(p => p.paid).reduce((sum, p) => sum + p.interestPaid, 0);
+  }, 0);
+
+  // Recharts data format
+  const profitabilityChartData = [
+    {
+      name: 'Sócios (10%)',
+      'Principal Ofertado': socioPrincipal,
+      'Juros Contratados': socioInterestExpected,
+      'Juros Líquidos Recebidos': socioInterestCollected,
+    },
+    {
+      name: 'Singulares (25%)',
+      'Principal Ofertado': singularPrincipal,
+      'Juros Contratados': singularInterestExpected,
+      'Juros Líquidos Recebidos': singularInterestCollected,
+    }
+  ];
+
+  // Moratorium handler
+  const handleApplyMoratorium = () => {
+    const { loanId, month, days, reason } = moratoriumState;
+    const targetLoan = loans.find(l => l.id === loanId);
+    if (!targetLoan) return;
+
+    const updatedLoans = loans.map((loan) => {
+      if (loan.id === loanId) {
+        const updatedPayments = loan.payments.map((p) => {
+          if (p.month === month) {
+            const newDate = addDaysToPtDate(p.dueDate, days);
+            const noteSuffix = ` (Prorrogado +${days}d)`;
+            const updatedDate = p.dueDate.includes('Prorrogado') ? newDate : `${newDate}${noteSuffix}`;
+            return {
+              ...p,
+              dueDate: updatedDate,
+              moratoriumReason: reason,
+              moratoriumGrantedAt: new Date().toISOString()
+            };
+          }
+          return p;
+        });
+
+        return {
+          ...loan,
+          payments: updatedPayments,
+        };
+      }
+      return loan;
+    });
+
+    const newLog: KixLog = {
+      id: `moratorium-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      type: 'policy_change',
+      amount: 0,
+      memberName: targetLoan.borrowerName,
+      month: currentMonth,
+      description: `MORATÓRIA CONCEDIDA: Parcela nº ${month} do contrato ${loanId} de ${targetLoan.borrowerName} prorrogada por +${days} dias. Motivo: "${reason}". Concedido administrativa e cooperativamente.`,
+    };
+
+    const updatedLogs = [newLog, ...logs];
+    saveState(members, updatedLogs, undefined, undefined, updatedLoans as Loan[]);
+
+    alert(`Moratória homologada com sucesso! Parcela prorrogada por mais ${days} dias e averbada formalmente no registro histórico de auditoria do Fundo.`);
+    setMoratoriumState({ loanId: '', month: 0, days: 30, reason: '', isActive: false });
+  };
 
   // Filtering Loans
   const filteredLoans = loans.filter(l => {
@@ -278,6 +435,12 @@ export default function CreditManagement({
       return;
     }
 
+    // 1. Solvency & Cash Reserve Audit Verification
+    if (amountRequested > liquidVaultBalance) {
+      alert(`CONFORMIDADE E SOLVÊNCIA NEGADA: O montante do crédito solicitado (${formatCurrency(amountRequested)}) excede as reservas de caixa operacionais disponíveis da Cooperativa Kixi-Fundo (${formatCurrency(liquidVaultBalance)}).\n\nReduza o montante ou aguarde a recolha de novas quotas mensais para garantir a saúde financeira e segurança do fundo coletivo.`);
+      return;
+    }
+
     const currentLimit = borrowerType === 'socio' ? limitSocio : limitSingular;
     if (amountRequested > currentLimit) {
       alert(`O montante excede o limite definido (${formatCurrency(currentLimit)}) para a categoria selecionada.`);
@@ -287,6 +450,21 @@ export default function CreditManagement({
     if (!guarantees.trim()) {
       alert('É estritamente necessário estipular as garantias de penhor ou fiadores para o processo de crédito.');
       return;
+    }
+
+    // 2. Co-signer / Fiador Cooperante Mandate
+    let guaranteesWithFiadorText = guarantees.trim();
+    if (borrowerType === 'singular') {
+      if (!fiadorMemberId) {
+        alert('RECURSO RECUSADO: É obrigatório nomear um Sócio Fiador Co-responsável para devedores singulares (não-sócios) para conter riscos de crédito.');
+        return;
+      }
+      const fiadorMember = members.find(m => m.id === fiadorMemberId);
+      if (!fiadorMember) {
+        alert('Membro fiador selecionado inválido.');
+        return;
+      }
+      guaranteesWithFiadorText += `\n\n[FIANÇA SOLIDÁRIA COOPERATIVA]: Sócio Co-Assinante Co-responsável: ${fiadorMember.name} (Telefone: ${fiadorMember.phone}). O referido fiador, sendo membro ativo do Kixi-Fundo, outorga e assina eletronicamente o presente contrato como garantidor solidário e principal pagador da totalidade do principal e dos juros ora acordados, renunciando ao benefício de exclusão em caso de inadimplemento do devedor.`;
     }
 
     // Generate monthly payment records
@@ -352,7 +530,7 @@ export default function CreditManagement({
       durationMonths,
       interestRate,
       monthlyInstallment,
-      guarantees.trim()
+      guaranteesWithFiadorText
     );
 
     const newLoan: Loan = {
@@ -366,7 +544,7 @@ export default function CreditManagement({
       amountRequested,
       interestRate,
       durationMonths,
-      guarantees: guarantees.trim(),
+      guarantees: guaranteesWithFiadorText,
       status: 'active',
       contractDate: new Date().toLocaleDateString('pt-AO'),
       payments: generatedPayments,
@@ -555,6 +733,207 @@ export default function CreditManagement({
             </div>
           </div>
 
+          {/* PRUDENTIAL CONTROL AND COMPLIANCE MONITORING BOARD */}
+          <div className="bg-slate-50 dark:bg-[#0e1320] border border-slate-200/60 dark:border-slate-805 p-5 rounded-xl space-y-4 text-left">
+            <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5 leading-none">
+              <ShieldCheck className="w-4 h-4 text-[#0ea5e9]" /> Painel de Governação Fiduciária e Conformidade Cooperativa
+            </h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              {/* Card 1: Solvency Liquidity Coverage Ratio */}
+              <div className="bg-white dark:bg-[#151c2c]/80 p-4 rounded-lg border border-slate-100 dark:border-slate-800 space-y-2">
+                <div className="flex items-center justify-between text-[10px] uppercase font-bold text-slate-400">
+                  <span>Margem de Solvência</span>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black ${
+                    totalQuotasWithdrawn > 0 && (liquidVaultBalance / totalQuotasWithdrawn) * 105 >= 20 
+                      ? 'bg-emerald-50 dark:bg-[#052e25] text-emerald-600 dark:text-emerald-450' 
+                      : 'bg-rose-50 dark:bg-rose-950/20 text-rose-500'
+                  }`}>
+                    {totalQuotasWithdrawn > 0 && (liquidVaultBalance / totalQuotasWithdrawn) * 105 >= 20 ? 'Excelente' : 'Abaixo de 20%'}
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-lg font-black font-mono text-slate-900 dark:text-white">
+                    {(totalQuotasWithdrawn > 0 ? (liquidVaultBalance / totalQuotasWithdrawn) * 105 : 0).toFixed(1)}% <span className="text-[10px] text-slate-450 font-medium">de liquidez</span>
+                  </div>
+                  <div className="text-[10px] text-slate-450 leading-normal font-medium">
+                    Fundo de reserva líquido em caixa ({formatCurrency(liquidVaultBalance)}) sobre total de quota social ({formatCurrency(totalQuotasWithdrawn)}).
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 2: Risk Exposure Allocation */}
+              <div className="bg-white dark:bg-[#151c2c]/80 p-4 rounded-lg border border-slate-100 dark:border-slate-800 space-y-2">
+                <div className="flex items-center justify-between text-[10px] uppercase font-bold text-slate-400">
+                  <span>Exposição da Carteira</span>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black ${
+                    riskExposureRatio <= 50 
+                      ? 'bg-emerald-50 dark:bg-[#052e25] text-emerald-600 dark:text-emerald-450' 
+                      : riskExposureRatio <= 70 
+                        ? 'bg-amber-50 dark:bg-amber-950/20 text-amber-600'
+                        : 'bg-rose-50 dark:bg-rose-950/20 text-rose-500'
+                  }`}>
+                    {riskExposureRatio <= 50 ? 'Verde (Saudável)' : riskExposureRatio <= 70 ? 'Alerta (Atenção)' : 'Exposta'}
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-lg font-black font-mono text-slate-900 dark:text-white">
+                    {riskExposureRatio.toFixed(1)}% <span className="text-[10px] text-slate-450 font-medium">de fundos lendo</span>
+                  </div>
+                  <div className="text-[10px] text-slate-450 leading-normal font-medium">
+                    Total do principal de crédito ativo em circulação ({formatCurrency(activeAmortizingBalance)}) em relação à poupança coletiva.
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 3: Portfolio At Risk (PAR-30) */}
+              <div className="bg-white dark:bg-[#151c2c]/80 p-4 rounded-lg border border-slate-100 dark:border-slate-800 space-y-2">
+                <div className="flex items-center justify-between text-[10px] uppercase font-bold text-slate-400">
+                  <span>Inadimplência Ativa (PAR)</span>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black ${
+                    portfolioAtRiskPercent <= 5 
+                      ? 'bg-emerald-50 dark:bg-[#052e25] text-emerald-600 dark:text-emerald-450' 
+                      : portfolioAtRiskPercent <= 15 
+                        ? 'bg-amber-50 dark:bg-amber-950/20 text-amber-655'
+                        : 'bg-rose-50 dark:bg-rose-950/20 text-rose-500'
+                  }`}>
+                    {portfolioAtRiskPercent <= 5 ? 'Excelente' : portfolioAtRiskPercent <= 15 ? 'Médio risco' : 'ALTO RISCO'}
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-lg font-black font-mono text-slate-900 dark:text-white">
+                    {portfolioAtRiskPercent.toFixed(1)}% <span className="text-[10px] text-slate-450 font-medium">de atraso</span>
+                  </div>
+                  <div className="text-[10px] text-slate-450 leading-normal font-medium">
+                    Relação entre contratos assinalados com atrasos / vencidos ({overdueLoansCount} de {totalActiveLoansCount} ativos) e carteira total.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Anti-fraud duplicates warnings */}
+            {duplicateBIList.length > 0 && (
+              <div className="bg-red-50/25 dark:bg-red-950/15 border border-red-200/40 p-3 rounded-lg text-[11px] leading-normal text-red-700 dark:text-red-400 flex items-start gap-2 text-left">
+                <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5 text-red-500" />
+                <div>
+                  <strong className="block font-black font-sans uppercase text-[10px]">Alerta de Dupla Exposição Ativa (Risco de Concentração de BI):</strong>
+                  Há beneficiários com o mesmo BI/NIF registrado em múltiplos contratos ativos concomitantes ({duplicateBIList.join(', ')}). Recomenda-se auditoria fiduciária de penhor e suspensão de novos desembolsos a esses devedores.
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* PAINEL DE KPI: DISTRIBUIÇÃO DE JUROS (10% VS 25%) COM RECHARTS */}
+          <div className="bg-white dark:bg-[#151c2c]/85 border border-slate-200/60 dark:border-slate-800 p-6 rounded-xl space-y-6 text-left">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-105 dark:border-slate-800/80 pb-4">
+              <div>
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5 leading-none">
+                  <TrendingUp className="w-4 h-4 text-emerald-500" /> Distribuição de Rentabilidade & Juros Acumulados
+                </h3>
+                <p className="text-[11px] text-slate-450 mt-1 font-sans">
+                  Análise de rentabilidade comparativa de Sócios (10%) vs Singulares (25%) em relação ao capital total emprestado.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded bg-amber-50 dark:bg-amber-950/20 text-amber-600 dark:text-amber-450">
+                  Sócio: 10% s/ Principal
+                </span>
+                <span className="text-[9px] font-black uppercase tracking-wider px-2 py-1 rounded bg-sky-50 dark:bg-sky-950/20 text-sky-600 dark:text-sky-450">
+                  Singular: 25% s/ Principal
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              
+              {/* Seção de Resumo de Indicadores KPI */}
+              <div className="lg:col-span-4 space-y-4 flex flex-col justify-between">
+                <div className="space-y-3.5">
+                  <div className="bg-slate-50 dark:bg-[#0e1320] p-4 rounded-xl border border-slate-100 dark:border-slate-850/60">
+                    <span className="text-[9px] uppercase font-bold text-slate-400 block mb-1">Rendimento Alvo (Sócios)</span>
+                    <strong className="text-lg font-black text-amber-600 dark:text-amber-400 font-mono">
+                      {socioPrincipal > 0 ? ((socioInterestExpected / socioPrincipal) * 100).toFixed(1) : '0.0'}%
+                    </strong>
+                    <div className="text-[10px] text-slate-450 mt-1.5 leading-snug font-medium font-sans">
+                      Principal: <span className="font-mono text-slate-700 dark:text-slate-300 font-bold">{formatCurrency(socioPrincipal)}</span>
+                      <br />Juros Totais: <span className="font-mono text-emerald-600 dark:text-emerald-450 font-bold">{formatCurrency(socioInterestExpected)}</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-50 dark:bg-[#0e1320] p-4 rounded-xl border border-slate-100 dark:border-slate-850/60">
+                    <span className="text-[9px] uppercase font-bold text-slate-400 block mb-1">Rendimento Alvo (Pessoas Singulares)</span>
+                    <strong className="text-lg font-black text-sky-600 dark:text-sky-400 font-mono">
+                      {singularPrincipal > 0 ? ((singularInterestExpected / singularPrincipal) * 100).toFixed(1) : '0.0'}%
+                    </strong>
+                    <div className="text-[10px] text-slate-450 mt-1.5 leading-snug font-medium font-sans">
+                      Principal: <span className="font-mono text-slate-700 dark:text-slate-300 font-bold">{formatCurrency(singularPrincipal)}</span>
+                      <br />Juros Totais: <span className="font-mono text-emerald-600 dark:text-emerald-450 font-bold">{formatCurrency(singularInterestExpected)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-emerald-50/20 dark:bg-[#04211a]/20 border border-emerald-100 dark:border-emerald-950/30 p-4 rounded-xl space-y-1">
+                  <span className="text-[9px] uppercase font-bold text-emerald-600 dark:text-emerald-450 block">Arrecadação de Rentabilidade</span>
+                  <div className="text-xl font-black font-mono text-emerald-700 dark:text-emerald-400">
+                    {totalInterestFundoExpected > 0 ? ((totalInterestFundoCollected / totalInterestFundoExpected) * 100).toFixed(1) : '0.0'}%
+                  </div>
+                  <p className="text-[9px] text-slate-450 leading-relaxed font-sans">
+                    Arrecadados {formatCurrency(totalInterestFundoCollected)} de {formatCurrency(totalInterestFundoExpected)} juros totais contratados em carteira.
+                  </p>
+                </div>
+              </div>
+
+              {/* Seção do Gráfico de Barras de Distribuição Recharts */}
+              <div className="lg:col-span-8 bg-slate-50 dark:bg-[#0a0f1d] border border-slate-100 dark:border-slate-850 p-4 rounded-xl flex flex-col justify-between" style={{ minHeight: '300px' }}>
+                <span className="text-[9px] font-black uppercase text-slate-400 block mb-3 font-mono">Comparativo Principal & Dividendos de Juros (KZs)</span>
+                <div className="w-full h-full min-h-[224px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={profitabilityChartData}
+                      margin={{ top: 10, right: 10, left: 15, bottom: 5 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#33415520" />
+                      <XAxis 
+                        dataKey="name" 
+                        stroke="#94a3b8" 
+                        fontSize={10} 
+                        fontWeight="bold"
+                        tickLine={false} 
+                      />
+                      <YAxis 
+                        stroke="#94a3b8" 
+                        fontSize={9} 
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={(value) => `${(value / 1000).toFixed(0)}k`}
+                      />
+                      <Tooltip 
+                        formatter={(value: any) => [formatCurrency(Number(value)), '']}
+                        contentStyle={{ 
+                          backgroundColor: '#0f172a', 
+                          borderColor: '#334155',
+                          borderRadius: '8px',
+                          color: '#fff',
+                          fontSize: '11px',
+                          display: 'block'
+                        }}
+                      />
+                      <Legend 
+                        wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} 
+                        verticalAlign="bottom" 
+                        align="center"
+                      />
+                      <Bar name="Principal Cedido" dataKey="Principal Ofertado" fill="#0284c7" radius={[4, 4, 0, 0]} />
+                      <Bar name="Juros Contratados" dataKey="Juros Contratados" fill="#84cc16" radius={[4, 4, 0, 0]} />
+                      <Bar name="Juros Líquidos Recebidos" dataKey="Juros Líquidos Recebidos" fill="#10b981" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
             {/* Left overview text and explanation */}
@@ -573,7 +952,7 @@ export default function CreditManagement({
                       <User className="w-3.5 h-3.5" /> Crédito para Sócios
                     </h5>
                     <p className="text-[11px] text-slate-450 mt-1">
-                      Taxa social reduzida de <strong>5% a 8% ao mês</strong> para fomento familiar ou pessoal. O limite de concessão é expressivo, até <strong>1.500.000,00 KZs</strong>, avaliado conforme assiduidade de quotas do cooperado.
+                      Taxa social fixa de <strong>10% sobre o total emprestado</strong> para fomento familiar ou pessoal. O limite de concessão é expressivo, até <strong>1.500.000,00 KZs</strong>, estruturado em parcelas mensais amortizadas.
                     </p>
                   </div>
 
@@ -582,7 +961,7 @@ export default function CreditManagement({
                       <Building className="w-3.5 h-3.5" /> Crédito para Pessoas Singulares
                     </h5>
                     <p className="text-[11px] text-slate-450 mt-1">
-                      Aplicação comercial externa com juros protetivos de <strong>12% a 15% ao mês</strong>. O limite máximo de exposição é fixado em <strong>800.000,00 KZs</strong> e requer a custódia explícita de bens físicos como colateral.
+                      Aplicação comercial externa com juros protetivos fixos de <strong>25% sobre o valor total do crédito</strong>. O limite máximo é fixado em <strong>800.000,00 KZs</strong> e requer co-fiador e bens colaterais.
                     </p>
                   </div>
                 </div>
@@ -704,30 +1083,55 @@ export default function CreditManagement({
                   </select>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">
-                      Nome Completo do Devedor
-                    </label>
-                    <input
-                      type="text"
-                      value={borrowerName}
-                      onChange={(e) => setBorrowerName(e.target.value)}
-                      placeholder="Ex: Victor Manuel de Angola"
-                      className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-lg text-xs font-bold text-slate-900 dark:text-white"
-                    />
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">
+                        Nome Completo do Devedor
+                      </label>
+                      <input
+                        type="text"
+                        value={borrowerName}
+                        onChange={(e) => setBorrowerName(e.target.value)}
+                        placeholder="Ex: Victor Manuel de Angola"
+                        className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-lg text-xs font-bold text-slate-900 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">
+                        Número de Telefone (WhatsApp)
+                      </label>
+                      <input
+                        type="text"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        placeholder="Ex: +244 923 111 222"
+                        className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-lg text-xs font-bold text-slate-900 dark:text-white"
+                      />
+                    </div>
                   </div>
+
                   <div>
-                    <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">
-                      Número de Telefone (WhatsApp)
+                    <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1 flex items-center gap-1">
+                      Sócio Fiador Co-responsável (Fiança Solidária) <span className="text-red-500">*</span>
                     </label>
-                    <input
-                      type="text"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="Ex: +244 923 111 222"
-                      className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-lg text-xs font-bold text-slate-900 dark:text-white"
-                    />
+                    <select
+                      value={fiadorMemberId}
+                      onChange={(e) => setFiadorMemberId(Number(e.target.value))}
+                      className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-lg text-xs leading-5 text-slate-900 dark:text-white font-bold inline-block"
+                    >
+                      <option value="">-- Selecione o Sócio Fiador Garantidor --</option>
+                      {members
+                        .filter(m => m.role !== 'admin')
+                        .map(m => (
+                          <option key={m.id} value={m.id}>
+                            {m.name} ({m.phone}) - Cota Mês {m.assignedMonth}
+                          </option>
+                        ))}
+                    </select>
+                    <span className="text-[10px] text-slate-400 block mt-1">
+                      Regra de Proteção de Ativos: Devedores externos (Singulares) exigem a chancela fiduciária solidária de um sócio ativo.
+                    </span>
                   </div>
                 </div>
               )}
@@ -788,9 +1192,33 @@ export default function CreditManagement({
                     step={50000}
                     className="w-full px-3 py-1.8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-lg text-xs font-bold text-slate-900 dark:text-white font-mono"
                   />
-                  <span className="text-[10px] text-slate-400">
-                    Limite: {borrowerType === 'socio' ? '1.500.000 KZs' : '800.000 KZs'}
-                  </span>
+                  <div className="flex justify-between items-center text-[10px] text-slate-400 mt-1 select-none">
+                    <span>Limite: {borrowerType === 'socio' ? '1.500.000 KZs' : '800.000 KZs'}</span>
+                    <span className="font-semibold text-[9px] text-[#22c55e]">Tesouraria: {formatCurrency(liquidVaultBalance)}</span>
+                  </div>
+
+                  {/* Operational Solvency Guard */}
+                  <div className={`mt-2 p-2 rounded-lg border text-[10px] font-bold leading-normal transition-colors ${
+                    amountRequested > liquidVaultBalance
+                      ? 'bg-red-50/20 dark:bg-red-950/15 border-red-200/40 text-red-600 dark:text-red-400'
+                      : 'bg-emerald-50/25 dark:bg-[#062422]/20 border-emerald-250/25 text-emerald-600 dark:text-emerald-450'
+                  }`}>
+                    <div className="flex items-center justify-between gap-1">
+                      <span>Prudência Fiduciária:</span>
+                      <span className="font-extrabold uppercase text-[9px]">
+                        {amountRequested > liquidVaultBalance ? '⛔ Caixa Negada' : '✓ Caixa Aprovada'}
+                      </span>
+                    </div>
+                    {amountRequested > liquidVaultBalance ? (
+                      <p className="text-[9px] text-red-450 font-normal mt-1 leading-snug">
+                        Valor solicitado excede o saldo do fundo ({formatCurrency(liquidVaultBalance)}). Concessão bloqueada.
+                      </p>
+                    ) : (
+                      <p className="text-[9px] text-emerald-555 font-normal mt-1 leading-snug">
+                        Fundos seguros em tesouraria para liquidação imediata do capital.
+                      </p>
+                    )}
+                  </div>
                 </div>
 
                 <div>
@@ -810,18 +1238,16 @@ export default function CreditManagement({
 
                 <div>
                   <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1">
-                    Taxa de Juros Mensal (%)
+                    Taxa de Juros sobre o Total (%)
                   </label>
                   <input
                     type="number"
                     value={interestRate}
-                    onChange={(e) => setInterestRate(Number(e.target.value))}
-                    min={1}
-                    max={30}
-                    className="w-full px-3 py-1.8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-lg text-xs font-bold text-slate-900 dark:text-white font-mono"
+                    disabled
+                    className="w-full px-3 py-1.8 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-lg text-xs font-bold text-slate-500 dark:text-slate-400 font-mono cursor-not-allowed"
                   />
-                  <span className="text-[10px] text-slate-400">
-                    Sugestão: {borrowerType === 'socio' ? '5% - 8%' : '12% - 15%'}
+                  <span className="text-[10px] text-indigo-500 font-bold block mt-1">
+                    Definido por Regra: {borrowerType === 'socio' ? '10% (Sócios)' : '25% (Pessoas Singulares)'}
                   </span>
                 </div>
               </div>
@@ -850,18 +1276,18 @@ export default function CreditManagement({
                 </div>
 
                 <div className="flex justify-between items-center bg-white dark:bg-[#151c2c]/40 p-2.5 rounded-lg">
-                  <span className="text-slate-450">Yield de Juros Mensal ({interestRate}%):</span>
+                  <span className="text-slate-450">Parcela de Juros Amortizada:</span>
                   <span className="font-extrabold text-emerald-600 dark:text-emerald-450 font-sans">{formatCurrency(monthlyInterest)}</span>
                 </div>
 
                 <div className="flex justify-between items-center bg-white dark:bg-[#151c2c]/40 p-2.5 rounded-lg">
-                  <span className="text-slate-450">Mensalidade Total de Cobrança:</span>
+                  <span className="text-slate-450">Amortização Mensal Total (Capital + Juros):</span>
                   <span className="font-black text-sky-600 dark:text-sky-400 font-sans">{formatCurrency(monthlyInstallment)}</span>
                 </div>
 
                 <div className="border-t border-slate-200 dark:border-slate-700/60 my-2 pt-2 space-y-2">
                   <div className="flex justify-between items-center">
-                    <span className="text-slate-450">Lucro de Juros p/ Fundo:</span>
+                    <span className="text-slate-450">Retorno Total em Juros ({interestRate}%):</span>
                     <span className="font-extrabold text-emerald-600 dark:text-emerald-400">{formatCurrency(totalInterestExpected)}</span>
                   </div>
                   <div className="flex justify-between items-center text-sm font-black text-slate-950 dark:text-white bg-sky-100/50 dark:bg-sky-950/20 p-2 rounded-lg border border-sky-100 dark:border-sky-900/10">
@@ -1167,13 +1593,28 @@ export default function CreditManagement({
                               ✓ Pago {p.paidAt ? `(${p.paidAt})` : ''}
                             </span>
                           ) : isAdmin ? (
-                            <button
-                              type="button"
-                              onClick={() => onPayInstallment(selectedLoan.id, p.month)}
-                              className="px-2.5 py-1 text-[9px] font-black text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg cursor-pointer hover:shadow hover:shadow-emerald-500/10 active:scale-95 text-center leading-none"
-                            >
-                              Baixar Parcela
-                            </button>
+                            <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                              <button
+                                type="button"
+                                onClick={() => onPayInstallment(selectedLoan.id, p.month)}
+                                className="px-2 py-1 text-[9px] font-black text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg cursor-pointer hover:shadow hover:shadow-emerald-500/10 active:scale-95 text-center leading-none"
+                              >
+                                Baixar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setMoratoriumState({
+                                  loanId: selectedLoan.id,
+                                  month: p.month,
+                                  days: 30,
+                                  reason: 'Prorrogação por dificuldade temporária de colheita/receita',
+                                  isActive: true
+                                })}
+                                className="px-2 py-1 text-[9px] font-black text-amber-700 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/20 dark:hover:bg-amber-900/30 rounded-lg border border-amber-200 dark:border-amber-900/30 transition-colors cursor-pointer text-center leading-none"
+                              >
+                                Moratória
+                              </button>
+                            </div>
                           ) : (
                             <span className="text-[9px] font-black text-amber-700 bg-amber-100/50 dark:bg-amber-950/20 px-2 py-0.5 rounded-full border border-amber-250/55 select-none animate-pulse">
                               Aguardando
@@ -1696,6 +2137,100 @@ export default function CreditManagement({
             </div>
 
           </div>
+        </div>
+      )}
+
+      {/* MORATÓRIA / RESTRUCTURING MODAL */}
+      {moratoriumState.isActive && (
+        <div className="fixed inset-0 z-[100] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="bg-white dark:bg-[#151c2c] border border-slate-200 dark:border-slate-800 max-w-md w-full rounded-2xl shadow-2xl p-6 space-y-5"
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-light dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-amber-50 dark:bg-amber-950/20 text-amber-600 rounded-lg">
+                  <Calendar className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider text-left">Homologar Moratória</h3>
+                  <span className="text-[10px] text-slate-450 font-bold block text-left">Restruturação de Contrato Ativo</span>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setMoratoriumState(prev => ({ ...prev, isActive: false }))}
+                className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs text-left">
+              <div className="bg-slate-50 dark:bg-[#0e1320] p-3 rounded-lg border border-slate-150 dark:border-slate-805 space-y-1 font-sans">
+                <div className="text-[10px] font-bold text-slate-400 uppercase">Beneficiário Tomador</div>
+                <div className="font-extrabold text-slate-900 dark:text-white text-xs">
+                  {loans.find(l => l.id === moratoriumState.loanId)?.borrowerName || 'Sem identificação'}
+                </div>
+                <div className="font-bold text-slate-400 text-[10px]">
+                  Contrato ID: <span className="font-mono text-slate-600 dark:text-slate-350">{moratoriumState.loanId}</span> | Parcela nº: <span className="font-bold text-sky-600 font-mono">{moratoriumState.month}</span>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black uppercase text-slate-400 mb-1">
+                  Prorrogação de Vencimento (Dias)
+                </label>
+                <select
+                  value={moratoriumState.days}
+                  onChange={(e) => setMoratoriumState(prev => ({ ...prev, days: Number(e.target.value) }))}
+                  className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-lg text-xs leading-5 text-slate-900 dark:text-white font-bold inline-block"
+                >
+                  <option value={15}>15 Dias de Carência Operacional</option>
+                  <option value={30}>30 Dias de Carência Cooperativa (Padrão)</option>
+                  <option value={45}>45 Dias de Carência Coletiva</option>
+                  <option value={60}>60 Dias de Prorrogação de Crédito</option>
+                  <option value={90}>90 Dias de Carência Extraordinária</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black uppercase text-slate-400 mb-1">
+                  Justificativa Estatutária / Motivo Cooperativo <span className="text-rose-500">*</span>
+                </label>
+                <textarea
+                  value={moratoriumState.reason}
+                  onChange={(e) => setMoratoriumState(prev => ({ ...prev, reason: e.target.value }))}
+                  rows={3}
+                  placeholder="Justifique o adiar de prazo cooperativamente (Ex: Queda provisória de volume comercial ou necessidade acrescida de interajuda de urgência de saúde)"
+                  className="w-full p-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-lg text-xs font-semibold text-slate-900 dark:text-white"
+                />
+              </div>
+
+              <div className="text-[10px] bg-amber-50/40 dark:bg-amber-950/15 text-amber-700 dark:text-amber-400 p-2.5 rounded-lg border border-amber-200/30 font-semibold leading-relaxed">
+                ⚠️ <strong>Aviso de Governação fiduciária:</strong> A concessão de moratórias não exclui a liquidação ordinária e juros futuros, mas elide as multas diárias de mora e protege o score de assiduidade do cooperador no diretório jurídico.
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 pt-2 no-print">
+              <button
+                type="button"
+                onClick={() => setMoratoriumState(prev => ({ ...prev, isActive: false }))}
+                className="w-full py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-lg transition-colors cursor-pointer"
+              >
+                Desistir
+              </button>
+              <button
+                type="button"
+                onClick={handleApplyMoratorium}
+                disabled={!moratoriumState.reason.trim()}
+                className="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black rounded-lg hover:shadow hover:shadow-amber-500/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                Averbar Moratória
+              </button>
+            </div>
+          </motion.div>
         </div>
       )}
 

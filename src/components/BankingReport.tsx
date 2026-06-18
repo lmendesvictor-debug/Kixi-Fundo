@@ -47,8 +47,17 @@ export default function BankingReport({
   const totalSocialDisbursed = socialAids.reduce((acc, log) => acc + log.amount, 0);
   const socialBalance = totalSocialRetained - totalSocialDisbursed;
 
-  // Total collected capital in general
-  const totalGrossCollected = totalPaidContributionsCount * 120000;
+  // Total collected capital in general (handles custom amounts per contribution dynamically)
+  const totalGrossCollected = members.reduce((acc, m) => {
+    return acc + Object.keys(m.contributions).reduce((monthAcc, monthKey) => {
+      const contr = m.contributions[Number(monthKey)];
+      if (contr?.paid) {
+        const amt = (contr as any).amount !== undefined ? (contr as any).amount : 120000;
+        return monthAcc + amt;
+      }
+      return monthAcc;
+    }, 0);
+  }, 0);
 
   // Total benefits paid out (600,000.00 * 2 per month completed)
   const completedMonthsOfPayout = Object.keys(payoutsCompleted).filter(

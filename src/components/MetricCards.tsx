@@ -16,6 +16,7 @@ interface MetricCardsProps {
   currentMonth: number;
   socialBalance: number;
   currentPaidCount: number;
+  currentCollected?: number;
   totalMembersCount: number;
   beneficiaries: { name: string; isPaid: boolean }[];
   isPayoutDone: boolean;
@@ -32,6 +33,7 @@ export default function MetricCards({
   currentMonth,
   socialBalance,
   currentPaidCount,
+  currentCollected: customCollected,
   totalMembersCount,
   beneficiaries,
   isPayoutDone,
@@ -44,7 +46,7 @@ export default function MetricCards({
   payoutsCompleted,
 }: MetricCardsProps) {
   const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'pending'>('all');
-  const currentCollected = currentPaidCount * 120000;
+  const currentCollected = customCollected !== undefined ? customCollected : currentPaidCount * 120000;
   const targetArrecadacao = totalMembersCount * 120000; // 1,440,000.00
   const progressPercent = (currentCollected / targetArrecadacao) * 100;
 

@@ -16,7 +16,7 @@ import {
   X,
   Eye
 } from 'lucide-react';
-import { Member, getMemberIdCode } from '../types';
+import { Member, getMemberIdCode, getMemberDisplayCode } from '../types';
 
 interface MembersTableProps {
   currentMonth: number;
@@ -218,6 +218,9 @@ export default function MembersTable({
   };
 
   const filteredMembers = members.filter((m) => {
+    // Excluir administradores da tabela de cadastro principal de quotas
+    if (m.role === 'admin') return false;
+
     const matchesSearch = 
       m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       m.phone.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -735,8 +738,11 @@ export default function MembersTable({
                             {m.email}
                           </span>
                           <div className="flex flex-wrap gap-1.5 mt-1.5 items-center">
-                            <span className="text-[9px] font-mono font-bold leading-none bg-teal-500/10 text-teal-700 dark:text-teal-400 border border-teal-500/20 dark:border-teal-500/30 px-1.5 py-0.5 rounded uppercase select-all" title="ID Único de Integrante (Chave Primária)">
-                              ID: {getMemberIdCode(m.name, m.phone)}
+                            <span className="text-[9px] font-mono font-extrabold leading-none bg-sky-500/10 text-sky-700 dark:text-sky-450 border border-sky-500/20 px-1.5 py-0.5 rounded uppercase" title="Código de Cadastro Cooperativo (Imutável)">
+                              ID: {getMemberDisplayCode(m.id)}
+                            </span>
+                            <span className="text-[8px] font-mono font-bold leading-none bg-slate-500/10 text-slate-400 dark:text-slate-500 border border-slate-200/40 dark:border-slate-800/60 px-1.5 py-0.5 rounded uppercase select-all" title="ID Único Completo de Integrante (Chave de Complemento Hash)">
+                              HASH: {getMemberIdCode(m.name, m.phone)}
                             </span>
                             {m.bankIban && (
                               <span className="text-[9px] text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 font-mono px-2 py-0.5 rounded-lg select-all font-bold tracking-wider" title="IBAN Cadastrado para Recebimentos">

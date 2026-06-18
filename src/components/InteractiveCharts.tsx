@@ -447,7 +447,13 @@ export default function InteractiveCharts({
                   ].map((m, i) => {
                     // Filter members who paid in month m.id
                     const paidCount = members.filter((member) => member.contributions[m.id]?.paid).length;
-                    const collectedKz = paidCount * 120000;
+                    const collectedKz = members.reduce((sum, member) => {
+                      const contr = member.contributions[m.id];
+                      if (contr?.paid) {
+                        return sum + ((contr as any).amount !== undefined ? (contr as any).amount : 120000);
+                      }
+                      return sum;
+                    }, 0);
                     
                     // Scale logic: We scale so a fully paying month (12 * 120k = 1.44M Kzs) or custom represents a clean height.
                     // Let's scale up slightly so it looks incredibly substantial and visually satisfying.
@@ -695,7 +701,13 @@ export default function InteractiveCharts({
               let accum = 0;
               const points = monthsTemp.map((m, index) => {
                 const paidCount = members.filter((member) => member.contributions[m.id]?.paid).length;
-                const collectedKz = paidCount * 120000;
+                const collectedKz = members.reduce((sum, member) => {
+                  const contr = member.contributions[m.id];
+                  if (contr?.paid) {
+                    return sum + ((contr as any).amount !== undefined ? (contr as any).amount : 120000);
+                  }
+                  return sum;
+                }, 0);
                 accum += collectedKz;
 
                 // Scale value relative to a max scale of 3,000,000 Kz (or scale appropriately based on data)

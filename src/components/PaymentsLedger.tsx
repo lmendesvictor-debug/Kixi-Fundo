@@ -64,7 +64,7 @@ export default function PaymentsLedger({
   } | null>(null);
 
   // Form Fields State
-  const [formMemberId, setFormMemberId] = useState<number>(members[0]?.id || 1);
+  const [formMemberId, setFormMemberId] = useState<number>(members.find(m => m.role !== 'admin')?.id || members[0]?.id || 1);
   const [formMonth, setFormMonth] = useState<number>(currentMonth);
   const [formDate, setFormDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [formAmount, setFormAmount] = useState<number>(120000); // Standard quota Kz
@@ -101,6 +101,9 @@ export default function PaymentsLedger({
 
   const allPaymentRows: PaymentRow[] = [];
   members.forEach((member) => {
+    // Administradores não concorrem a quotas ou pagamentos de quotas
+    if (member.role === 'admin') return;
+
     // We cover a 6-month cycle as standard, but we can generate entries for all 6 months
     for (let m = 1; m <= 6; m++) {
       const contrib = member.contributions[m];
@@ -161,7 +164,7 @@ export default function PaymentsLedger({
   // Open modal/form for a brand new payment
   const openNewPaymentModal = () => {
     setEditingRecord(null);
-    setFormMemberId(members[0]?.id || 1);
+    setFormMemberId(members.find(m => m.role !== 'admin')?.id || members[0]?.id || 1);
     setFormMonth(currentMonth);
     setFormDate(new Date().toISOString().split('T')[0]);
     setFormAmount(120000);
@@ -712,7 +715,7 @@ export default function PaymentsLedger({
                     onChange={(e) => setFormMemberId(Number(e.target.value))}
                     className="w-full p-2.5 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-250 dark:border-slate-800 rounded-lg text-slate-800 dark:text-white focus:outline-none focus:border-sky-500 font-semibold"
                   >
-                    {members.map((m) => (
+                    {members.filter(m => m.role !== 'admin').map((m) => (
                       <option key={m.id} value={m.id}>
                         {m.name} ({m.phone})
                       </option>

@@ -19,7 +19,7 @@ import {
   Database,
   Info
 } from 'lucide-react';
-import { Member, getMemberIdCode } from '../types';
+import { Member, getMemberIdCode, getMemberDisplayCode } from '../types';
 
 interface UserManagementProps {
   members: Member[];
@@ -59,11 +59,19 @@ export default function UserManagement({
     assignedMonth: '3',
     role: 'membro' as 'admin' | 'membro',
     tempPassword: 'membro123',
-    // Detailed info permissions inside 'conceder niveis de acesso as informacoes'
     allowFinancialReports: true,
     allowAuditingLogs: true,
     allowSupportRequest: true,
-    allowReceiptSubmission: true
+    allowReceiptSubmission: true,
+    accessInicio: true,
+    accessDashboard: true,
+    accessMembersList: true,
+    accessCycles: true,
+    accessSocial: true,
+    accessAudit: true,
+    accessAdminModule: true,
+    accessReports: true,
+    accessContracts: true,
   });
 
   const [errorMsg, setErrorMsg] = useState('');
@@ -166,13 +174,23 @@ export default function UserManagement({
       allowFinancialReports: true,
       allowAuditingLogs: true,
       allowSupportRequest: true,
-      allowReceiptSubmission: true
+      allowReceiptSubmission: true,
+      accessInicio: true,
+      accessDashboard: false,
+      accessMembersList: false,
+      accessCycles: true,
+      accessSocial: true,
+      accessAudit: true,
+      accessAdminModule: false,
+      accessReports: true,
+      accessContracts: true,
     });
     setErrorMsg('');
     setShowAddModal(true);
   };
 
   const openEditFlow = (member: Member) => {
+    const perms = member.permissions || {};
     setEditingMember(member);
     setFormData({
       name: member.name,
@@ -182,10 +200,19 @@ export default function UserManagement({
       assignedMonth: String(member.assignedMonth),
       role: member.role || 'membro',
       tempPassword: member.tempPassword || 'membro123',
-      allowFinancialReports: true, // Defaults for mock permissions level details
-      allowAuditingLogs: member.role === 'admin' || member.id % 2 === 0,
-      allowSupportRequest: true,
-      allowReceiptSubmission: true
+      allowFinancialReports: perms.accessReports !== false,
+      allowAuditingLogs: perms.accessAudit !== false,
+      allowSupportRequest: perms.accessSocial !== false,
+      allowReceiptSubmission: true,
+      accessInicio: perms.accessInicio !== false,
+      accessDashboard: perms.accessDashboard !== false,
+      accessMembersList: perms.accessMembersList !== false,
+      accessCycles: perms.accessCycles !== false,
+      accessSocial: perms.accessSocial !== false,
+      accessAudit: perms.accessAudit !== false,
+      accessAdminModule: perms.accessAdminModule !== false,
+      accessReports: perms.accessReports !== false,
+      accessContracts: perms.accessContracts !== false,
     });
     setErrorMsg('');
     setShowAddModal(true);
@@ -230,6 +257,17 @@ export default function UserManagement({
     setSuccessMsg('');
 
     const targetEmail = formData.email.trim().toLowerCase();
+    
+    // Check password reset permission
+    const isResettingPassword = editingMember && editingMember.tempPassword !== formData.tempPassword;
+    const isSuperAdmin = currentUserEmail.trim().toLowerCase() === 'lmendesvictor@gmail.com';
+    const loggedInMember = members.find(m => m.email.trim().toLowerCase() === currentUserEmail.trim().toLowerCase());
+    
+    if (isResettingPassword && !isSuperAdmin && loggedInMember?.permissions?.actionResetPasswords === false) {
+      setErrorMsg('Acesso Negado: Não possui privilégios de gestor para redefinir palavras-passe de cooperantes.');
+      return;
+    }
+
     if (!formData.name || !targetEmail) {
       setErrorMsg('Por favor, preencha o Nome e o E-mail de Utilizador.');
       return;
@@ -265,7 +303,18 @@ export default function UserManagement({
             bankIban: formData.bankIban.trim(),
             role: formData.role,
             assignedMonth: Number(formData.assignedMonth),
-            tempPassword: formData.tempPassword
+            tempPassword: formData.tempPassword,
+            permissions: {
+              accessInicio: formData.accessInicio,
+              accessDashboard: formData.accessDashboard,
+              accessMembersList: formData.accessMembersList,
+              accessCycles: formData.accessCycles,
+              accessSocial: formData.accessSocial,
+              accessAudit: formData.accessAudit,
+              accessAdminModule: formData.accessAdminModule,
+              accessReports: formData.accessReports,
+              accessContracts: formData.accessContracts,
+            }
           };
         }
         return m;
@@ -287,6 +336,17 @@ export default function UserManagement({
         assignedMonth: Number(formData.assignedMonth),
         role: formData.role,
         tempPassword: formData.tempPassword,
+        permissions: {
+          accessInicio: formData.accessInicio,
+          accessDashboard: formData.accessDashboard,
+          accessMembersList: formData.accessMembersList,
+          accessCycles: formData.accessCycles,
+          accessSocial: formData.accessSocial,
+          accessAudit: formData.accessAudit,
+          accessAdminModule: formData.accessAdminModule,
+          accessReports: formData.accessReports,
+          accessContracts: formData.accessContracts,
+        },
         contributions: {
           1: { paid: false },
           2: { paid: false },
@@ -482,9 +542,14 @@ export default function UserManagement({
                             <span className="text-[10px] text-slate-400 font-mono block leading-none">
                               {m.email}
                             </span>
-                            <span className="text-[9px] font-mono font-bold leading-none bg-teal-500/10 dark:bg-teal-500/20 text-teal-600 dark:text-teal-400 border border-teal-500/20 px-1.5 py-0.5 rounded w-fit uppercase select-all" title="ID Único associado à Chave Primária">
-                              ID: {getMemberIdCode(m.name, m.phone)}
-                            </span>
+                            <div className="flex items-center gap-1">
+                              <span className="text-[9px] font-mono font-extrabold leading-none bg-sky-500/10 text-sky-600 dark:text-sky-450 border border-sky-500/20 px-1 py-0.5 rounded uppercase select-all" title="ID de Cadastro">
+                                ID: {getMemberDisplayCode(m.id)}
+                              </span>
+                              <span className="text-[8px] font-mono font-normal leading-none text-slate-400 dark:text-slate-500 uppercase select-all" title="Complemento Hash">
+                                HASH: {getMemberIdCode(m.name, m.phone)}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1088,9 +1153,10 @@ export default function UserManagement({
                       Nível de Privilégio
                     </label>
                     <select
+                      disabled={currentUserEmail.trim().toLowerCase() !== 'lmendesvictor@gmail.com'}
                       value={formData.role}
                       onChange={(e) => setFormData({ ...formData, role: e.target.value as 'admin' | 'membro' })}
-                      className={`w-full text-xs p-2.5 rounded-lg border focus:outline-none focus:border-teal-500 ${
+                      className={`w-full text-xs p-2.5 rounded-lg border focus:outline-none focus:border-teal-500 disabled:opacity-70 disabled:cursor-not-allowed ${
                         theme === 'dark' 
                           ? 'bg-slate-950 border-slate-800 text-white' 
                           : 'bg-slate-50 border-slate-200'
@@ -1126,58 +1192,162 @@ export default function UserManagement({
                 </div>
 
                 {/* DETAILED INFORMATION ACCESS LEVELS - "CONCEDER NIVEIS DE ACESSO AS INFORMACOES" */}
-                <div className={`p-4 rounded-xl border space-y-3 ${
-                  theme === 'dark' ? 'bg-slate-950/45 border-slate-800/80' : 'bg-slate-50 border-slate-150'
-                }`}>
-                  <div className="flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400">
-                    <Database className="w-3.5 h-3.5" />
-                    <span>Conceder Níveis de Acesso às Informações</span>
-                  </div>
-                  
-                  <div className="space-y-2.5 pt-1 text-xs">
-                    {/* Access to detailed financial reports */}
-                    <label className="flex items-start gap-2.5 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={formData.allowFinancialReports}
-                        onChange={(e) => setFormData({ ...formData, allowFinancialReports: e.target.checked })}
-                        className="rounded border-slate-350 text-teal-600 focus:ring-teal-500 mt-0.5"
-                      />
-                      <div>
-                        <span className="font-bold text-slate-700 dark:text-slate-200 block">Autorizar Relatórios Bancários e Balancetes</span>
-                        <span className="text-[10px] text-slate-400">Permite ver e descarregar lançamentos e conciliações do banco BIC.</span>
+                {(() => {
+                  const isSuperAdmin = currentUserEmail.trim().toLowerCase() === 'lmendesvictor@gmail.com';
+                  return (
+                    <div className={`p-4 rounded-xl border space-y-3.5 ${
+                      theme === 'dark' ? 'bg-slate-950/45 border-slate-800/80' : 'bg-slate-50 border-slate-150'
+                    }`}>
+                      <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-teal-600 dark:text-teal-400">
+                        <Lock className="w-3.5 h-3.5" />
+                        <span>🔑 Controlo de Outorga de Acessos aos Módulos</span>
                       </div>
-                    </label>
 
-                    {/* Access to Audit Trail logs */}
-                    <label className="flex items-start gap-2.5 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={formData.allowAuditingLogs}
-                        onChange={(e) => setFormData({ ...formData, allowAuditingLogs: e.target.checked })}
-                        className="rounded border-slate-350 text-teal-600 focus:ring-teal-500 mt-0.5"
-                      />
-                      <div>
-                        <span className="font-bold text-slate-700 dark:text-slate-200 block">Visualizar Livro de Auditoria Digital (Ledger)</span>
-                        <span className="text-[10px] text-slate-400">Dá acesso ao histórico completo de contribuições e auditorias de regras matemáticas.</span>
-                      </div>
-                    </label>
+                      {!isSuperAdmin && (
+                        <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[10px] text-amber-600 dark:text-amber-400 font-medium leading-relaxed">
+                          ⚠️ <strong>Apenas Leitura:</strong> Só o Super-Administrador <strong>lmendesvictor</strong> possui prerrogativas regulatórias para conceder ou modificar permissões de acesso ao sistema.
+                        </div>
+                      )}
+                      
+                      <div className="grid grid-cols-1 gap-2 pt-1 text-xs">
+                        {/* accessInicio */}
+                        <label className={`flex items-start gap-2.5 ${isSuperAdmin ? 'cursor-pointer' : 'cursor-not-allowed opacity-75'}`}>
+                          <input
+                            type="checkbox"
+                            disabled={!isSuperAdmin}
+                            checked={formData.accessInicio}
+                            onChange={(e) => setFormData({ ...formData, accessInicio: e.target.checked })}
+                            className="rounded border-slate-350 text-teal-600 focus:ring-teal-500 mt-0.5"
+                          />
+                          <div>
+                            <span className="font-bold text-slate-700 dark:text-slate-200 block">Acesso ao Módulo 'Início'</span>
+                            <span className="text-[10px] text-slate-400">Permite ver as boas-vindas do consórcio rotativo.</span>
+                          </div>
+                        </label>
 
-                    {/* Allow social aid request support */}
-                    <label className="flex items-start gap-2.5 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={formData.allowSupportRequest}
-                        onChange={(e) => setFormData({ ...formData, allowSupportRequest: e.target.checked })}
-                        className="rounded border-slate-350 text-teal-600 focus:ring-teal-500 mt-0.5"
-                      />
-                      <div>
-                        <span className="font-bold text-slate-700 dark:text-slate-200 block">Solicitar Resgate no Fundo de Interajuda Coletiva</span>
-                        <span className="text-[10px] text-slate-400">Habilita submissão de casos de urgência social de farmácias ou consultas em rede.</span>
+                        {/* accessDashboard */}
+                        <label className={`flex items-start gap-2.5 ${isSuperAdmin ? 'cursor-pointer' : 'cursor-not-allowed opacity-75'}`}>
+                          <input
+                            type="checkbox"
+                            disabled={!isSuperAdmin}
+                            checked={formData.accessDashboard}
+                            onChange={(e) => setFormData({ ...formData, accessDashboard: e.target.checked })}
+                            className="rounded border-slate-350 text-teal-600 focus:ring-teal-500 mt-0.5"
+                          />
+                          <div>
+                            <span className="font-bold text-slate-700 dark:text-slate-200 block">Painel Geral & Gráficos (Dashboard)</span>
+                            <span className="text-[10px] text-slate-400">Dá acesso aos gráficos de distribuição financeira e conciliação de saldos fiscais.</span>
+                          </div>
+                        </label>
+
+                        {/* accessMembersList */}
+                        <label className={`flex items-start gap-2.5 ${isSuperAdmin ? 'cursor-pointer' : 'cursor-not-allowed opacity-75'}`}>
+                          <input
+                            type="checkbox"
+                            disabled={!isSuperAdmin}
+                            checked={formData.accessMembersList}
+                            onChange={(e) => setFormData({ ...formData, accessMembersList: e.target.checked })}
+                            className="rounded border-slate-350 text-teal-600 focus:ring-teal-500 mt-0.5"
+                          />
+                          <div>
+                            <span className="font-bold text-slate-700 dark:text-slate-200 block">Lista de Cadastro (Cooperados)</span>
+                            <span className="text-[10px] text-slate-400">Habilita visualização da tabela de membros ativos para quotas.</span>
+                          </div>
+                        </label>
+
+                        {/* accessCycles */}
+                        <label className={`flex items-start gap-2.5 ${isSuperAdmin ? 'cursor-pointer' : 'cursor-not-allowed opacity-75'}`}>
+                          <input
+                            type="checkbox"
+                            disabled={!isSuperAdmin}
+                            checked={formData.accessCycles}
+                            onChange={(e) => setFormData({ ...formData, accessCycles: e.target.checked })}
+                            className="rounded border-slate-350 text-teal-600 focus:ring-teal-500 mt-0.5"
+                          />
+                          <div>
+                            <span className="font-bold text-slate-700 dark:text-slate-200 block">Quadro de Pagamentos e Ciclos</span>
+                            <span className="text-[10px] text-slate-400">Permite registar e auditar lançamentos de saídas/ajustes mensais.</span>
+                          </div>
+                        </label>
+
+                        {/* accessSocial */}
+                        <label className={`flex items-start gap-2.5 ${isSuperAdmin ? 'cursor-pointer' : 'cursor-not-allowed opacity-75'}`}>
+                          <input
+                            type="checkbox"
+                            disabled={!isSuperAdmin}
+                            checked={formData.accessSocial}
+                            onChange={(e) => setFormData({ ...formData, accessSocial: e.target.checked })}
+                            className="rounded border-slate-350 text-teal-600 focus:ring-teal-500 mt-0.5"
+                          />
+                          <div>
+                            <span className="font-bold text-slate-700 dark:text-slate-200 block">Fundo de Interajuda Coletiva</span>
+                            <span className="text-[10px] text-slate-400">Permite amparar urgências sociais de saúde ou amparo solidário.</span>
+                          </div>
+                        </label>
+
+                        {/* accessAudit */}
+                        <label className={`flex items-start gap-2.5 ${isSuperAdmin ? 'cursor-pointer' : 'cursor-not-allowed opacity-75'}`}>
+                          <input
+                            type="checkbox"
+                            disabled={!isSuperAdmin}
+                            checked={formData.accessAudit}
+                            onChange={(e) => setFormData({ ...formData, accessAudit: e.target.checked })}
+                            className="rounded border-slate-350 text-teal-600 focus:ring-teal-500 mt-0.5"
+                          />
+                          <div>
+                            <span className="font-bold text-slate-700 dark:text-slate-200 block">Balancetes e Livro de Registos (Ledger)</span>
+                            <span className="text-[10px] text-slate-400">Exibe os fluxos com identificações de actas imutáveis (DEP, AJUDA, PAG, CRED).</span>
+                          </div>
+                        </label>
+
+                        {/* accessReports */}
+                        <label className={`flex items-start gap-2.5 ${isSuperAdmin ? 'cursor-pointer' : 'cursor-not-allowed opacity-75'}`}>
+                          <input
+                            type="checkbox"
+                            disabled={!isSuperAdmin}
+                            checked={formData.accessReports}
+                            onChange={(e) => setFormData({ ...formData, accessReports: e.target.checked })}
+                            className="rounded border-slate-350 text-teal-600 focus:ring-teal-500 mt-0.5"
+                          />
+                          <div>
+                            <span className="font-bold text-slate-700 dark:text-slate-200 block">Mapeamento de Balancete Bancário BIC</span>
+                            <span className="text-[10px] text-slate-400">Acesso às conciliações oficiais e PDF de extratos do cooperante.</span>
+                          </div>
+                        </label>
+
+                        {/* accessContracts */}
+                        <label className={`flex items-start gap-2.5 ${isSuperAdmin ? 'cursor-pointer' : 'cursor-not-allowed opacity-75'}`}>
+                          <input
+                            type="checkbox"
+                            disabled={!isSuperAdmin}
+                            checked={formData.accessContracts}
+                            onChange={(e) => setFormData({ ...formData, accessContracts: e.target.checked })}
+                            className="rounded border-slate-350 text-teal-600 focus:ring-teal-500 mt-0.5"
+                          />
+                          <div>
+                            <span className="font-bold text-slate-700 dark:text-slate-200 block">Amortização & Contratos de Microcréditos</span>
+                            <span className="text-[10px] text-slate-400">Ver e registar novos créditos emitidos com amortizações automáticas (CRED).</span>
+                          </div>
+                        </label>
+
+                        {/* accessAdminModule */}
+                        <label className={`flex items-start gap-2.5 ${isSuperAdmin ? 'cursor-pointer' : 'cursor-not-allowed opacity-75'}`}>
+                          <input
+                            type="checkbox"
+                            disabled={!isSuperAdmin}
+                            checked={formData.accessAdminModule}
+                            onChange={(e) => setFormData({ ...formData, accessAdminModule: e.target.checked })}
+                            className="rounded border-slate-350 text-teal-600 focus:ring-teal-500 mt-0.5"
+                          />
+                          <div>
+                            <span className="font-bold text-slate-700 dark:text-slate-200 block">Gestão Estratégica e Configurações (Admin)</span>
+                            <span className="text-[10px] text-slate-400">Parâmetros operacionais globais, comunicados e regras de quotas.</span>
+                          </div>
+                        </label>
                       </div>
-                    </label>
-                  </div>
-                </div>
+                    </div>
+                  );
+                })()}
 
                  {/* Footer buttons */}
                 <div className={`flex justify-end gap-3 pt-3 border-t ${
