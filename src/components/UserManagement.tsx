@@ -17,14 +17,15 @@ import {
   Check, 
   UserCheck, 
   Database,
-  Info
+  Info,
+  AlertCircle
 } from 'lucide-react';
 import { Member, getMemberIdCode, getMemberDisplayCode } from '../types';
 
 interface UserManagementProps {
   members: Member[];
   setMembers: React.Dispatch<React.SetStateAction<Member[]>>;
-  saveState: (newMembers: Member[], newLogs: any[]) => any;
+  saveState: (newMembers: Member[], newLogs: any[], payoutsCompleted?: any, currentMonth?: any, loans?: any, config?: any) => any;
   logs: any[];
   setLogs: React.Dispatch<React.SetStateAction<any[]>>;
   currentUserEmail: string;
@@ -79,6 +80,10 @@ export default function UserManagement({
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingConfig, setIsSavingConfig] = useState(false);
 
+  // Custom modal states for secure sandbox execution without blocking
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: number; email: string; name: string } | null>(null);
+  const [alertModal, setAlertModal] = useState<{ title: string; message: string; type: 'error' | 'warning' | 'success' } | null>(null);
+
   // Local state for app settings editable by admin
   const [appBankIban, setAppBankIban] = useState(appConfig.bankIban);
   const [appPhone, setAppPhone] = useState(appConfig.phone);
@@ -99,9 +104,84 @@ export default function UserManagement({
   const [contractClauseGarantias, setContractClauseGarantias] = useState(appConfig.contractClauseGarantias || '');
   const [contractTemplateWhole, setContractTemplateWhole] = useState(appConfig.contractTemplateWhole || '');
   const [appConfigSuccess, setAppConfigSuccess] = useState('');
+  const [ibanValidationError, setIbanValidationError] = useState<string | null>(null);
+
+  // Auto-format IBAN input to AO06 XXXX XXXX XXXX XXXX XXXX X and validate
+  const handleIbanChange = (val: string) => {
+    // Clean string by removing non-alphanumeric, converted to uppercase
+    const clean = val.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    
+    // Group into 4-char chunks
+    const parts: string[] = [];
+    for (let i = 0; i < clean.length && i < 25; i += 4) {
+      if (i + 4 >= 25) {
+        parts.push(clean.substring(i, 25));
+      } else {
+        parts.push(clean.substring(i, i + 4));
+      }
+    }
+    const formatted = parts.join(' ');
+    setAppBankIban(formatted);
+
+    // Dynamic real-time validation
+    if (!clean) {
+      setIbanValidationError('O IBAN é obrigatório.');
+      return;
+    }
+    if (!clean.startsWith('AO06')) {
+      setIbanValidationError('O IBAN deve começar obrigatoriamente por AO06.');
+      return;
+    }
+    if (clean.length < 25) {
+      setIbanValidationError(`IBAN incompleto. Deve conter exactamente 25 caracteres (AO06 + 21 números). Em falta: ${25 - clean.length} caracteres.`);
+      return;
+    }
+    const remainingDigits = clean.substring(4);
+    if (!/^\d+$/.test(remainingDigits)) {
+      setIbanValidationError('O IBAN deve conter apenas números depois do AO06.');
+      return;
+    }
+    // Entirely correct
+    setIbanValidationError(null);
+  };
+
+  // Run initial validation on mount
+  React.useEffect(() => {
+    if (appBankIban) {
+      const clean = appBankIban.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+      if (!clean) {
+        setIbanValidationError('O IBAN é obrigatório.');
+      } else if (!clean.startsWith('AO06') || clean.length !== 25 || !/^\d+$/.test(clean.substring(4))) {
+        setIbanValidationError('Formato do IBAN actual inválido ou em estilo antigo.');
+      } else {
+        setIbanValidationError(null);
+      }
+    }
+  }, []);
 
   const handleSaveAppConfig = (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validate on submit
+    const cleanIban = appBankIban.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    if (!cleanIban) {
+      setIbanValidationError('O IBAN é obrigatório.');
+      return;
+    }
+    if (!cleanIban.startsWith('AO06')) {
+      setIbanValidationError('O IBAN deve começar obrigatoriamente por AO06.');
+      return;
+    }
+    if (cleanIban.length !== 25) {
+      setIbanValidationError(`IBAN incompleto. Deve conter exactamente 25 caracteres (AO06 + 21 números).`);
+      return;
+    }
+    const remainingDigits = cleanIban.substring(4);
+    if (!/^\d+$/.test(remainingDigits)) {
+      setIbanValidationError('O IBAN deve conter apenas números depois do AO06.');
+      return;
+    }
+
     const updatedConfig = {
       bankName: 'Banco BIC Angola',
       bankIban: appBankIban.trim(),
@@ -139,7 +219,7 @@ export default function UserManagement({
     setLogs(updatedLogs);
 
     setIsSavingConfig(true);
-    saveState(members, updatedLogs).then(() => {
+    saveState(members, updatedLogs, undefined, undefined, undefined, updatedConfig).then(() => {
       setIsSavingConfig(false);
       setAppConfigSuccess('Parâmetros estratégicos, tipografia, escala visual e privilégios regulatórios salvos com sucesso!');
       setTimeout(() => {
@@ -220,35 +300,51 @@ export default function UserManagement({
 
   const handleDeleteUser = (id: number, email: string) => {
     if (appConfig.adminPrivilegeCanDelete === false) {
-      alert('Acesso Negado: A exclusão de contas de cooperantes está desativada de acordo com as políticas regulatórias de privilégios de administrador do sistema. Ative esta política para prosseguir.');
+      setAlertModal({
+        title: 'Acesso Negado',
+        message: 'A exclusão de contas de cooperantes está desativada de acordo com as políticas regulatórias de privilégios de administrador do sistema. Ative esta política para prosseguir.',
+        type: 'warning'
+      });
       return;
     }
 
     if (email.toLowerCase() === currentUserEmail.toLowerCase()) {
-      alert('Erro: Não pode eliminar a sua própria conta enquanto estiver autenticado.');
+      setAlertModal({
+        title: 'Operação Inválida',
+        message: 'Erro: Não pode eliminar a sua própria conta enquanto estiver autenticado.',
+        type: 'error'
+      });
       return;
     }
 
-    if (window.confirm(`Tem a certeza que deseja eliminar DEFINITIVAMENTE o utilizador "${members.find(m => m.id === id)?.name}"?`)) {
-      const updated = members.filter((m) => m.id !== id);
-      setMembers(updated);
-      
-      const newLog = {
-        id: `user-deleted-${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        type: 'member_management' as any,
-        amount: 0,
-        description: `UTILIZADOR ELIMINADO: O administrador eliminou definitivamente a conta de utilizador com e-mail ${email}.`,
-        month: 3
-      };
-      
-      const updatedLogs = [newLog, ...logs];
-      setLogs(updatedLogs);
-      saveState(updated, updatedLogs);
-      
-      setSuccessMsg('Utilizador eliminado com sucesso!');
-      setTimeout(() => setSuccessMsg(''), 3000);
+    const m = members.find(m => m.id === id);
+    if (m) {
+      setDeleteConfirm({ id, email, name: m.name });
     }
+  };
+
+  const confirmDeleteUser = () => {
+    if (!deleteConfirm) return;
+    const { id, email } = deleteConfirm;
+    const updated = members.filter((m) => m.id !== id);
+    setMembers(updated);
+    
+    const newLog = {
+      id: `user-deleted-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      type: 'member_management' as any,
+      amount: 0,
+      description: `UTILIZADOR ELIMINADO: O administrador eliminou definitivamente a conta de utilizador com e-mail ${email}.`,
+      month: 3
+    };
+    
+    const updatedLogs = [newLog, ...logs];
+    setLogs(updatedLogs);
+    saveState(updated, updatedLogs);
+    
+    setSuccessMsg('Utilizador eliminado com sucesso!');
+    setTimeout(() => setSuccessMsg(''), 3000);
+    setDeleteConfirm(null);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -684,11 +780,26 @@ export default function UserManagement({
                 required
                 placeholder="Ex: AO06 0040 ..."
                 value={appBankIban}
-                onChange={(e) => setAppBankIban(e.target.value)}
-                className={`w-full text-xs p-2.5 rounded-lg border focus:outline-none focus:border-emerald-500 font-mono uppercase ${
-                  theme === 'dark' ? 'bg-slate-950 border-slate-800 text-white animate-pulse-once' : 'bg-slate-50 border-slate-200 text-slate-700'
+                onChange={(e) => handleIbanChange(e.target.value)}
+                className={`w-full text-xs p-2.5 rounded-lg border focus:outline-none font-mono uppercase transition-all ${
+                  ibanValidationError 
+                    ? 'border-rose-450 focus:border-rose-500 bg-rose-500/5 text-rose-600 dark:text-rose-400' 
+                    : 'focus:border-emerald-500 ' + (theme === 'dark' ? 'border-slate-800' : 'border-slate-200')
+                } ${
+                  theme === 'dark' ? 'bg-slate-950 text-white animate-pulse-once' : 'bg-slate-50 text-slate-700'
                 }`}
               />
+              {ibanValidationError ? (
+                <div className="flex items-start gap-1 mt-1.5 text-rose-500 dark:text-rose-400 text-[9.5px] leading-tight font-medium">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  <span>{ibanValidationError}</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1 mt-1.5 text-emerald-600 dark:text-emerald-400 text-[9.5px] leading-tight font-medium">
+                  <Check className="w-3.5 h-3.5 shrink-0" />
+                  <span>Formato de IBAN válido (Angola AO06)</span>
+                </div>
+              )}
             </div>
             
             <div>
@@ -1378,6 +1489,95 @@ export default function UserManagement({
                 </div>
 
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Custom Delete Confirmation Modal */}
+      <AnimatePresence>
+        {deleteConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto bg-slate-950/60 backdrop-blur-xs font-sans">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className={`relative w-full max-w-md p-6 overflow-hidden rounded-2xl shadow-2xl border transition-all ${
+                theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'
+              }`}
+            >
+              <div className="flex items-start gap-4">
+                <div className="p-3 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-xl shrink-0">
+                  <Trash2 className="w-5.5 h-5.5 animate-bounce" />
+                </div>
+                <div className="space-y-1.5 flex-1">
+                  <h3 className={`text-sm font-extrabold uppercase tracking-wide ${theme === 'dark' ? 'text-white' : 'text-slate-855'}`}>
+                    Eliminar Utilizador?
+                  </h3>
+                  <p className={`text-xs leading-relaxed ${theme === 'dark' ? 'text-slate-300' : 'text-slate-500'}`}>
+                    Tem a certeza de que deseja eliminar DEFINITIVAMENTE o utilizador <strong className="font-extrabold text-rose-500">{deleteConfirm.name}</strong> ({deleteConfirm.email}) do sistema? Esta ação é irreversível e removerá todos os privilégios.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-3.5 mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirm(null)}
+                  className="px-4.5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmDeleteUser}
+                  className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-mono font-bold shadow-lg shadow-red-500/15 transition-all cursor-pointer"
+                >
+                  EXCLUIR PERMANENTE
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Custom General Warning/Error Modal */}
+      <AnimatePresence>
+        {alertModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto bg-slate-950/65 backdrop-blur-xs font-sans">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className={`relative w-full max-w-md p-6 overflow-hidden rounded-2xl shadow-2xl border transition-all ${
+                theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'
+              }`}
+            >
+              <div className="flex items-start gap-4">
+                <div className={`p-3 rounded-xl shrink-0 ${
+                  alertModal.type === 'error' ? 'bg-red-50 dark:bg-red-950/30 text-red-500' :
+                  alertModal.type === 'warning' ? 'bg-amber-50 dark:bg-amber-950/30 text-amber-500' :
+                  'bg-teal-50 dark:bg-teal-950/30 text-teal-500'
+                }`}>
+                  <AlertCircle className="w-5.5 h-5.5" />
+                </div>
+                <div className="space-y-1.5 flex-1">
+                  <h3 className={`text-sm font-extrabold uppercase tracking-wide ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                    {alertModal.title}
+                  </h3>
+                  <p className={`text-xs leading-relaxed ${theme === 'dark' ? 'text-slate-300' : 'text-slate-500'}`}>
+                    {alertModal.message}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-3.5 mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setAlertModal(null)}
+                  className="px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer"
+                >
+                  Compreendi
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

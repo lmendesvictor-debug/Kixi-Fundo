@@ -88,6 +88,10 @@ export default function MembersTable({
   const [errorMsg, setErrorMsg] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
+  // Safe non-blocking custom dialog states for iframe sandbox execution
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: number; name: string } | null>(null);
+  const [alertModal, setAlertModal] = useState<{ title: string; message: string; type: 'error' | 'warning' } | null>(null);
+
   // Permission toggles state
   const [permInicio, setPermInicio] = useState(true);
   const [permDashboard, setPermDashboard] = useState(false);
@@ -491,28 +495,46 @@ export default function MembersTable({
   };
 
   // Delete member helper
-  const handleDeleteMember = async (memberId: number, name: string) => {
-    if (window.confirm(`Tem a certeza que deseja excluir permanentemente o integrador ${name} do Kix Fundo? Esta ação não pode ser desfeita.`)) {
-      const updatedMembers = members.filter((m) => m.id !== memberId);
-      
-      const newLog = {
-        id: `delete-${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        type: 'member_management' as any,
-        amount: 0,
-        description: `ADMINISTRADOR: Removido o membro "${name}" do consórcio rotativo.`,
-        month: currentMonth,
-      };
+  const handleDeleteMember = (memberId: number, name: string) => {
+    // Prevent self-deletion if they try to delete their own member profile from the table
+    if (currentUser?.email && members.find(m => m.id === memberId)?.email?.toLowerCase() === currentUser.email.toLowerCase()) {
+      setAlertModal({
+        title: 'Operação Inválida',
+        message: 'Erro: Não pode remover a sua própria conta ou perfil de membro enquanto estiver autenticado no sistema.',
+        type: 'error'
+      });
+      return;
+    }
+    setDeleteConfirm({ id: memberId, name });
+  };
 
-      const updatedLogs = [newLog, ...logs];
-      setMembers(updatedMembers);
-      setLogs(updatedLogs);
-      
-      try {
-        await saveState(updatedMembers, updatedLogs);
-      } catch (err) {
-        alert("Erro ao remover membro da base de dados: " + err);
-      }
+  const confirmDeleteMember = async () => {
+    if (!deleteConfirm) return;
+    const { id: memberId, name } = deleteConfirm;
+    const updatedMembers = members.filter((m) => m.id !== memberId);
+    
+    const newLog = {
+      id: `delete-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      type: 'member_management' as any,
+      amount: 0,
+      description: `ADMINISTRADOR: Removido o membro "${name}" do consórcio rotativo.`,
+      month: currentMonth,
+    };
+
+    const updatedLogs = [newLog, ...logs];
+    setMembers(updatedMembers);
+    setLogs(updatedLogs);
+    setDeleteConfirm(null);
+    
+    try {
+      await saveState(updatedMembers, updatedLogs);
+    } catch (err) {
+      setAlertModal({
+        title: 'Erro de Gravação',
+        message: "Erro ao remover membro da base de dados: " + err,
+        type: 'error'
+      });
     }
   };
 
@@ -691,24 +713,24 @@ export default function MembersTable({
                 return (
                   <tr
                     key={m.id}
-                    className={`hover:bg-slate-55/40 dark:hover:bg-slate-800/40 transition-colors ${
-                      isCurrentMonthBeneficiary ? 'bg-indigo-55/5 dark:bg-indigo-950/10' : ''
+                    className={`border-b border-slate-100 dark:border-slate-800/80 hover:bg-slate-55/35 dark:hover:bg-slate-800/25 transition-colors ${
+                      isCurrentMonthBeneficiary ? 'bg-indigo-500/5 dark:bg-indigo-950/5' : ''
                     }`}
                   >
                     
-                    {/* Visual identification with picture */}
-                    <td className="py-3.5 px-5">
-                      <div className="flex items-center gap-3">
+                    {/* Visual identification with picture conforming to Image 5 */}
+                    <td className="py-4 px-5">
+                      <div className="flex items-center gap-3.5 text-left">
                         {m.avatarImage ? (
                           <img
                             src={m.avatarImage}
                             alt={m.name}
                             referrerPolicy="no-referrer"
-                            className="w-10 h-10 rounded-xl object-cover bg-slate-100 dark:bg-slate-800 border-2 border-slate-200/60 dark:border-slate-700/80 shadow-sm"
+                            className="w-12 h-12 rounded-2xl object-cover bg-slate-100 dark:bg-slate-820 border-2 border-slate-200/50 dark:border-slate-800 shadow-xs shrink-0"
                           />
                         ) : (
                           <div
-                            className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm text-white shrink-0 shadow-sm ${m.avatarColor}`}
+                            className={`w-12 h-12 rounded-2xl flex items-center justify-center font-black text-sm text-white shrink-0 shadow-xs ${m.avatarColor}`}
                           >
                             {m.name
                               .split(' ')
@@ -718,34 +740,31 @@ export default function MembersTable({
                           </div>
                         )}
                         
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-extrabold text-slate-900 dark:text-white text-[13px] tracking-tight truncate block">
+                        <div className="min-w-0 space-y-0.5">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-extrabold text-slate-900 dark:text-white text-[13.5px] tracking-tight block">
                               {m.name}
                             </span>
-                            {isCurrentMonthBeneficiary && (
-                              <span className="text-[8px] font-black text-indigo-700 dark:text-indigo-300 bg-indigo-500/10 dark:bg-indigo-950/50 px-2 py-0.5 rounded-md uppercase tracking-wide border border-indigo-500/20">
-                                Beneficiário
-                              </span>
-                            )}
                             {m.role === 'admin' && (
-                              <span className="text-[8px] font-black text-amber-700 dark:text-amber-300 bg-amber-500/10 dark:bg-amber-950/50 px-2 py-0.5 rounded-md uppercase tracking-wide border border-amber-500/20">
+                              <span className="text-[8.5px] font-black text-amber-850 dark:text-amber-300 bg-amber-500/15 dark:bg-amber-950/60 px-2 py-0.5 rounded-md uppercase tracking-wider border border-amber-500/20">
                                 Direção
                               </span>
                             )}
+                            {isCurrentMonthBeneficiary && (
+                              <span className="text-[8.5px] font-black text-indigo-700 dark:text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded-md uppercase tracking-wider border border-indigo-500/15">
+                                Beneficiário
+                              </span>
+                            )}
                           </div>
-                          <span className="text-[10px] text-slate-500 dark:text-slate-400 block truncate mt-0.5">
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-medium truncate">
                             {m.email}
                           </span>
-                          <div className="flex flex-wrap gap-1.5 mt-1.5 items-center">
-                            <span className="text-[9px] font-mono font-extrabold leading-none bg-sky-500/10 text-sky-700 dark:text-sky-450 border border-sky-500/20 px-1.5 py-0.5 rounded uppercase" title="Código de Cadastro Cooperativo (Imutável)">
+                          <div className="flex flex-wrap gap-2 pt-1 items-center">
+                            <span className="text-[9px] font-mono font-extrabold leading-none bg-sky-500/10 text-sky-700 dark:text-sky-400 border border-sky-500/15 px-1.5 py-0.5 rounded" title="Código de Cadastro Cooperativo (Imutável)">
                               ID: {getMemberDisplayCode(m.id)}
                             </span>
-                            <span className="text-[8px] font-mono font-bold leading-none bg-slate-500/10 text-slate-400 dark:text-slate-500 border border-slate-200/40 dark:border-slate-800/60 px-1.5 py-0.5 rounded uppercase select-all" title="ID Único Completo de Integrante (Chave de Complemento Hash)">
-                              HASH: {getMemberIdCode(m.name, m.phone)}
-                            </span>
                             {m.bankIban && (
-                              <span className="text-[9px] text-amber-700 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 font-mono px-2 py-0.5 rounded-lg select-all font-bold tracking-wider" title="IBAN Cadastrado para Recebimentos">
+                              <span className="text-[9px] text-[#0d5c3a] dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/15 font-mono px-2 py-0.5 rounded-md font-bold tracking-tight select-all">
                                 🏦 IBAN: {m.bankIban}
                               </span>
                             )}
@@ -754,58 +773,59 @@ export default function MembersTable({
                       </div>
                     </td>
 
-                    {/* International formatted phone */}
-                    <td className="py-3.5 px-5 font-mono text-[11px] text-slate-700 dark:text-slate-200">
-                      <div className="flex items-center gap-1.5 font-semibold text-xs">
-                        <span className="text-sky-500 dark:text-sky-450 filter grayscale opacity-80">📞</span>
-                        <span className="tracking-wider">{m.phone}</span>
+                    {/* International formatted phone styled dynamically */}
+                    <td className="py-4 px-5 font-mono font-bold text-[12px] text-slate-700 dark:text-slate-350">
+                      <div className="flex items-center gap-1.5 justify-start text-left">
+                        <span className="filter grayscale opacity-70">📞</span>
+                        <span className="tracking-widest">{m.phone}</span>
                       </div>
                     </td>
 
                     {/* Benefit Month Target */}
-                    <td className="py-3.5 px-5">
-                      <div className="flex flex-col gap-1">
-                        <div className="flex items-center gap-1">
-                          <span className="text-xs font-black font-display text-slate-900 dark:text-white">
+                    <td className="py-4 px-5 text-left">
+                      <div className="flex flex-col gap-1.5 items-start">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-xs font-black text-slate-900 dark:text-white font-mono">
                             📅 Mês 0{m.assignedMonth}
                           </span>
                         </div>
                         {m.assignedMonth < currentMonth ? (
-                          <span className="inline-flex items-center gap-0.5 text-[9px] text-emerald-600 dark:text-emerald-400 font-extrabold tracking-wide uppercase px-1.5 py-0.5 bg-emerald-500/10 rounded-md border border-emerald-500/20">
+                          <span className="inline-flex items-center gap-0.5 text-[9px] text-emerald-700 bg-emerald-500/10 font-black tracking-wider uppercase px-2 py-0.5 rounded border border-emerald-500/20">
                             ✓ Liquidado
                           </span>
                         ) : m.assignedMonth === currentMonth ? (
-                          <span className="inline-flex items-center gap-0.5 text-[9px] text-rose-700 dark:text-rose-400 font-extrabold tracking-wide uppercase px-1.5 py-0.5 bg-rose-500/15 rounded-md border border-rose-500/30 animate-pulse">
+                          <span className="inline-flex items-center gap-0.5 text-[9px] text-rose-700 bg-rose-500/15 font-black tracking-wider uppercase px-2 py-0.5 rounded border border-rose-500/25 animate-pulse">
                             ★ Ativo
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-0.5 text-[9px] text-slate-500 dark:text-slate-400 font-bold tracking-wide uppercase px-1.5 py-0.5 bg-slate-500/10 rounded-md border border-slate-500/10">
+                          <span className="inline-flex items-center gap-0.5 text-[9px] text-slate-500 bg-slate-500/10 font-extrabold tracking-wider uppercase px-2 py-0.5 rounded border border-slate-500/10">
                             ⏱ Agendado
                           </span>
                         )}
                       </div>
                     </td>
 
-                    {/* Quota counter and social balance */}
-                    <td className="py-3.5 px-5">
-                      <div className="flex flex-col">
-                        <span className="font-extrabold font-mono text-[13px] text-emerald-600 dark:text-emerald-455">
+                    {/* Quota counter and social balance displaying perfect status circles */}
+                    <td className="py-4 px-5 text-left">
+                      <div className="flex flex-col items-start justify-center">
+                        <span className="font-extrabold font-mono text-[13.5px] text-emerald-700 dark:text-emerald-400">
                           {formatCurrency(individualSocialInvestment)}
                         </span>
-                        <span className="text-[10px] text-slate-500 dark:text-slate-440 font-semibold mt-0.5">
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold mt-0.5">
                           Poupança: {paidMonthsCount}/6 cotas pagas
                         </span>
-                        {/* Monthly visual indicators under Quotas Pagas column */}
-                        <div className="flex gap-1.5 mt-1.5">
+                        
+                        {/* Perfect Circles 1 to 6 - Conforming directly with Image 5 */}
+                        <div className="flex gap-1.5 mt-2">
                           {[1, 2, 3, 4, 5, 6].map((mIdx) => {
                             const isPaid = m.contributions[mIdx]?.paid;
                             return (
                               <span 
                                 key={mIdx} 
-                                className={`w-5 h-5 rounded-lg flex items-center justify-center text-[9px] font-black tracking-tight border shadow-sm transition-all ${
+                                className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black tracking-tight border shadow-xs transition-all ${
                                   isPaid 
-                                    ? 'bg-emerald-500 text-white border-emerald-600' 
-                                    : 'bg-slate-100 dark:bg-slate-850 text-slate-400 dark:text-slate-500 border-slate-200 dark:border-slate-800'
+                                    ? 'bg-[#0b5a3e] text-white border-[#0d5c3a]' 
+                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200/60 dark:border-slate-700'
                                 }`}
                                 title={`Mês 0${mIdx}: ${isPaid ? 'Pago' : 'Pendente'}`}
                               >
@@ -817,12 +837,12 @@ export default function MembersTable({
                       </div>
                     </td>
 
-                    {/* Current Month State */}
-                    <td className="py-3.5 px-5 text-center">
-                      <div className="flex flex-col items-center justify-center gap-1.5">
+                    {/* Current Month State with Pink/Red pills conforming to Image 5 */}
+                    <td className="py-4 px-5">
+                      <div className="flex flex-col items-center justify-center gap-2">
                         {hasPaidCurrentMonth ? (
                           <>
-                            <span className="inline-flex items-center gap-1 px-3 py-1 text-[9px] font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-full border border-emerald-500/25 uppercase tracking-widest leading-none shadow-sm">
+                            <span className="inline-flex items-center gap-1.5 px-3.5 py-1 text-[9.5px] font-black bg-emerald-500/10 text-emerald-600 dark:text-emerald-450 rounded-full border border-emerald-500/20 uppercase tracking-widest leading-none shadow-xs">
                               🟢 Pago
                             </span>
                             {(() => {
@@ -834,7 +854,7 @@ export default function MembersTable({
                                     href={receiptBase64}
                                     download={rName}
                                     title="Descarregar comprovativo recebido"
-                                    className="text-[9px] text-[#4F46E5] hover:text-[#4338CA] dark:text-indigo-400 dark:hover:text-indigo-300 font-extrabold underline flex items-center justify-center gap-1 bg-indigo-500/5 hover:bg-indigo-500/10 border border-indigo-500/10 px-2 py-1 rounded-lg transition-all whitespace-nowrap mt-1 pointer-events-auto cursor-pointer"
+                                    className="text-[9px] text-[#4F46E5] hover:text-[#3730A3] dark:text-[#818CF8] font-black uppercase tracking-wider flex items-center justify-center gap-1 bg-indigo-500/5 hover:bg-indigo-500/10 border border-indigo-500/15 px-2 py-1 rounded-lg transition-all mt-0.5"
                                   >
                                     📁 Baixar Recibo
                                   </a>
@@ -844,7 +864,7 @@ export default function MembersTable({
                                   <button
                                     type="button"
                                     onClick={() => handleAdminClickUpload(m.id)}
-                                    className="text-[9px] text-slate-500 hover:text-indigo-600 font-semibold underline flex items-center gap-1 mt-1 cursor-pointer"
+                                    className="text-[9px] text-slate-500 hover:text-indigo-650 font-bold underline flex items-center gap-0.5 mt-0.5 cursor-pointer"
                                     title="Anexar um comprovativo em falta"
                                   >
                                     📎 Anexar Recibo
@@ -855,13 +875,13 @@ export default function MembersTable({
                           </>
                         ) : (
                           <>
-                            <span className="inline-flex items-center gap-1 px-3 py-1 text-[9px] font-black bg-rose-500/10 text-rose-600 dark:text-rose-450 rounded-full border border-rose-500/25 uppercase tracking-widest leading-none shadow-sm font-sans">
+                            <span className="inline-flex items-center gap-1.5 px-3.5 py-1 text-[9.5px] font-black bg-rose-100 text-rose-750 dark:bg-rose-950/40 dark:text-rose-400 rounded-full border border-rose-200 uppercase tracking-widest leading-none shadow-xs">
                               🔴 Pendente
                             </span>
                             <button
                               type="button"
                               onClick={() => handleAdminClickUpload(m.id)}
-                              className="text-[9px] text-[#4F46E5] hover:text-[#4338CA] dark:text-indigo-400 dark:hover:text-indigo-300 font-extrabold underline flex items-center gap-1 mt-1 cursor-pointer bg-indigo-500/5 hover:bg-indigo-500/10 border border-indigo-500/10 px-2 py-1 rounded-lg transition-all"
+                              className="text-[9px] text-indigo-700 hover:text-indigo-850 dark:text-indigo-300 font-extrabold uppercase tracking-wide flex items-center gap-1 mt-1 bg-indigo-55/15 dark:bg-indigo-950/20 border border-indigo-200/50 dark:border-indigo-900 px-2 py-1.5 rounded-lg hover:bg-indigo-100/60 cursor-pointer"
                               title="Pagar e carregar comprovativo"
                             >
                               📎 Pagar c/ Recibo
@@ -871,19 +891,19 @@ export default function MembersTable({
                       </div>
                     </td>
 
-                    {/* Actions column based on Admin level */}
-                    <td className="py-3.5 px-5 text-right">
-                      <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                    {/* Actions column based on Admin levels with rounded squares */}
+                    <td className="py-4 px-5 text-right">
+                      <div className="flex items-center justify-end gap-2 flex-wrap">
                         {/* Simulation trigger */}
                         {onSimulateMember && (
                           <button
                             type="button"
                             onClick={() => onSimulateMember(m.id)}
-                            className="px-2 py-1 text-amber-600 dark:text-amber-400 hover:text-white dark:hover:text-white hover:bg-amber-550 active:scale-95 bg-amber-50/70 dark:bg-amber-950/25 rounded-lg border border-amber-200 dark:border-amber-900/40 transition-all flex items-center gap-1 text-[10px] font-extrabold cursor-pointer"
+                            className="px-2.5 py-1.5 text-amber-700 hover:text-white hover:bg-amber-600 active:scale-95 bg-amber-500/10 rounded-xl border border-amber-500/25 transition-all flex items-center gap-1.5 text-[10px] font-black cursor-pointer shadow-xs"
                             title="Simular e Visualizar Área do Membro"
                           >
                             <Eye className="w-3.5 h-3.5" />
-                            <span className="hidden xl:inline">Simular</span>
+                            <span className="hidden xl:inline uppercase tracking-wider">Simular</span>
                           </button>
                         )}
 
@@ -892,10 +912,10 @@ export default function MembersTable({
                           <button
                             type="button"
                             onClick={() => onToggleContribution(m.id)}
-                            className={`px-2 py-1 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer border ${
+                            className={`px-3 py-1.5 rounded-xl text-[10.5px] font-extrabold transition-all cursor-pointer border shadow-xs ${
                               hasPaidCurrentMonth
-                                ? 'border-rose-200 dark:border-rose-900/40 text-rose-700 dark:text-rose-400 bg-rose-50/20 hover:bg-rose-500 hover:text-white'
-                                : 'border-teal-200 dark:border-teal-900/40 text-teal-850 dark:text-teal-400 bg-teal-50 hover:bg-emerald-600 hover:text-white shadow-sm'
+                                ? 'border-rose-200 text-rose-700 bg-rose-50 hover:bg-rose-600 hover:text-white'
+                                : 'border-[#10b981]/30 text-emerald-800 bg-[#10b981]/10 hover:bg-emerald-600 hover:text-white'
                             }`}
                           >
                             {hasPaidCurrentMonth ? 'Desfazer' : 'Confirmar'}
@@ -907,10 +927,10 @@ export default function MembersTable({
                           <button
                             type="button"
                             onClick={() => handleOpenEditForm(m)}
-                            className="p-1.5 text-indigo-600 dark:text-indigo-400 hover:text-white dark:hover:text-white hover:bg-indigo-600 dark:hover:bg-indigo-600 bg-indigo-50 dark:bg-indigo-950/40 rounded-lg border border-indigo-200 dark:border-indigo-900/50 transition-all cursor-pointer shadow-sm hover:scale-105 active:scale-95"
+                            className="p-2 text-indigo-750 bg-indigo-50 hover:text-white hover:bg-indigo-600 rounded-xl border border-indigo-200 transition-all cursor-pointer shadow-xs"
                             title="Editar Perfil"
                           >
-                            <Edit3 className="w-3.5 h-3.5" />
+                            <Edit3 className="w-4 h-4" />
                           </button>
                         )}
 
@@ -919,10 +939,10 @@ export default function MembersTable({
                           <button
                             type="button"
                             onClick={() => handleDeleteMember(m.id, m.name)}
-                            className="p-1.5 text-rose-600 dark:text-rose-400 hover:text-white dark:hover:text-white hover:bg-rose-600 dark:hover:bg-rose-600 bg-rose-50 dark:bg-rose-950/40 rounded-lg border border-rose-200 dark:border-rose-900/50 transition-all cursor-pointer shadow-sm hover:scale-105 active:scale-95"
+                            className="p-2 text-rose-750 bg-rose-50 hover:text-white hover:bg-rose-600 rounded-xl border border-rose-200 transition-all cursor-pointer shadow-xs"
                             title="Remover Membro"
                           >
-                            <Trash2 className="w-3.5 h-3.5" />
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         )}
 
@@ -1398,6 +1418,94 @@ export default function MembersTable({
         accept="application/pdf,image/*"
         className="hidden"
       />
+
+      {/* Custom Delete Confirmation Modal */}
+      <AnimatePresence>
+        {deleteConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto bg-slate-950/60 backdrop-blur-xs font-sans">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className={`relative w-full max-w-md p-6 overflow-hidden rounded-2xl shadow-2xl border transition-all ${
+                theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'
+              }`}
+            >
+              <div className="flex items-start gap-4">
+                <div className="p-3 bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 rounded-xl shrink-0">
+                  <Trash2 className="w-5.5 h-5.5 animate-bounce" />
+                </div>
+                <div className="space-y-1.5 flex-1">
+                  <h3 className={`text-sm font-extrabold uppercase tracking-wide ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                    Excluir Integrador / Membro?
+                  </h3>
+                  <p className={`text-xs leading-relaxed ${theme === 'dark' ? 'text-slate-300' : 'text-slate-500'}`}>
+                    Tem a certeza de que deseja eliminar PERMANENTEMENTE o membro <strong className="font-extrabold text-rose-500">{deleteConfirm.name}</strong> do Kix Fundo? Esta ação removerá o seu perfil de todos os relatórios e é definitiva.
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-3.5 mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirm(null)}
+                  className="px-4.5 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-705 text-slate-500 dark:text-slate-300 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmDeleteMember}
+                  className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-mono font-bold shadow-lg shadow-red-500/15 transition-all cursor-pointer"
+                >
+                  EXCLUIR DEFINITIVO
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Custom Alert/Error Modal */}
+      <AnimatePresence>
+        {alertModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto bg-slate-950/65 backdrop-blur-xs font-sans">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className={`relative w-full max-w-md p-6 overflow-hidden rounded-2xl shadow-2xl border transition-all ${
+                theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'
+              }`}
+            >
+              <div className="flex items-start gap-4">
+                <div className={`p-3 rounded-xl shrink-0 ${
+                  alertModal.type === 'error' ? 'bg-red-50 dark:bg-red-950/30 text-red-500' :
+                  'bg-amber-50 dark:bg-amber-950/30 text-amber-500'
+                }`}>
+                  <AlertCircle className="w-5.5 h-5.5" />
+                </div>
+                <div className="space-y-1.5 flex-1">
+                  <h3 className={`text-sm font-extrabold uppercase tracking-wide ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                    {alertModal.title}
+                  </h3>
+                  <p className={`text-xs leading-relaxed ${theme === 'dark' ? 'text-slate-300' : 'text-slate-500'}`}>
+                    {alertModal.message}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-3.5 mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setAlertModal(null)}
+                  className="px-5 py-2 bg-slate-900 dark:bg-slate-850 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-md cursor-pointer"
+                >
+                  Confirmar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
     </div>
   );

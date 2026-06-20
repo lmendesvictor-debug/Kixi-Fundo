@@ -24,11 +24,18 @@ import {
   LogIn,
   LogOut,
   CheckCircle,
+  Key,
+  TrendingUp,
+  LineChart,
+  MessageSquare,
+  Lock,
+  FileText,
 } from 'lucide-react';
 import UserManagement from './UserManagement';
 import ReceiptsAutomation from './ReceiptsAutomation';
 import BankingReport from './BankingReport';
 import PrivilegesManagement from './PrivilegesManagement';
+import { loadStateFromFirestore } from '../firebaseSync';
 
 interface AdminModuleProps {
   currentMonth: number;
@@ -36,7 +43,7 @@ interface AdminModuleProps {
   setMembers: React.Dispatch<React.SetStateAction<any[]>>;
   logs: any[];
   setLogs: React.Dispatch<React.SetStateAction<any[]>>;
-  saveState: (m: any[], l: any[]) => void;
+  saveState: (m: any[], l: any[], payoutsCompleted?: any, currentMonth?: any, loans?: any, config?: any) => void;
   currentUser: any;
   payoutsCompleted: Record<string, boolean>;
   formatCurrency: (amount: number) => string;
@@ -67,7 +74,7 @@ export default function AdminModule({
   setCarouselSlides,
   onRestoreBackup,
 }: AdminModuleProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'users' | 'receipts' | 'banking' | 'carousel' | 'audit' | 'backup' | 'privileges'>('users');
+  const [activeSubTab, setActiveSubTab] = useState<'users' | 'receipts' | 'banking' | 'carousel' | 'audit' | 'backup' | 'privileges' | 'member-cleanup'>('users');
 
   const loggedInMember = currentUser 
     ? members.find(m => m.id === currentUser.memberId || m.email?.trim().toLowerCase() === currentUser.email?.trim().toLowerCase())
@@ -96,6 +103,177 @@ export default function AdminModule({
   const [isGDriveLoading, setIsGDriveLoading] = useState(false);
   const [driveBackups, setDriveBackups] = useState<any[]>([]);
   const [backupActionLoading, setBackupActionLoading] = useState<string | null>(null);
+
+  // Estados do Cloud Firestore para Restore Points e Alternador
+  const [firestoreBackups, setFirestoreBackups] = useState<any[]>([]);
+  const [isFirestoreLoading, setIsFirestoreLoading] = useState(false);
+  const [backupActiveCloudType, setBackupActiveCloudType] = useState<'firestore' | 'gdrive'>('firestore');
+
+  // Estados para a ferramenta de Verificação de Integridade Firestore vs Local
+  const [integrityStatus, setIntegrityStatus] = useState<'idle' | 'checking' | 'success' | 'discrepancy' | 'error'>('idle');
+  const [firestoreMembersCount, setFirestoreMembersCount] = useState<number | null>(null);
+  const [firestoreLogsCount, setFirestoreLogsCount] = useState<number | null>(null);
+  const [lastIntegrityCheck, setLastIntegrityCheck] = useState<string | null>(null);
+  const [integrityError, setIntegrityError] = useState<string | null>(null);
+  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
+  const [isRestoringFromCloud, setIsRestoringFromCloud] = useState(false);
+
+  // Local states for the definitive Member Cleanup Tool
+  const [cleanupSelectedMemberId, setCleanupSelectedMemberId] = useState<number | null>(null);
+  const [cleanupConfirmName, setCleanupConfirmName] = useState<string>('');
+  const [cleanupSuccess, setCleanupSuccess] = useState<string | null>(null);
+  const [cleanupError, setCleanupError] = useState<string | null>(null);
+  const [cleanupSearch, setCleanupSearch] = useState<string>('');
+  const [isCleaningUp, setIsCleaningUp] = useState(false);
+
+  const handleDefinitiveDeleteMember = async () => {
+    if (!cleanupSelectedMemberId) return;
+    
+    const targetMember = members.find((m) => m.id === cleanupSelectedMemberId);
+    if (!targetMember) {
+      setCleanupError("Membro não encontrado no sistema.");
+      return;
+    }
+
+    // Safety: prevent self deletion
+    if (currentUser?.email && targetMember.email?.trim().toLowerCase() === currentUser.email.trim().toLowerCase()) {
+      setCleanupError("Operação inválida: Não pode remover a sua própria conta de administrador enquanto estiver autenticado no sistema.");
+      return;
+    }
+
+    // Safety: prevent deleting superadmin main account
+    if (targetMember.email?.trim().toLowerCase() === 'lmendesvictor@gmail.com') {
+      setCleanupError("Erro Crítico: Não é permitido excluir o proprietário principal / Super Admin do sistema.");
+      return;
+    }
+
+    if (cleanupConfirmName.trim().toLowerCase() !== targetMember.name.trim().toLowerCase()) {
+      setCleanupError("Erro de validação: O nome digitado não corresponde exatamente ao nome do membro.");
+      return;
+    }
+
+    setIsCleaningUp(true);
+    setCleanupError(null);
+    setCleanupSuccess(null);
+
+    try {
+      const updatedMembers = members.filter((m) => m.id !== cleanupSelectedMemberId);
+      
+      const newLog = {
+        id: `member-cleanup-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+        type: 'member_management' as any,
+        amount: 0,
+        description: `EXCLUSÃO INCONDICIONAL: O administrador removeu permanentemente o membro "${targetMember.name}" (${targetMember.email || 'Sem e-mail'}) do cofre principal.`,
+        month: currentMonth,
+        memberName: targetMember.name
+      };
+
+      const updatedLogs = [newLog, ...logs];
+
+      // Disparar atualização local, localStorage e Cloud Firestore de forma imediata e assíncrona
+      await saveState(updatedMembers, updatedLogs);
+
+      setCleanupSuccess(`O membro "${targetMember.name}" foi excluído com êxito! Os dados locais e da Nuvem Firestore foram sincronizados imediatamente.`);
+      setCleanupSelectedMemberId(null);
+      setCleanupConfirmName('');
+    } catch (err: any) {
+      console.error("Erro durante exclusão de membro:", err);
+      setCleanupError(`Ocorreu um erro ao excluir o membro e sincronizar à Nuvem Firestore: ${err.message || err}`);
+    } finally {
+      setIsCleaningUp(false);
+    }
+  };
+
+  const runIntegrityCheck = async () => {
+    setIntegrityStatus('checking');
+    setIntegrityError(null);
+    try {
+      const dbState = await loadStateFromFirestore();
+      if (!dbState) {
+        setFirestoreMembersCount(0);
+        setFirestoreLogsCount(0);
+        setLastIntegrityCheck(new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+        if (members.length > 0 || logs.length > 0) {
+          setIntegrityStatus('discrepancy');
+        } else {
+          setIntegrityStatus('success');
+        }
+        return;
+      }
+      
+      const fsMembersCount = dbState.members ? dbState.members.length : 0;
+      const fsLogsCount = dbState.logs ? dbState.logs.length : 0;
+      
+      setFirestoreMembersCount(fsMembersCount);
+      setFirestoreLogsCount(fsLogsCount);
+      setLastIntegrityCheck(new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+      
+      if (fsMembersCount !== members.length || fsLogsCount !== logs.length) {
+        setIntegrityStatus('discrepancy');
+      } else {
+        setIntegrityStatus('success');
+      }
+    } catch (err: any) {
+      console.error(err);
+      setIntegrityError(err?.message || 'Falha ao conectar ou ler dados do Firestore.');
+      setIntegrityStatus('error');
+    }
+  };
+
+  const handleResolvePushToCloud = async () => {
+    if (!window.confirm("Deseja realmente atualizar a base de dados Firestore com as informações do seu navegador local? Esta ação substituirá os dados guardados em Nuvem.")) return;
+    setIsSyncingCloud(true);
+    try {
+      await saveState(members, logs, payoutsCompleted, currentMonth, [], appConfig);
+      await runIntegrityCheck();
+    } catch (err: any) {
+      alert("Erro ao sincronizar com Firestore: " + (err?.message || err));
+    } finally {
+      setIsSyncingCloud(false);
+    }
+  };
+
+  const handleResolvePullFromCloud = async () => {
+    if (!window.confirm("Deseja realmente substituir seus dados locais pelos armazenados no Firestore? Os seus ajustes locais não sincronizados serão perdidos.")) return;
+    setIsRestoringFromCloud(true);
+    try {
+      const dbState = await loadStateFromFirestore();
+      if (dbState) {
+        onRestoreBackup(dbState);
+        setIntegrityStatus('success');
+        setFirestoreMembersCount(dbState.members ? dbState.members.length : 0);
+        setFirestoreLogsCount(dbState.logs ? dbState.logs.length : 0);
+        setLastIntegrityCheck(new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+      } else {
+        alert("Nenhum estado válido encontrado na Cloud para restaurar.");
+      }
+    } catch (err: any) {
+      alert("Erro ao importar do Firestore: " + (err?.message || err));
+    } finally {
+      setIsRestoringFromCloud(false);
+    }
+  };
+
+  const fetchFirestoreBackups = async () => {
+    setIsFirestoreLoading(true);
+    try {
+      const { listBackupsFromFirestore } = await import('../firebaseSync');
+      const backups = await listBackupsFromFirestore();
+      setFirestoreBackups(backups);
+    } catch (err) {
+      console.error("Erro ao obter backups do Firestore:", err);
+    } finally {
+      setIsFirestoreLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (activeSubTab === 'backup') {
+      fetchFirestoreBackups();
+      runIntegrityCheck();
+    }
+  }, [activeSubTab]);
 
   React.useEffect(() => {
     let unsubscribe: (() => void) | null = null;
@@ -241,6 +419,77 @@ export default function AdminModule({
     }
   };
 
+  const handleCreateFirestoreBackup = async () => {
+    if (!canManageBackups) {
+      alert('Acesso Negado: Não possui privilégios de gestor para criar pontos de restauro.');
+      return;
+    }
+    const name = prompt('Insira um nome ou identificador curto para este ponto de restauro:', `Ponto de Restauro Manual - ${new Date().toLocaleDateString('pt-AO')}`);
+    if (!name) return;
+
+    setBackupActionLoading('create_firestore');
+    try {
+      const { saveBackupToFirestore } = await import('../firebaseSync');
+      const payload = {
+        members,
+        logs,
+        payoutsCompleted,
+        currentMonth,
+        appConfig,
+        updatedAt: new Date().toISOString()
+      };
+      await saveBackupToFirestore(name, payload, 'manual');
+      alert(`Ponto de restauro "${name}" gravado com sucesso no Cloud Firestore!`);
+      await fetchFirestoreBackups();
+    } catch (err: any) {
+      alert(`Falha ao criar cofre no Firestore: ${err.message || err}`);
+    } finally {
+      setBackupActionLoading(null);
+    }
+  };
+
+  const handleRestoreFirestoreBackup = async (backupId: string, backupName: string, payload: any) => {
+    if (!canManageBackups) {
+      alert('Acesso Negado: Não possui privilégios de gestor para restaurar pontos de restauro.');
+      return;
+    }
+    if (window.confirm(`ATENÇÃO: Deseja SUBSTITUIR todos os dados atuais do cofre pelos dados do ponto de restauro "${backupName}"? Esta operação modificará instantaneamente o estado de toda a plataforma.`)) {
+      setBackupActionLoading(`restore_fs_${backupId}`);
+      try {
+        const ok = onRestoreBackup(payload);
+        if (ok) {
+          alert(`Plataforma reestabelecida com sucesso a partir do ponto de restauro "${backupName}"!`);
+        } else {
+          alert('Procedimento de restauro recusado: Ficheiro corrompido ou de formato incompatível.');
+        }
+      } catch (err: any) {
+        alert(`Erro de restauro: ${err.message || err}`);
+      } finally {
+        setBackupActionLoading(null);
+      }
+    }
+  };
+
+  const handleDeleteFirestoreBackup = async (backupId: string, backupName: string) => {
+    if (!canManageBackups) {
+      alert('Acesso Negado: Não possui privilégios de gestor para remover backups.');
+      return;
+    }
+    if (window.confirm(`Tem a certeza que deseja eliminar PERMANENTEMENTE o ponto de restauro "${backupName}" do Cloud Firestore?`)) {
+      setBackupActionLoading(`delete_fs_${backupId}`);
+      try {
+        const { deleteBackupFromFirestore } = await import('../firebaseSync');
+        await deleteBackupFromFirestore(backupId);
+        alert('Ponto de restauro eliminado com sucesso da base de dados cloud.');
+        await fetchFirestoreBackups();
+      } catch (err: any) {
+        alert(`Falha ao excluir backup do Firestore: ${err.message || err}`);
+      } finally {
+        setBackupActionLoading(null);
+      }
+    }
+  };
+
   const handleJSONFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!canManageBackups) {
       alert('Acesso Negado: Não possui privilégios de gestor para importar ficheiros de segurança.');
@@ -314,107 +563,239 @@ export default function AdminModule({
     {
       id: 'users' as const,
       label: 'Tabela Utilizadores & Membros',
-      icon: <Users className="w-4 h-4 shrink-0 transition-colors" />,
       description: 'Gestão de contas, atribuições, IBANs privados e acessos ao portal.',
     },
     {
       id: 'privileges' as const,
       label: 'Outorga de Privilégios (Gestores)',
-      icon: <ShieldAlert className="w-4 h-4 text-rose-500 shrink-0 transition-colors" />,
       description: 'Configure acessos de telas e acções críticas permitidas ao grupo de gestores.',
     },
     {
       id: 'receipts' as const,
       label: 'Automação de Recibos (Kix-Drive)',
-      icon: <Receipt className="w-4 h-4 shrink-0 transition-colors" />,
       description: 'Upload de comprovativos PDF/imagem, leitura OCR e validação de cotas.',
     },
     {
       id: 'banking' as const,
       label: 'Relatórios Bancários & Auditoria',
-      icon: <Landmark className="w-4 h-4 shrink-0 transition-colors" />,
       description: 'Conciliação matemática do caixa, extratos consolidados e balancetes.',
     },
     {
       id: 'carousel' as const,
       label: 'Comunicação & Slides',
-      icon: <Sparkles className="w-4 h-4 shrink-0 transition-colors" />,
       description: 'Gerir as mensagens e imagens rotativas difundidas no topo do portal do fundo.',
     },
     {
       id: 'backup' as const,
       label: 'Backup Coletor Google Drive',
-      icon: <Cloud className="w-4 h-4 shrink-0 text-emerald-500 transition-colors" />,
       description: 'Guarda os dados de membros em segurança no Google Drive e redundâncias.',
     },
     {
       id: 'audit' as const,
       label: 'Histórico de Auditoria Global',
-      icon: <ShieldCheck className="w-4 h-4 shrink-0 text-amber-500 transition-colors" />,
       description: 'Visualização cronológica de diretivas críticas, acessos, políticas e palavras-passe.',
+    },
+    {
+      id: 'member-cleanup' as const,
+      label: 'Exclusão de Membros (Definitivo)',
+      description: 'Ferramenta administrativa de remoção definitiva de utilizadores/membros com sincronização Firestore imediata.',
     },
   ];
 
+  const getSubTabIcons = (id: string) => {
+    const iconSizeClass = "w-7 h-7 stroke-[1.65] shrink-0";
+    const badgeIconSizeClass = "w-4 h-4";
+    
+    switch (id) {
+      case 'users':
+        return {
+          main: <Users className={`${iconSizeClass} text-sky-600 dark:text-sky-400`} />,
+          second: <TrendingUp className={`${badgeIconSizeClass} text-[#af904f] dark:text-sky-400/80`} />
+        };
+      case 'privileges':
+        return {
+          main: <Lock className={`${iconSizeClass} text-rose-500`} />,
+          second: <Key className={`${badgeIconSizeClass} text-[#af904f] dark:text-amber-400`} />
+        };
+      case 'receipts':
+        return {
+          main: <Receipt className={`${iconSizeClass} text-sky-600 dark:text-sky-450`} />,
+          second: <TrendingUp className={`${badgeIconSizeClass} text-[#af904f] dark:text-sky-400`} />
+        };
+      case 'banking':
+        return {
+          main: <Landmark className={`${iconSizeClass} text-indigo-500`} />,
+          second: <TrendingUp className={`${badgeIconSizeClass} text-[#af904f] dark:text-sky-400`} />
+        };
+      case 'carousel':
+        return {
+          main: <Sparkles className={`${iconSizeClass} text-indigo-500`} />,
+          second: <Sparkles className={`${badgeIconSizeClass} text-[#af904f] dark:text-indigo-400`} />
+        };
+      case 'backup':
+        return {
+          main: <Cloud className={`${iconSizeClass} text-emerald-500`} />,
+          second: <Database className={`${badgeIconSizeClass} text-[#af904f] dark:text-emerald-400`} />
+        };
+      case 'audit':
+        return {
+          main: <FileText className={`${iconSizeClass} text-amber-500`} />,
+          second: <Search className={`${badgeIconSizeClass} text-[#af904f] dark:text-amber-400`} />
+        };
+      case 'member-cleanup':
+        return {
+          main: <Trash2 className={`${iconSizeClass} text-rose-500 animate-pulse`} />,
+          second: <Users className={`${badgeIconSizeClass} text-rose-500`} />
+        };
+      default:
+        return {
+          main: <Users className={iconSizeClass} />,
+          second: <TrendingUp className={badgeIconSizeClass} />
+        };
+    }
+  };
+
+  const isDark = theme === 'dark';
+
   return (
-    <div className={`p-1 space-y-6 ${theme === 'dark' ? 'text-white' : 'text-slate-900 font-medium'}`}>
+    <div className={`p-1 space-y-6 ${isDark ? 'text-white' : 'text-slate-900 font-medium'}`}>
       
       {/* Header of administration module */}
-      <div className={`p-6 rounded-2xl border ${
-        theme === 'dark' 
-          ? 'bg-slate-900/80 border-slate-800' 
-          : 'bg-white border-slate-200'
+      <div className={`p-6 rounded-2xl border relative overflow-hidden transition-all duration-300 ${
+        isDark 
+          ? 'bg-[#0a1122] border-[#1d273d] shadow-[0_4px_30px_rgba(0,0,0,0.5)]' 
+          : 'bg-[#faf8f5] border-[#d4c3a3] shadow-[0_4px_30px_rgba(212,195,163,0.15)]'
       }`}>
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        {/* Certificate inner subtle box border framing */}
+        <div className={`absolute inset-1.5 border rounded-xl pointer-events-none ${
+          isDark ? 'border-sky-950/45' : 'border-[#e8dfd0]'
+        }`} />
+
+        {/* Dynamic Nested Outer Certificate Corners */}
+        <div className="absolute top-1 left-1 pointer-events-none flex flex-col gap-0.5">
+          <div className={`w-5 h-5 border-t border-l ${isDark ? 'border-indigo-500/40' : 'border-[#a78b54]/60'}`} />
+          <div className={`w-3 h-3 -mt-4 ml-1 border-t border-l ${isDark ? 'border-indigo-505/40' : 'border-[#a78b54]/60'} opacity-65`} />
+        </div>
+        <div className="absolute top-1 right-1 pointer-events-none flex flex-col items-end gap-0.5">
+          <div className={`w-5 h-5 border-t border-r ${isDark ? 'border-indigo-505/40' : 'border-[#a78b54]/60'}`} />
+          <div className={`w-3 h-3 -mt-4 mr-1 border-t border-r ${isDark ? 'border-indigo-505/40' : 'border-[#a78b54]/60'} opacity-65`} />
+        </div>
+        <div className="absolute bottom-1 left-1 pointer-events-none flex flex-col gap-0.5">
+          <div className={`w-3 h-3 ml-1 border-b border-l ${isDark ? 'border-indigo-505/40' : 'border-[#a78b54]/60'} opacity-65`} />
+          <div className={`w-5 h-5 -mt-4 border-b border-l ${isDark ? 'border-indigo-505/40' : 'border-[#a78b54]/60'}`} />
+        </div>
+        <div className="absolute bottom-1 right-1 pointer-events-none flex flex-col items-end gap-0.5">
+          <div className={`w-3 h-3 mr-1 border-b border-r ${isDark ? 'border-indigo-505/40' : 'border-[#a78b54]/60'} opacity-65`} />
+          <div className={`w-5 h-5 -mt-4 border-b border-r ${isDark ? 'border-indigo-505/40' : 'border-[#a78b54]/60'}`} />
+        </div>
+
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5 animate-fade-in">
           <div>
-            <h1 className="text-2xl font-black font-display tracking-tight flex items-center gap-2">
+            <h1 className={`text-2xl font-black font-display tracking-tight flex items-center gap-2 ${
+              isDark ? 'text-white' : 'text-[#0c4a6e]'
+            }`}>
               ⚙️ MÓDULO DE ADMINISTRAÇÃO COLETIVA
             </h1>
-            <p className={`text-xs mt-1 max-w-2xl ${
-              theme === 'dark' ? 'text-slate-300' : 'text-slate-800 font-bold'
+            <p className={`text-xs mt-1.5 max-w-4xl select-none leading-relaxed ${
+              isDark ? 'text-slate-300' : 'text-slate-800 font-bold'
             }`}>
               Painel centralizado de governança. Monitorize utilizadores registados, valide comprovativos 
               carregados por cooperantes, administre banners e audite os relatórios bancários automáticos com integridade matemática.
             </p>
           </div>
-          <div className="flex items-center gap-2 bg-red-600/10 border border-red-500/20 px-3.5 py-2 rounded-xl">
-            <ShieldAlert className="w-4 h-4 text-red-600 shrink-0" />
-            <span className="text-[10px] font-black uppercase text-red-600 tracking-wider">
-              ACESSO RESTRITO (ADMINISTRADOR)
-            </span>
+
+          {/* Golden Ribbon Stamp Accessory (Restricted Access Medal) */}
+          <div className="flex items-center select-none shrink-0">
+            <div className={`pl-4 pr-6 py-1.5 rounded-l-full -mr-4 shadow-sm border ${
+              isDark 
+                ? 'bg-[#070d19] border-sky-900/40 text-sky-400' 
+                : 'bg-[#fcfaf7] border-[#d4c3a3] text-[#735a29]'
+            }`}>
+              <div className="text-[9.5px] font-black uppercase tracking-widest font-sans flex flex-col items-center leading-tight">
+                <span>ACESSO RESTRITO</span>
+                <span className="text-[7px] font-semibold opacity-85">(ADMINISTRADOR)</span>
+              </div>
+            </div>
+            
+            {/* The Medal Stamp Seal */}
+            <div className="relative w-12 h-12 rounded-full border-2 border-[#b59441] bg-gradient-to-br from-[#f3e3ba] via-[#c6a45c] to-[#997730] flex items-center justify-center shadow-md transform hover:scale-105 transition-all duration-300">
+              <div className="absolute inset-0.5 rounded-full border border-dashed border-[#fee08b]/40" />
+              <div className="w-8.5 h-8.5 rounded-full bg-[#1e1a12] dark:bg-[#0a0d14] border border-[#86631e] flex items-center justify-center shadow-inner">
+                <ShieldAlert className="w-4 h-4 text-[#fcd34d]" />
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* High-contrast sub-tab toggles */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2 mt-6">
+        {/* Custom Decorative Ribbon label "MODO CLEAR / MODO ESCURO" centered line */}
+        <div className="relative flex items-center justify-center my-4 overflow-hidden select-none">
+          <div className={`h-[1px] w-full ${isDark ? 'bg-slate-800' : 'bg-slate-300'}`} />
+          <span className={`absolute px-4 text-[9px] font-black tracking-widest uppercase rounded-full ${
+            isDark ? 'text-[#a5b4fc] bg-[#0c1328] border border-indigo-500/20' : 'text-[#735a29] bg-[#faf8f5] border border-[#d4c3a3]/60'
+          }`}>
+            {isDark ? 'MODO ESCURO' : 'MODO CLARO'}
+          </span>
+        </div>
+
+        {/* High-fidelity card grids matching the design */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3.5 mt-5 relative z-10">
           {subTabs.map((tab) => {
             const isActive = activeSubTab === tab.id;
+            const { main, second } = getSubTabIcons(tab.id);
+
             return (
               <button
                 key={tab.id}
                 onClick={() => setActiveSubTab(tab.id)}
-                className={`text-left p-3.5 rounded-xl border-2 transition-all flex flex-col gap-1.5 cursor-pointer ${
+                className={`text-left p-4 rounded-xl border-2 transition-all flex flex-col gap-2 cursor-pointer relative overflow-hidden duration-300 transform select-none ${
                   isActive
-                    ? theme === 'dark'
-                      ? 'bg-sky-950/40 border-sky-500 text-sky-200 shadow-lg ring-1 ring-sky-500/25'
-                      : 'bg-sky-50 border-sky-500 text-sky-950 shadow-md ring-1 ring-sky-200/50'
-                    : theme === 'dark'
-                      ? 'bg-slate-950 border-slate-900 text-slate-400 hover:text-white hover:border-slate-805'
-                      : 'bg-slate-50 border-slate-200 text-slate-800 hover:bg-slate-100 hover:border-slate-300 font-bold'
+                    ? isDark
+                      ? 'bg-[#0e172a] border-sky-400 text-white font-semibold shadow-[0_0_24px_rgba(14,165,233,0.18)] ring-1 ring-sky-500/30'
+                      : 'bg-[#faf6f0] border-[#b59441] text-[#735a29] font-bold shadow-[0_8px_20px_rgba(180,135,45,0.08)] ring-1 ring-[#b59441]/40'
+                    : isDark
+                      ? 'bg-[#080d19] border-slate-900 text-slate-400 hover:border-slate-800 hover:bg-slate-900/60'
+                      : 'bg-[#faf8f5] border-[#e2dcd0] text-slate-800 hover:bg-[#faf6e8]/45 hover:border-[#bfb199]'
                 }`}
               >
-                <div className="flex items-center gap-2 font-bold font-display text-xs">
-                  <div className={isActive ? (theme === 'dark' ? 'text-sky-400' : 'text-sky-600') : ''}>
-                    {tab.icon}
-                  </div>
-                  <span className="tracking-tight">{tab.label}</span>
+                {/* Secondary inner certificate framing border */}
+                <div className={`absolute inset-1 border rounded-lg pointer-events-none transition-colors duration-300 ${
+                  isActive
+                    ? isDark ? 'border-sky-500/30' : 'border-[#b59441]/35'
+                    : isDark ? 'border-[#1d273d]' : 'border-[#e2dcd0]/40'
+                }`} />
+
+                {/* Classic Corner brackets for elegant design */}
+                <div className="absolute top-0.5 left-0.5 w-2 h-2 pointer-events-none border-t border-l opacity-80" 
+                  style={{ borderColor: isActive ? (isDark ? '#38bdf8' : '#b59441') : (isDark ? '#334155' : '#cbd5e1') }} />
+                <div className="absolute top-0.5 right-0.5 w-2 h-2 pointer-events-none border-t border-r opacity-80"
+                  style={{ borderColor: isActive ? (isDark ? '#38bdf8' : '#b59441') : (isDark ? '#334155' : '#cbd5e1') }} />
+                <div className="absolute bottom-0.5 left-0.5 w-2 h-2 pointer-events-none border-b border-l opacity-80"
+                  style={{ borderColor: isActive ? (isDark ? '#38bdf8' : '#b59441') : (isDark ? '#334155' : '#cbd5e1') }} />
+                <div className="absolute bottom-0.5 right-0.5 w-2 h-2 pointer-events-none border-b border-r opacity-80"
+                  style={{ borderColor: isActive ? (isDark ? '#38bdf8' : '#b59441') : (isDark ? '#334155' : '#cbd5e1') }} />
+
+                <div className="flex items-center justify-between w-full relative z-10 font-sans">
+                  {main}
+                  {second}
                 </div>
-                <p className={`text-[9px] leading-relaxed select-none ${
-                  isActive 
-                    ? theme === 'dark' ? 'text-sky-300/90' : 'text-sky-800/90 font-medium' 
-                    : theme === 'dark' ? 'text-slate-500' : 'text-slate-650'
-                }`}>
-                  {tab.description}
-                </p>
+
+                <div className="flex flex-col gap-1 mt-1 relative z-10">
+                  <span className={`font-sans text-xs tracking-tight uppercase leading-tight font-extrabold ${
+                    isActive 
+                      ? isDark ? 'text-[#38bdf8]' : 'text-[#735a29]' 
+                      : isDark ? 'text-slate-200' : 'text-[#1e293b]'
+                  }`}>
+                    {tab.label}
+                  </span>
+                  
+                  <p className={`text-[9.5px] leading-relaxed select-none ${
+                    isActive 
+                      ? isDark ? 'text-[#38bdf8]/80' : 'text-[#8c6e32]' 
+                      : isDark ? 'text-[#7a889e]' : 'text-[#5c697a]'
+                  }`}>
+                    {tab.description}
+                  </p>
+                </div>
               </button>
             );
           })}
@@ -442,6 +823,301 @@ export default function AdminModule({
               appConfig={appConfig}
               setAppConfig={setAppConfig}
             />
+          </motion.div>
+        )}
+
+        {activeSubTab === 'member-cleanup' && (
+          <motion.div
+            key="admin_member_cleanup"
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className={`p-6 rounded-2xl border ${
+              isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'
+            } space-y-6 shadow-sm`}
+          >
+            {/* Header section */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
+              <div className="space-y-1">
+                <h3 className="text-base font-extrabold flex items-center gap-2 text-rose-600 dark:text-rose-450 uppercase tracking-tight">
+                  <Trash2 className="w-5 h-5 text-rose-500 animate-pulse" />
+                  Gestão & Exclusão Definitiva de Membros
+                </h3>
+                <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                  Remova membros do array global com propagação síncrona aos dados locais, ao cache local e gravação imediata no Firestore.
+                </p>
+              </div>
+              
+              <div className="flex items-center gap-2 text-xs font-bold text-amber-500 bg-amber-50 dark:bg-amber-950/20 px-3 py-1.5 rounded-lg border border-amber-500/10">
+                <AlertCircle className="w-4 h-4" />
+                <span>Zona de Risco Administrativo</span>
+              </div>
+            </div>
+
+            {/* Error & Success Messages */}
+            {cleanupSuccess && (
+              <div className="p-4 bg-teal-50 dark:bg-teal-950/30 border border-teal-500/20 text-teal-850 dark:text-teal-400 rounded-xl text-xs font-semibold flex items-start gap-2.5">
+                <CheckCircle className="w-4 h-4 text-teal-500 mt-0.5" />
+                <div className="flex-1">{cleanupSuccess}</div>
+                <button onClick={() => setCleanupSuccess(null)} className="text-slate-400 hover:text-slate-650 dark:hover:text-slate-200">✕</button>
+              </div>
+            )}
+
+            {cleanupError && (
+              <div className="p-4 bg-rose-50 dark:bg-rose-950/30 border border-rose-500/20 text-rose-850 dark:text-rose-400 rounded-xl text-xs font-semibold flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-rose-500 mt-0.5" />
+                <div className="flex-1">{cleanupError}</div>
+                <button onClick={() => setCleanupError(null)} className="text-slate-400 hover:text-slate-650 dark:hover:text-slate-200">✕</button>
+              </div>
+            )}
+
+            {/* Main selection panel */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              
+              {/* Left Column: Left List with search */}
+              <div className="lg:col-span-5 space-y-4">
+                <div className="space-y-1.5">
+                  <label className={`text-[10px] font-extrabold uppercase tracking-wider ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                    Procurar membro para seleção
+                  </label>
+                  <div className="relative">
+                    <Search className="absolute left-3.5 top-2.5 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      value={cleanupSearch}
+                      onChange={(e) => setCleanupSearch(e.target.value)}
+                      placeholder="Pesquisar por nome ou e-mail..."
+                      className={`w-full pl-9.5 pr-4 py-2 text-xs rounded-xl border transition-all ${
+                        isDark 
+                          ? 'bg-slate-950/60 border-slate-800 text-white placeholder-slate-500 focus:border-rose-500/40 focus:ring-1 focus:ring-rose-500/20' 
+                          : 'bg-slate-50 border-slate-200 text-slate-900 placeholder-slate-400 focus:border-rose-500 focus:ring-1 focus:ring-rose-500/10'
+                      }`}
+                    />
+                  </div>
+                </div>
+
+                {/* List Container */}
+                <div className={`border rounded-xl max-h-[380px] overflow-y-auto divide-y transition-all ${
+                  isDark ? 'border-slate-800 divide-slate-800' : 'border-slate-100 divide-slate-100'
+                }`}>
+                  {members
+                    .filter((m) => {
+                      if (!cleanupSearch) return true;
+                      const q = cleanupSearch.toLowerCase();
+                      return (
+                        m.name.toLowerCase().includes(q) || 
+                        (m.email && m.email.toLowerCase().includes(q))
+                      );
+                    })
+                    .map((m) => {
+                      const isSelected = cleanupSelectedMemberId === m.id;
+                      const isCurrentUser = currentUser?.email && m.email?.trim().toLowerCase() === currentUser.email.trim().toLowerCase();
+                      
+                      return (
+                        <div
+                          key={m.id}
+                          onClick={() => {
+                            setCleanupSelectedMemberId(m.id);
+                            setCleanupConfirmName('');
+                            setCleanupError(null);
+                          }}
+                          className={`p-3 text-xs flex items-center justify-between cursor-pointer transition-all ${
+                            isSelected 
+                              ? 'bg-rose-500/10 text-rose-500 dark:bg-rose-500/10 font-bold' 
+                              : isDark 
+                                ? 'hover:bg-slate-800/50 text-slate-350' 
+                                : 'hover:bg-slate-50 text-slate-705'
+                          }`}
+                        >
+                          <div className="space-y-0.5">
+                            <span className="font-bold flex items-center gap-1.5 uppercase tracking-tight text-[11px]">
+                              {m.name}
+                              {isCurrentUser && (
+                                <span className="text-[8px] bg-sky-500 text-white px-1.5 py-0.5 rounded font-mono uppercase font-black tracking-widest animate-pulse">
+                                  TU
+                                </span>
+                              )}
+                            </span>
+                            <span className="text-[10px] text-slate-400 block font-mono">
+                              {m.email || 'Nenhum e-mail'}
+                            </span>
+                          </div>
+                          
+                          <div className="flex items-center gap-2 shrink-0">
+                            {/* Role indicator */}
+                            <span className={`px-2 py-0.5 text-[8.5px] font-bold rounded uppercase tracking-wider ${
+                              m.role === 'admin' 
+                                ? 'bg-red-950/20 text-red-500 border border-red-500/10' 
+                                : m.role === 'gestor'
+                                  ? 'bg-amber-950/20 text-amber-500 border border-amber-500/10'
+                                  : 'bg-slate-100 dark:bg-slate-950 text-slate-500 border border-slate-200/50'
+                            }`}>
+                              {m.role || 'Membro'}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              </div>
+
+              {/* Right Column: Execution of Delete & Confirm */}
+              <div className="lg:col-span-7">
+                {cleanupSelectedMemberId ? (() => {
+                  const target = members.find((m) => m.id === cleanupSelectedMemberId);
+                  if (!target) return null;
+                  const isCurrentUser = currentUser?.email && target.email?.trim().toLowerCase() === currentUser.email.trim().toLowerCase();
+                  const isSuper = target.email?.trim().toLowerCase() === 'lmendesvictor@gmail.com';
+
+                  return (
+                    <div className={`p-5 rounded-2xl border flex flex-col h-full justify-between gap-5 transition-all ${
+                      isDark ? 'bg-slate-950/40 border-slate-800' : 'bg-slate-50 border-slate-100'
+                    }`}>
+                      <div className="space-y-4">
+                        <div className="flex items-start gap-3.5 pb-3 border-b border-slate-200/50 dark:border-slate-800/50">
+                          <div className="p-3 bg-rose-505/10 text-rose-500 rounded-xl">
+                            <Trash2 className="w-5.5 h-5.5" />
+                          </div>
+                          <div className="space-y-0.5">
+                            <span className="text-[10px] font-extrabold uppercase tracking-widest text-[#b59441]">
+                              Membro Selecionado
+                            </span>
+                            <h4 className="text-sm font-extrabold text-slate-850 dark:text-white uppercase tracking-tight">
+                              {target.name}
+                            </h4>
+                          </div>
+                        </div>
+
+                        {/* Stats fields preview */}
+                        <div className="grid grid-cols-2 gap-3.5 text-xs text-slate-500 dark:text-slate-400">
+                          <div className="space-y-1">
+                            <span className="text-[9.5px] font-bold uppercase tracking-wider block text-slate-400">E-mail:</span>
+                            <span className="font-mono font-semibold dark:text-slate-200 text-slate-800">{target.email || 'Sem e-mail'}</span>
+                          </div>
+                          <div className="space-y-1">
+                            <span className="text-[9.5px] font-bold uppercase tracking-wider block text-slate-400">Privilégio:</span>
+                            <span className="font-semibold block uppercase tracking-wider text-rose-500">{target.role || 'Membro Comum'}</span>
+                          </div>
+                          <div className="space-y-1">
+                            <span className="text-[9.5px] font-bold uppercase tracking-wider block text-slate-400">IBAN:</span>
+                            <span className="font-mono font-semibold dark:text-slate-200 text-slate-800">{target.iban || 'Não configurado'}</span>
+                          </div>
+                          <div className="space-y-1">
+                            <span className="text-[9.5px] font-bold uppercase tracking-wider block text-slate-400">ID Único:</span>
+                            <span className="font-mono font-semibold dark:text-slate-200 text-slate-800">#{target.id}</span>
+                          </div>
+                        </div>
+
+                        {/* Critical Action Confirmation Box */}
+                        {isCurrentUser ? (
+                          <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-xl text-xs space-y-1.5 text-amber-550 font-semibold leading-relaxed">
+                            <div className="flex items-center gap-2 uppercase font-extrabold tracking-wider">
+                              <AlertCircle className="w-4 h-4 text-amber-500" />
+                              Auto Exclusão Proibida
+                            </div>
+                            <p className="text-[11px]">
+                              Para garantir a segurança do sistema e estabilidade de acesso, não é permitido remover a sua própria conta de administrador ativa.
+                            </p>
+                          </div>
+                        ) : isSuper ? (
+                          <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-xs space-y-1.5 text-red-500 font-semibold leading-relaxed">
+                            <div className="flex items-center gap-2 uppercase font-extrabold tracking-wider">
+                              <AlertCircle className="w-4 h-4 text-red-500 animate-bounce" />
+                              Remoção De Super Admin Bloqueada
+                            </div>
+                            <p className="text-[11px]">
+                              O utilizador <strong>{target.name}</strong> é o Super Administrador proprietário do domínio do consórcio rotativo. A exclusão desta conta é bloqueada por segurança reguladora de raiz.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-3.5 p-4 border rounded-xl bg-rose-505/5 border-rose-500/15">
+                            <div className="space-y-1 text-xs">
+                              <span className="font-extrabold text-rose-550 uppercase tracking-wider flex items-center gap-1">
+                                <AlertCircle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+                                Confirmação de Segurança Exigida
+                              </span>
+                              <p className="text-slate-500 dark:text-slate-400 text-[11px] leading-relaxed">
+                                Para evitar acidentes catastróficos, escreva o nome do membro <strong className="font-extrabold dark:text-white text-slate-800 select-all">{target.name}</strong> exatamente abaixo para destravar a exclusão total.
+                              </p>
+                            </div>
+                            
+                            <div className="space-y-1.5">
+                              <input
+                                type="text"
+                                value={cleanupConfirmName}
+                                onChange={(e) => {
+                                  setCleanupConfirmName(e.target.value);
+                                  setCleanupError(null);
+                                }}
+                                placeholder="Digite o nome do membro para desbloquear..."
+                                className={`w-full px-4 py-2 text-xs rounded-xl border transition-all font-semibold ${
+                                  isDark 
+                                    ? 'bg-slate-950/60 border-slate-700 text-white focus:border-red-505/80' 
+                                    : 'bg-white border-slate-200 text-slate-900 focus:border-red-500'
+                                }`}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Execution bar */}
+                      {!isCurrentUser && !isSuper && (
+                        <div className="flex items-center justify-end gap-3 mt-4 pt-3 border-t border-slate-200/40 dark:border-slate-800/45">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCleanupSelectedMemberId(null);
+                              setCleanupConfirmName('');
+                            }}
+                            className="px-4.5 py-2 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                          >
+                            Cancelar
+                          </button>
+                          
+                          <button
+                            type="button"
+                            disabled={cleanupConfirmName.trim().toLowerCase() !== target.name.trim().toLowerCase() || isCleaningUp}
+                            onClick={handleDefinitiveDeleteMember}
+                            className={`px-5 py-2.5 rounded-xl text-xs font-mono font-bold uppercase transition-all flex items-center gap-2 text-white ${
+                              cleanupConfirmName.trim().toLowerCase() === target.name.trim().toLowerCase() && !isCleaningUp
+                                ? 'bg-red-600 hover:bg-red-700 cursor-pointer shadow-lg shadow-red-500/20'
+                                : 'bg-slate-300 dark:bg-slate-800 text-slate-505 dark:text-slate-600 cursor-not-allowed'
+                            }`}
+                          >
+                            {isCleaningUp ? (
+                              <>
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                Sincronizando...
+                              </>
+                            ) : (
+                              <>
+                                <Trash2 className="w-3.5 h-3.5" />
+                                Excluir Incondicionalmente
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })() : (
+                  <div className={`p-12 text-center rounded-2xl border-2 border-dashed flex flex-col items-center justify-center gap-3 select-none h-full min-h-[280px] ${
+                    isDark ? 'border-slate-800 text-slate-500' : 'border-slate-200 text-slate-405'
+                  }`}>
+                    <Users className="w-10 h-10 stroke-[1.25] text-slate-400 animate-pulse" />
+                    <div className="space-y-1">
+                      <span className="text-xs font-bold uppercase tracking-wider block">Nenhum Membro Selecionado</span>
+                      <p className="text-[10px] max-w-xs mx-auto leading-relaxed">
+                        Selecione um utilizador da lista lateral esquerda para abrir o painel de exclusão incondicional com sincronização direta no Firestore.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+            </div>
           </motion.div>
         )}
 
@@ -807,11 +1483,274 @@ export default function AdminModule({
               </div>
             </div>
 
+            {/* PAINEL DE INTEGRIDADE EM TEMPO REAL */}
+            <div className={`mt-6 p-5 rounded-2xl border ${
+              theme === 'dark' 
+                ? 'bg-slate-950 border-slate-800' 
+                : 'bg-slate-50 border-slate-200'
+            }`}>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                    <Database className="w-4 h-4 text-sky-500" />
+                    Utilitário de Verificação de Integridade de Dados (Firestore vs Local)
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium">
+                    Compara instantaneamente as contagens de membros e registos de auditoria guardados no seu navegador contra a base de dados em nuvem do Firestore.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={runIntegrityCheck}
+                  disabled={integrityStatus === 'checking'}
+                  className="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50 inline-flex"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${integrityStatus === 'checking' ? 'animate-spin' : ''}`} />
+                  {integrityStatus === 'checking' ? 'A verificar...' : 'Re-verificar'}
+                </button>
+              </div>
+
+              {/* Status Display Area */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-6 mt-4 pt-4 border-t border-slate-200/60 dark:border-slate-800/60">
+                {/* Local Stats */}
+                <div className="col-span-1 md:col-span-4 p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-2">💻 Memória do Navegador (Local)</span>
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center text-xs text-slate-600 dark:text-slate-300">
+                      <span>Contagem de Membros:</span>
+                      <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{members.length}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-xs text-slate-600 dark:text-slate-300">
+                      <span>Contagem de Logs:</span>
+                      <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{logs.length}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Firestore Cloud Stats */}
+                <div className="col-span-1 md:col-span-4 p-4 rounded-xl bg-white dark:bg-slate-900 border border-slate-150 dark:border-slate-800/80">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-2">☁️ Base de dados Firestore (Cloud)</span>
+                  {integrityStatus === 'checking' ? (
+                    <div className="flex items-center gap-2 h-8 text-xs text-slate-400">
+                      <RefreshCw className="w-3 h-3 animate-spin text-sky-500" />
+                      <span>Ligando ao servidor...</span>
+                    </div>
+                  ) : firestoreMembersCount === null ? (
+                    <div className="text-xs text-slate-400 italic py-2">
+                      Verificação pendente. Clique em "Re-verificar".
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center text-xs text-slate-600 dark:text-slate-300">
+                        <span>Contagem de Membros:</span>
+                        <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{firestoreMembersCount}</span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs text-slate-600 dark:text-slate-300">
+                        <span>Contagem de Logs:</span>
+                        <span className="font-mono font-bold text-slate-800 dark:text-slate-200">{firestoreLogsCount}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Verification result summary badge */}
+                 <div className="col-span-1 md:col-span-4 flex flex-col justify-center">
+                  {integrityStatus === 'checking' && (
+                    <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-900/50 text-slate-550 dark:text-slate-400 text-xs flex items-center justify-center gap-2">
+                      <RefreshCw className="w-4 h-4 animate-spin text-sky-500" />
+                      <span>Analisando estruturas de dados...</span>
+                    </div>
+                  )}
+
+                  {(integrityStatus === 'idle' || integrityStatus === 'checking') && firestoreMembersCount === null && (
+                    <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-900/50 text-slate-550 dark:text-slate-400 text-xs text-center border border-dashed border-slate-250 dark:border-slate-850">
+                      Aguardando início do diagnóstico global.
+                    </div>
+                  )}
+
+                  {integrityStatus === 'success' && (
+                    <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs space-y-1">
+                      <div className="font-bold flex items-center gap-1.5 uppercase text-[10px] tracking-widest text-emerald-500">
+                        <CheckCircle className="w-4 h-4" />
+                        DADOS ÍNTEGROS
+                      </div>
+                      <p className="leading-relaxed">
+                        A memória local e o Firestore estão em total harmonia. Nenhuma discrepância foi detetada.
+                      </p>
+                      {lastIntegrityCheck && (
+                        <span className="text-[9.5px] text-slate-400 block mt-1.5 font-mono">Última leitura: {lastIntegrityCheck}</span>
+                      )}
+                    </div>
+                  )}
+
+                  {integrityStatus === 'error' && (
+                    <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-450 text-xs space-y-1">
+                      <span className="font-bold flex items-center gap-1.5 uppercase text-[10px] tracking-widest text-rose-500">
+                        <AlertCircle className="w-4 h-4" />
+                        ERRO DE LEITURA
+                      </span>
+                      <p className="leading-snug text-slate-650 dark:text-slate-350">
+                        {integrityError || 'Erro desconhecido do Firestore.'}
+                      </p>
+                    </div>
+                  )}
+
+                  {integrityStatus === 'discrepancy' && (
+                    <div className="p-4 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-600 dark:text-amber-400 text-xs space-y-1 animate-pulse" style={{ animationDuration: '3s' }}>
+                      <span className="font-bold flex items-center gap-1.5 uppercase text-[11px] tracking-widest text-amber-600 dark:text-amber-400 font-sans">
+                        <AlertCircle className="w-4 h-4 text-amber-500 dark:text-amber-450 animate-bounce" />
+                        DISCREPÂNCIA DETETADA
+                      </span>
+                      <p className="leading-normal text-slate-700 dark:text-slate-300 font-sans">
+                        As contagens de registos locais diferem do armazenamento em Nuvem.
+                      </p>
+                      {lastIntegrityCheck && (
+                        <span className="text-[9.5px] text-slate-450 dark:text-slate-400 block mt-1 font-mono">Verificado em: {lastIntegrityCheck}</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Action options inside discrepancy alert to easily sync / heal */}
+              {integrityStatus === 'discrepancy' && (
+                <div className="mt-4 p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-slate-800 dark:text-slate-200">
+                  <div className="font-bold text-amber-600 dark:text-amber-400 mb-2 font-display uppercase tracking-wider">
+                    ⚠️ AÇÕES CORRETIVAS DISPONÍVEIS:
+                  </div>
+                  <p className="text-slate-600 dark:text-slate-400 mb-4 leading-normal font-medium">
+                    Selecione uma das opções abaixo para sincronizar e resolver o desfalque ou desencontro de registros de forma definitiva:
+                  </p>
+                  
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <button
+                      type="button"
+                      disabled={isSyncingCloud}
+                      onClick={handleResolvePushToCloud}
+                      className="flex-1 px-4 py-3 bg-amber-650 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-500 text-white font-bold rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-50"
+                    >
+                      {isSyncingCloud ? (
+                        <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                      ) : (
+                        <CloudUpload className="w-4 h-4 text-white" />
+                      )}
+                      <span>Sincronizar Cloud (Local → Firestore)</span>
+                    </button>
+                    
+                    <button
+                      type="button"
+                      disabled={isRestoringFromCloud}
+                      onClick={handleResolvePullFromCloud}
+                      className="flex-1 px-4 py-3 bg-sky-650 hover:bg-sky-700 dark:bg-sky-600 dark:hover:bg-sky-500 text-white font-bold rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-all disabled:opacity-50"
+                    >
+                      {isRestoringFromCloud ? (
+                        <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                      ) : (
+                        <CloudDownload className="w-4 h-4 text-white" />
+                      )}
+                      <span>Restaurar Navegador (Firestore → Local)</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Grid Container */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-6">
               
               {/* Left Column - Configurations and Local contingency */}
               <div className="lg:col-span-5 space-y-6">
+                
+                {/* CONFIGURADOR DE AGENDAMENTO AUTOMÁTICO */}
+                <div className={`p-5 rounded-2xl border ${
+                  theme === 'dark' ? 'bg-slate-950 border-slate-850' : 'bg-slate-50 border-slate-100'
+                }`}>
+                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2 mb-4">
+                    <Calendar className="w-4 h-4 text-sky-500" />
+                    Agendamento de Backups Automáticos
+                  </h3>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-[10px] font-black uppercase text-slate-400 block mb-1.5">Frequência da Operação</label>
+                      <select
+                        value={appConfig.autoBackupSchedule || 'off'}
+                        onChange={(e) => {
+                          const val = e.target.value as 'off' | 'daily' | 'weekly';
+                          const updatedConfig = { ...appConfig, autoBackupSchedule: val };
+                          setAppConfig(updatedConfig);
+                          localStorage.setItem('kix_app_config', JSON.stringify(updatedConfig));
+                          saveState(members, logs, payoutsCompleted, currentMonth, [], updatedConfig);
+                        }}
+                        className={`w-full text-xs font-semibold p-2.5 rounded-xl border cursor-pointer outline-none transition-all ${
+                          theme === 'dark'
+                            ? 'bg-slate-900 border-slate-800 text-white focus:border-slate-700'
+                            : 'bg-white border-slate-200 text-slate-1000'
+                        }`}
+                      >
+                        <option value="off">Off (Gestão Manual)</option>
+                        <option value="daily">Calendário Diário (A cada 24 horas)</option>
+                        <option value="weekly">Calendário Semanal (A cada 7 dias)</option>
+                      </select>
+                      <p className="text-[10px] text-slate-405 dark:text-slate-505 leading-normal mt-1.5">
+                        Armazena e atualiza de forma transparente e segura pontos de restauração confiáveis na nuvem coletora sempre que a plataforma inicializa.
+                      </p>
+                    </div>
+
+                    <div className="pt-3 border-t border-slate-200 dark:border-slate-800/65 flex items-center justify-between gap-2">
+                      <div>
+                        <div className="text-xs font-bold text-slate-800 dark:text-slate-100">Cópia Dupla em Google Drive</div>
+                        <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-normal mt-0.5">
+                          Ative para enviar a cópia programada também para o Google Drive coletor quando sua conta estiver conectada.
+                        </p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={appConfig.autoBackUpGDrive === true}
+                        disabled={!googleToken}
+                        onChange={(e) => {
+                          const active = e.target.checked;
+                          const updatedConfig = { ...appConfig, autoBackUpGDrive: active };
+                          setAppConfig(updatedConfig);
+                          localStorage.setItem('kix_app_config', JSON.stringify(updatedConfig));
+                          saveState(members, logs, payoutsCompleted, currentMonth, [], updatedConfig);
+                        }}
+                        className="w-4 h-4 rounded text-sky-600 border-slate-350 bg-white cursor-pointer accent-sky-505 disabled:opacity-45"
+                      />
+                    </div>
+
+                    <div className="bg-slate-100 dark:bg-slate-900/40 rounded-xl p-3 space-y-2 mt-2">
+                      <div className="flex justify-between items-center text-[10px] font-semibold text-slate-500 dark:text-slate-450">
+                        <span>Último Ponto Firestore:</span>
+                        <span className="font-mono text-slate-700 dark:text-slate-300">
+                          {appConfig.lastAutoBackupFirestore ? new Date(appConfig.lastAutoBackupFirestore).toLocaleString('pt-AO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'Nunca'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center text-[10px] font-semibold text-slate-500 dark:text-slate-450">
+                        <span>Último Ponto GDrive:</span>
+                        <span className="font-mono text-slate-700 dark:text-slate-300">
+                          {appConfig.lastAutoBackupGDrive ? new Date(appConfig.lastAutoBackupGDrive).toLocaleString('pt-AO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : 'Nunca'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="pt-2">
+                      <button
+                        type="button"
+                        disabled={backupActionLoading === 'create_firestore'}
+                        onClick={handleCreateFirestoreBackup}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer disabled:opacity-50"
+                      >
+                        {backupActionLoading === 'create_firestore' ? (
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Database className="w-3.5 h-3.5" />
+                        )}
+                        Criar Ponto de Restauro em Firestore
+                      </button>
+                    </div>
+                  </div>
+                </div>
                 
                 {/* Google Drive Connection Block */}
                 <div className={`p-5 rounded-2xl border ${
@@ -953,25 +1892,150 @@ export default function AdminModule({
                 <div className={`flex-1 p-5 rounded-2xl border ${
                   theme === 'dark' ? 'bg-slate-950 border-slate-800' : 'bg-slate-50 border-slate-100'
                 }`}>
+                  {/* ALTERNADOR DE ABAS ENTRE CLOUD FIRESTORE E GOOGLE DRIVE */}
                   <div className="flex items-center justify-between gap-4 mb-4 pb-3 border-b border-slate-200 dark:border-slate-800">
-                    <h3 className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                      <CloudDownload className="w-4 h-4 text-[#10B981]" />
-                      Cópias de Segurança Ativas no Google Drive
-                    </h3>
-                    {googleToken && (
+                    <div className="flex items-center gap-1 bg-slate-150 dark:bg-slate-900 p-1 rounded-xl">
                       <button
+                        type="button"
+                        onClick={() => setBackupActiveCloudType('firestore')}
+                        className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer ${
+                          backupActiveCloudType === 'firestore'
+                            ? 'bg-sky-600 text-white shadow-sm'
+                            : 'text-slate-550 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                        }`}
+                      >
+                        <Database className="w-3.5 h-3.5" />
+                        Firestore ({firestoreBackups.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBackupActiveCloudType('gdrive')}
+                        className={`px-3 py-1.5 rounded-lg text-[11px] font-black uppercase tracking-wider flex items-center gap-1.5 transition-all cursor-pointer ${
+                          backupActiveCloudType === 'gdrive'
+                            ? 'bg-emerald-600 text-white shadow-sm'
+                            : 'text-slate-550 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                        }`}
+                      >
+                        <Cloud className="w-3.5 h-3.5" />
+                        Google Drive ({googleToken ? driveBackups.length : 'Off'})
+                      </button>
+                    </div>
+
+                    {googleToken && backupActiveCloudType === 'gdrive' && (
+                      <button
+                        type="button"
                         onClick={() => fetchGoogleBackups(googleToken)}
                         disabled={isGDriveLoading}
                         className="p-1 px-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg text-xs font-bold flex items-center gap-1 text-slate-500 dark:text-slate-400 cursor-pointer"
-                        title="Recarregar Lista"
+                        title="Recarregar Lista Google Drive"
                       >
                         <RefreshCw className={`w-3 h-3 ${isGDriveLoading ? 'animate-spin' : ''}`} />
                         Sincronizar
                       </button>
                     )}
+
+                    {backupActiveCloudType === 'firestore' && (
+                      <button
+                        type="button"
+                        onClick={fetchFirestoreBackups}
+                        disabled={isFirestoreLoading}
+                        className="p-1 px-2 hover:bg-slate-200 dark:hover:bg-slate-800 rounded-lg text-xs font-bold flex items-center gap-1 text-slate-500 dark:text-slate-400 cursor-pointer"
+                        title="Recarregar Lista Firestore"
+                      >
+                        <RefreshCw className={`w-3 h-3 ${isFirestoreLoading ? 'animate-spin' : ''}`} />
+                        Sincronizar
+                      </button>
+                    )}
                   </div>
 
-                  {!googleToken ? (
+                  {backupActiveCloudType === 'firestore' ? (
+                    isFirestoreLoading ? (
+                      <div className="h-full flex flex-col items-center justify-center py-20 text-center">
+                        <RefreshCw className="w-8 h-8 text-sky-500 animate-spin mb-3" />
+                        <p className="text-xs font-bold text-slate-500 dark:text-slate-400">A mapear pontos de restauro na Cloud Firestore...</p>
+                      </div>
+                    ) : firestoreBackups.length === 0 ? (
+                      <div className="h-full flex flex-col items-center justify-center py-20 text-center">
+                        <Database className="w-12 h-12 text-slate-300 dark:text-slate-805 mb-3" />
+                        <p className="text-xs font-extrabold text-slate-500 dark:text-slate-400">Nenhum ponto de restauro Firestore</p>
+                        <p className="text-[10px] text-slate-400 dark:text-slate-600 max-w-xs mt-1">
+                          Configure a frequência acima ou clique em "Criar Ponto de Restauro em Firestore" para capturar seu primeiro ponto seguro.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+                        {firestoreBackups.map((bk) => {
+                          const dateFormatted = bk.createdAt ? new Date(bk.createdAt).toLocaleString('pt-AO', {
+                            year: 'numeric', month: 'short', day: 'numeric',
+                            hour: '2-digit', minute: '2-digit'
+                          }) : 'Data Desconhecida';
+                          
+                          const isActionActive = backupActionLoading?.includes(bk.id);
+                          const isAuto = bk.type === 'automatic';
+
+                          return (
+                            <div
+                              key={bk.id}
+                              className="p-3.5 bg-white dark:bg-slate-900 border border-slate-205 dark:border-slate-850 rounded-xl flex items-center justify-between gap-3 hover:shadow-sm hover:border-slate-300 dark:hover:border-slate-755 transition-all font-medium"
+                            >
+                              <div className="min-w-0">
+                                <div className="text-xs font-black text-slate-800 dark:text-slate-200 flex items-center gap-1.5 leading-none">
+                                  {isAuto ? (
+                                    <span className="p-1 px-1.5 bg-amber-500/10 text-amber-600 dark:text-amber-550 rounded text-[9px] uppercase tracking-wider font-extrabold flex items-center gap-0.5">
+                                      <Calendar className="w-2.5 h-2.5" /> Auto
+                                    </span>
+                                  ) : (
+                                    <span className="p-1 px-1.5 bg-sky-505/10 text-sky-600 rounded text-[9px] uppercase tracking-wider font-extrabold flex items-center gap-0.5">
+                                      <Database className="w-2.5 h-2.5" /> Manual
+                                    </span>
+                                  )}
+                                  <span className="truncate">{bk.name}</span>
+                                </div>
+                                <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-2 flex items-center gap-1.5 font-semibold">
+                                  <span>Registado:</span>
+                                  <strong className="font-bold text-slate-600 dark:text-slate-300">{dateFormatted}</strong>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                {/* Restore Button */}
+                                <button
+                                  type="button"
+                                  disabled={isActionActive}
+                                  onClick={() => handleRestoreFirestoreBackup(bk.id, bk.name, bk.payload)}
+                                  className="px-2.5 py-1.5 bg-sky-600 hover:bg-sky-700 text-white rounded-lg text-[10px] font-extrabold uppercase tracking-wide flex items-center gap-1 transition-all disabled:opacity-50 cursor-pointer"
+                                >
+                                  {backupActionLoading === `restore_fs_${bk.id}` ? (
+                                    <RefreshCw className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    <CloudDownload className="w-3 h-3" />
+                                  )}
+                                  Restaurar
+                                </button>
+
+                                {/* Delete button */}
+                                <button
+                                  type="button"
+                                  disabled={isActionActive}
+                                  onClick={() => handleDeleteFirestoreBackup(bk.id, bk.name)}
+                                  className="p-1.5 border border-red-500/20 hover:bg-red-500/10 text-red-500 rounded-lg transition-all disabled:opacity-50 cursor-pointer"
+                                  title="Eliminar Permanente"
+                                >
+                                  {backupActionLoading === `delete_fs_${bk.id}` ? (
+                                    <RefreshCw className="w-3 h-3 animate-spin" />
+                                  ) : (
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )
+                  ) : (
+                    <>
+                      {!googleToken ? (
                     <div className="h-full flex flex-col items-center justify-center py-16 text-center">
                       <Cloud className="w-12 h-12 text-slate-300 dark:text-slate-800 mb-3" />
                       <p className="text-xs font-bold text-slate-405 dark:text-slate-400">Google Drive Não Conectado</p>
@@ -1054,6 +2118,8 @@ export default function AdminModule({
                         );
                       })}
                     </div>
+                  )}
+                    </>
                   )}
                 </div>
               </div>

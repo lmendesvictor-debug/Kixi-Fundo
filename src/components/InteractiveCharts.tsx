@@ -56,6 +56,15 @@ export default function InteractiveCharts({
   const [selectedYear, setSelectedYear] = useState<string>('2026');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedAllocationSlice, setSelectedAllocationSlice] = useState<string | null>(null);
+  const [hoveredBar, setHoveredBar] = useState<{
+    id: number;
+    name: string;
+    x: number;
+    y: number;
+    collectedKz: number;
+    paidCount: number;
+    beneficiaries: string[];
+  } | null>(null);
   
   // Folders/Caixas de consulta states
   const [openSection, setOpenSection] = useState<'simulation' | 'calculations' | 'none'>('calculations');
@@ -366,7 +375,7 @@ export default function InteractiveCharts({
       </div>
 
       {/* 2. MAIN INTERACTIVE CHARTS WRAPPER GRID */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6" id="charts-container">
         
         {/* GRAPH 1 (TOP LEFT): ARRECADAÇÃO MENSAL (KZ) */}
         {isFlowChartActive && (
@@ -455,12 +464,17 @@ export default function InteractiveCharts({
                       return sum;
                     }, 0);
                     
+                    const monthBeneficiaries = members
+                      .filter((member) => member.assignedMonth === m.id)
+                      .map((member) => member.name);
+
                     // Scale logic: We scale so a fully paying month (12 * 120k = 1.44M Kzs) or custom represents a clean height.
                     // Let's scale up slightly so it looks incredibly substantial and visually satisfying.
                     // The maximum collection possible is 1,440,000. Let's map 1,440,000 to a nice height of 150px contextually, so the bars look gorgeous!
                     // In the user's screenshot, "Mai" is the peak bar representing full operation.
                     const barHeight = Math.max(3, (collectedKz / 1440000) * 190); 
                     const isActive = activeChartMonth === m.id;
+                    const isHoveredCol = hoveredBar?.id === m.id;
                     const xPosition = 45 + i * 39 + 10;
                     const yPosition = 230 - barHeight;
 
@@ -469,6 +483,20 @@ export default function InteractiveCharts({
                         key={m.id} 
                         className="cursor-pointer group"
                         onClick={() => setActiveChartMonth(m.id)}
+                        onMouseEnter={() => {
+                          setHoveredBar({
+                            id: m.id,
+                            name: m.name,
+                            x: xPosition,
+                            y: yPosition,
+                            collectedKz,
+                            paidCount,
+                            beneficiaries: monthBeneficiaries
+                          });
+                        }}
+                        onMouseLeave={() => {
+                          setHoveredBar(null);
+                        }}
                       >
                         {/* Hover bar overlay trigger area */}
                         <rect
@@ -484,16 +512,26 @@ export default function InteractiveCharts({
                         <motion.rect
                           initial={{ height: 0, y: 230 }}
                           animate={{ height: barHeight, y: yPosition }}
-                          transition={{ duration: 0.5, delay: i * 0.02 }}
+                          whileHover={{ 
+                            scale: 1.05,
+                            filter: "drop-shadow(0px 6px 12px rgba(14,165,233,0.5))"
+                          }}
+                          transition={{ 
+                            height: { duration: 0.5, delay: i * 0.02 },
+                            y: { duration: 0.5, delay: i * 0.02 },
+                            scale: { duration: 0.2 },
+                            filter: { duration: 0.2 }
+                          }}
+                          style={{ transformOrigin: `${xPosition + 7}px ${yPosition + barHeight}px` }}
                           x={xPosition}
                           width={14}
                           rx={7}
                           ry={7}
-                          fill={isActive ? "#0ea5e9" : "#38bdf8"}
-                          className={`transition-all duration-200 ${
-                            isActive 
-                              ? "fill-[#0ea5e9] saturate-110 drop-shadow-[0_4px_8px_rgba(14,165,233,0.3)]" 
-                              : "fill-sky-450/40 group-hover:fill-sky-400"
+                          fill={isActive || isHoveredCol ? "#0ea5e9" : "#38bdf8"}
+                          className={`transition-all duration-200 cursor-pointer ${
+                            isActive || isHoveredCol
+                              ? "fill-[#0ea5e9] saturate-110" 
+                              : "fill-sky-450/40 group-hover:fill-sky-450"
                           }`}
                         />
 
@@ -502,22 +540,74 @@ export default function InteractiveCharts({
                           x={xPosition + 7}
                           y={248}
                           textAnchor="middle"
-                          fill={isActive ? "#0ea5e9" : "#94a3b8"}
+                          fill={isActive || isHoveredCol ? "#0ea5e9" : "#94a3b8"}
                           className={`text-[9px] font-medium font-sans ${
-                            isActive ? "font-bold fill-sky-500 dark:fill-sky-400" : "fill-slate-450 dark:fill-slate-500"
+                            isActive || isHoveredCol ? "font-bold fill-sky-500 dark:fill-sky-400" : "fill-slate-450 dark:fill-slate-500"
                           }`}
                         >
                           {m.name}
                         </text>
-
-                        {/* Tooltip on Hover */}
-                        <title>
-                          {`Mês ${m.id} (${m.name}): ${formatCurrency(collectedKz)} (${paidCount}/12 pagos)`}
-                        </title>
                       </g>
                     );
                   })}
                 </svg>
+
+                {/* Floating Interactive Tooltip */}
+                <AnimatePresence>
+                  {hoveredBar && (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.95, y: -8 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95, y: -8 }}
+                      className={`absolute z-50 pointer-events-none p-3.5 rounded-2xl border shadow-xl text-xs flex flex-col gap-2 transition-all duration-150 ${
+                        theme === 'dark' 
+                          ? 'bg-[#0f172a]/95 border-slate-700/80 text-white shadow-black/60' 
+                          : 'bg-white/95 border-slate-200 text-slate-800 shadow-slate-200/60'
+                      }`}
+                      style={{
+                        left: `${((hoveredBar.x + 7) / 540) * 100}%`,
+                        top: `${(hoveredBar.y / 240) * 100}%`,
+                        transform: 'translate(-50%, -105%)',
+                      }}
+                    >
+                      <div className="flex items-center gap-1.5 border-b pb-1.5 border-slate-700/20 dark:border-slate-100/10 mb-0.5">
+                        <Calendar className="w-3.5 h-3.5 text-sky-500 shrink-0" />
+                        <span className="font-sans font-bold text-[10px] uppercase tracking-wider">
+                          Mês {hoveredBar.id} — {hoveredBar.name}
+                        </span>
+                      </div>
+                      
+                      <div className="space-y-1.5 text-[11px]">
+                        <div className="flex justify-between items-center gap-6">
+                          <span className="text-slate-400 font-medium">Arrecadação total:</span>
+                          <span className="font-mono font-extrabold text-[#0ea5e9]">
+                            {formatCurrency(hoveredBar.collectedKz)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center gap-6">
+                          <span className="text-slate-400 font-medium">Adesão / Settled:</span>
+                          <span className="font-mono font-extrabold">
+                            {hoveredBar.paidCount} de 12 sócios ({Math.round((hoveredBar.paidCount / 12) * 100)}%)
+                          </span>
+                        </div>
+                        <div className="border-t pt-2 border-slate-705/10 dark:border-slate-100/5 mt-0.5 webkit-font-smoothing">
+                          <span className="text-slate-400 font-bold block mb-1">Beneficiários designados:</span>
+                          <div className="flex flex-col gap-1 pl-2 border-l-2 border-amber-500/80">
+                            {hoveredBar.beneficiaries.length === 0 ? (
+                              <span className="text-slate-500 italic text-[10px]">Sem beneficiários alocados</span>
+                            ) : (
+                              hoveredBar.beneficiaries.map((name, idx) => (
+                                <span key={idx} className="font-semibold text-amber-600 dark:text-amber-400 text-[10.5px]">
+                                  • {name}
+                                </span>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </div>
 

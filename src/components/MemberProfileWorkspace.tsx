@@ -402,68 +402,195 @@ export default function MemberProfileWorkspace({
   return (
     <div className="space-y-8" id="member-workspace-panel">
       
-      {/* Dynamic Personalized Header Card */}
-      <div className="bg-gradient-to-r from-slate-900 to-slate-950 text-white rounded-2xl border border-slate-800 p-6 relative overflow-hidden shadow-sm">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 rounded-bl-full -z-10" />
-        <div className="flex flex-col md:flex-row items-center gap-6 relative z-10">
+      {/* Dynamic Personalized Header Card - Inspired by Image 2 */}
+      <div className="bg-[#050e0f] text-slate-100 rounded-3xl border border-slate-800/80 p-8 relative overflow-hidden shadow-xl" id="member-card-credential-profile">
+        {/* Subtle background glow */}
+        <div className="absolute top-0 right-0 w-80 h-80 bg-emerald-500/5 rounded-bl-full pointer-events-none -z-5" />
+        
+        {/* Centered Top Badge */}
+        <div className="flex justify-center md:justify-start mb-6">
+          <span className="px-3 py-1 rounded-full border border-emerald-500/30 bg-emerald-950/60 text-[9px] font-black text-emerald-400 uppercase tracking-widest">
+            Membro do Consórcio
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start relative z-10 text-left">
           
-          <div className="relative shrink-0">
-            {member.avatarImage ? (
-              <img
-                src={member.avatarImage}
-                alt={member.name}
-                referrerPolicy="no-referrer"
-                className="w-20 h-20 rounded-2xl object-cover border-2 border-emerald-500 bg-slate-800"
-              />
-            ) : (
-              <div
-                className={`w-20 h-20 rounded-2xl flex items-center justify-center font-bold text-white text-2xl ${member.avatarColor} border-2 border-slate-700`}
-              >
-                {member.name
-                  .split(' ')
-                  .map((n) => n[0])
-                  .slice(0, 2)
-                  .join('')}
+          {/* LEFT: Avatar / Profile Photo Container */}
+          <div className="lg:col-span-3 flex flex-col items-center justify-center relative shrink-0">
+            <div className="relative">
+              {member.avatarImage ? (
+                <img
+                  src={member.avatarImage}
+                  alt={member.name}
+                  referrerPolicy="no-referrer"
+                  className="w-24 h-24 rounded-3xl object-cover bg-slate-900 border-2 border-emerald-500/40"
+                />
+              ) : (
+                <div
+                  className="w-24 h-24 rounded-3xl flex items-center justify-center font-black text-white text-3xl bg-gradient-to-tr from-[#e11d48] to-[#db2777] border-2 border-slate-800 shadow-lg"
+                >
+                  {member.name
+                    .split(' ')
+                    .map((n) => n[0])
+                    .slice(0, 2)
+                    .join('')}
+                </div>
+              )}
+              {/* Shield lock icon badge overlay on bottom right, conforming to Image 2 */}
+              <div className="absolute -bottom-2 -right-2 bg-[#022c22] text-[#10B981] p-2 rounded-2xl border-2 border-[#050e0f] shadow-md">
+                <svg className="w-5 h-5 fill-none stroke-current" viewBox="0 0 24 24" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  <rect x="9" y="11" width="6" height="5" rx="1" ry="1" />
+                  <path d="M10 11V9a2 2 0 1 1 4 0v2" />
+                </svg>
               </div>
-            )}
-            <div className="absolute -bottom-1 -right-1 bg-emerald-500 text-slate-950 p-1.5 rounded-lg border border-slate-950">
-              <ShieldCheck className="w-3.5 h-3.5" />
             </div>
           </div>
 
-          <div className="space-y-1.5 flex-1 text-center md:text-left">
-            <div className="flex flex-wrap items-center justify-center md:justify-start gap-2">
-              <h2 className="text-xl md:text-2xl font-black tracking-tight">{member.name}</h2>
-              <span className="text-[10px] font-bold bg-[#10B981]/15 text-[#10B981] border border-[#10B981]/25 px-2.5 py-1 rounded-full uppercase tracking-wider">
-                Membro do Consórcio
-              </span>
+          {/* MIDDLE LEFT: Name and Identifier Checklist */}
+          <div className="lg:col-span-5 space-y-4">
+            <div>
+              <h2 className="text-xl md:text-2xl font-black text-white tracking-tight">{member.name}</h2>
             </div>
+
+            {/* Identificação de Membro Box */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                <span>Identificação de Membro</span>
+                <div className="h-[2px] bg-gradient-to-r from-emerald-500/40 to-transparent flex-1" />
+              </div>
+
+              <div className="space-y-1.5 text-xs text-slate-350">
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-400 font-medium">ID de Membro:</span>
+                  <span className="font-mono text-[10.5px] font-black text-[#10b981] bg-[#10b981]/10 border border-[#10b981]/20 px-2 py-0.5 rounded uppercase">
+                    {getMemberDisplayCode(member.id)}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 font-medium">Soma de verificação:</span>{' '}
+                  <span className="font-mono font-bold text-white select-all">
+                    {getMemberIdCode(member.name, member.phone)}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-slate-400 font-medium">Seq:</span>{' '}
+                  <span className="font-mono font-black text-white">#0 {member.id}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* MIDDLE RIGHT: Agendamento de Contemplações card */}
+          <div className="lg:col-span-4 space-y-6 flex flex-col justify-between h-full">
             
-            <p className="text-xs text-slate-400 flex flex-wrap items-center justify-center md:justify-start gap-x-2 gap-y-1.5">
-              <span>ID de Membro: <span className="font-mono font-extrabold text-sky-400 bg-sky-950/40 border border-sky-800/35 px-1.5 py-0.5 rounded uppercase select-all" title="ID de Cadastro Cooperativo">{getMemberDisplayCode(member.id)}</span></span>
-              <span>•</span>
-              <span>Checksum: <span className="font-mono text-slate-400 select-all" title="Complemento Hash SHA-Código">{getMemberIdCode(member.name, member.phone)}</span></span>
-              <span>•</span>
-              <span>Seq: <span className="font-mono font-bold text-slate-300">#0{member.id}</span></span>
-              <span>•</span>
-              <span>Telefone: <span className="font-mono text-slate-300">{member.phone}</span></span>
-              <span>•</span>
-              <span>Email: <span className="font-mono text-slate-300">{member.email}</span></span>
-            </p>
+            {/* Outline Card for Scheduling */}
+            <div className="border border-slate-800 bg-[#0d1e1f]/30 rounded-2xl p-4 space-y-3.5">
+              <div className="flex items-center gap-2 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                <span>Agendamento para Contemplação</span>
+                <div className="h-[2px] bg-gradient-to-r from-emerald-500/40 to-transparent flex-1" />
+              </div>
 
-            <p className="text-xs text-emerald-400 font-medium flex items-center justify-center md:justify-start gap-1">
-              <Award className="w-4 h-4" />
-              Agendado para contemplação de <strong>600.000,00 KZs</strong> no mês <strong>Mês 0{member.assignedMonth}</strong>
-            </p>
+              <div className="flex gap-2.5 items-start">
+                <div className="p-1.5 bg-emerald-950/50 rounded-lg text-emerald-400 shrink-0 mt-0.5">
+                  <svg className="w-5 h-5 text-[#10B981]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                    <line x1="16" y1="2" x2="16" y2="6" />
+                    <line x1="8" y1="2" x2="8" y2="6" />
+                    <line x1="3" y1="10" x2="21" y2="10" />
+                    <polyline points="8 14 10 16 14 12" />
+                  </svg>
+                </div>
+                <div className="text-left">
+                  {member.assignedMonth > 0 ? (
+                    <>
+                      <p className="text-xs font-black text-white uppercase tracking-wide">
+                        Agendado para: <span className="text-emerald-455 italic">Mês 0{member.assignedMonth}</span>
+                      </p>
+                      <p className="text-[10px] text-slate-500 italic mt-0.5">
+                        [mês planeado no consórcio]*
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-xs font-black text-slate-400 uppercase tracking-wide">
+                        Agendado para: <span className="text-rose-455 italic">*Não mês*</span>
+                      </p>
+                      <p className="text-[10px] text-slate-500 italic mt-0.5">
+                        [mês not scheduled]*
+                      </p>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
 
-            <div className="flex flex-wrap items-center justify-center md:justify-start gap-2.5 pt-1.5 text-xs">
-              <span className="text-slate-400">Suas Coordenadas para Recebimento (Seu Cadastro IBAN):</span>
-              <span className="font-mono text-emerald-400 bg-slate-900 border border-slate-800 px-2.5 py-1 rounded font-bold uppercase tracking-tight">
-                {member.bankIban || 'Não Configurado pelo Administrador'}
+          </div>
+
+        </div>
+
+        {/* Divider separator */}
+        <div className="h-[1px] bg-slate-800/80 my-6" />
+
+        {/* BOTTOM SECTION OF THE CARD: Contact and IBAN coordinates */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start relative z-10 text-left">
+          {/* Dados de contato */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+              <span>Dados de Contato</span>
+              <div className="h-[2px] bg-gradient-to-r from-emerald-500/40 to-transparent flex-1" />
+            </div>
+            <div className="space-y-1.5 text-xs">
+              <p className="text-slate-350">
+                <span className="text-slate-455 font-medium">Telefone:</span>{' '}
+                <span className="font-mono text-white tracking-wider font-semibold">{member.phone}</span>
+              </p>
+              <p className="text-slate-350">
+                <span className="text-slate-455 font-medium">E-mail:</span>{' '}
+                <a href={`mailto:${member.email}`} className="font-mono text-teal-400 hover:text-teal-300 underline select-all">
+                  {member.email}
+                </a>
+              </p>
+            </div>
+          </div>
+
+          {/* IBAN Coordinates container */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-[10px] font-black text-slate-500 uppercase tracking-widest">
+              <span>Coordenadas para Recebimento (IBAN)</span>
+              <div className="h-[2px] bg-gradient-to-r from-emerald-500/40 to-transparent flex-1" />
+            </div>
+
+            {/* Clickable dark copy block */}
+            <div 
+              onClick={() => {
+                if (member.bankIban) {
+                  navigator.clipboard.writeText(member.bankIban);
+                  const btn = document.getElementById('iban-copy-indicator');
+                  if (btn) {
+                    btn.innerText = 'Copiado!';
+                    setTimeout(() => { btn.innerText = 'Copiar'; }, 2000);
+                  }
+                }
+              }}
+              title="Clique para copiar o IBAN cooperativo"
+              className="flex items-center justify-between bg-[#041a1a]/80 border border-emerald-950/40 hover:bg-[#072424] px-4 py-2.5 rounded-xl cursor-pointer transition-colors group"
+            >
+              <span className="font-mono text-sm font-extrabold text-[#10B981] tracking-widest select-all">
+                {member.bankIban || 'NÃO CONFIGURADO'}
               </span>
+              <div className="flex items-center gap-1 text-[10px] uppercase font-black text-slate-500 group-hover:text-emerald-400 transition-colors shrink-0 pl-2">
+                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                  <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+                  <rect x="8" y="2" width="8" height="4" rx="1" ry="1" />
+                </svg>
+                <span id="iban-copy-indicator">Copiar</span>
+              </div>
             </div>
           </div>
         </div>
+
       </div>
 
       {/* Grid line cards */}

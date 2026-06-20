@@ -21,6 +21,10 @@
           "type": "array",
           "description": "Audit trail de transações"
         },
+        "loans": {
+          "type": "array",
+          "description": "Lista de contratos de apoio ao crédito concedidos (BI/NIF, fiador e cronograma de amortizações)"
+        },
         "appConfig": {
           "type": "object",
           "description": "Parâmetros globais de configuração do Painel"

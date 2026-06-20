@@ -11,17 +11,10 @@ export const INITIAL_MEMBERS: Member[] = [
     role: 'admin',
     tempPassword: 'Historia100',
     bankIban: 'AO06.0006.0001.0002.0003.0004.5',
-    contributions: {
-      1: { paid: false },
-      2: { paid: false },
-      3: { paid: false },
-      4: { paid: false },
-      5: { paid: false },
-      6: { paid: false },
-    },
+    contributions: {},
     benefits: {},
     socialSupportReceived: 0,
-  },
+  }
 ];
 
 export const INITIAL_LOGS: KixLog[] = [
@@ -32,5 +25,5 @@ export const INITIAL_LOGS: KixLog[] = [
     amount: 0,
     description: 'Fundo de Poupança Kix-Fundo inicializado com sucesso para o ciclo operacional ativo.',
     month: 1,
-  },
+  }
 ];

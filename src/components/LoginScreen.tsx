@@ -74,6 +74,22 @@ export default function LoginScreen({ members, onLogin, userEmail, onResetPasswo
   const [identifiedUser, setIdentifiedUser] = useState('');
   const [showRegulations, setShowRegulations] = useState(false);
 
+  // Evita que o browser fixe/force o preenchimento automático das credenciais ao carregar o ecrã
+  useEffect(() => {
+    const timer1 = setTimeout(() => {
+      setEmail('');
+      setPassword('');
+    }, 50);
+    const timer2 = setTimeout(() => {
+      setEmail('');
+      setPassword('');
+    }, 200);
+    return () => {
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+    };
+  }, []);
+
   // Rotates high contrast phrases in the carrossel every 8 seconds
   useEffect(() => {
     const timer = setInterval(() => {
@@ -113,6 +129,8 @@ export default function LoginScreen({ members, onLogin, userEmail, onResetPasswo
 
     if (isAdminAccount) {
       if (targetPass === customAdminPass || targetPass === 'Historia100' || targetPass === 'admin123' || targetPass === 'admin' || targetPass === '1234') {
+        setEmail('');
+        setPassword('');
         onLogin({
           email: targetEmail,
           role: 'admin',
@@ -121,6 +139,7 @@ export default function LoginScreen({ members, onLogin, userEmail, onResetPasswo
         return;
       } else {
         setErrorMsg('Palavra-passe de administrador incorreta.');
+        setPassword('');
         return;
       }
     }
@@ -133,6 +152,8 @@ export default function LoginScreen({ members, onLogin, userEmail, onResetPasswo
     if (matchedMember) {
       const matchPass = matchedMember.tempPassword || 'membro123';
       if (targetPass === matchPass || targetPass === 'membro123' || targetPass === 'membro' || targetPass === '1234') {
+        setEmail('');
+        setPassword('');
         onLogin({
           email: matchedMember.email,
           role: matchedMember.role || 'membro',
@@ -142,11 +163,13 @@ export default function LoginScreen({ members, onLogin, userEmail, onResetPasswo
         return;
       } else {
         setErrorMsg('Palavra-passe de acesso inválida.');
+        setPassword('');
         return;
       }
     }
 
     setErrorMsg('Conta não localizada no consórcio.');
+    setPassword('');
   };
 
   const loginAsAdmin = () => {
@@ -353,7 +376,7 @@ export default function LoginScreen({ members, onLogin, userEmail, onResetPasswo
             )}
 
             {/* Form controls */}
-            <form onSubmit={handleFormLogin} className="space-y-4">
+            <form onSubmit={handleFormLogin} className="space-y-4" autoComplete="off">
               
               {/* Utilizador / Email */}
               <div>
@@ -370,6 +393,7 @@ export default function LoginScreen({ members, onLogin, userEmail, onResetPasswo
                     placeholder="Username ou email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    autoComplete="new-password"
                     className="w-full bg-[#111827] border border-slate-800 rounded-xl pl-10 pr-4 py-3 text-xs focus:outline-none focus:border-[#0EA5E9] focus:bg-[#131a2e] text-white placeholder-slate-500 transition-all font-medium font-sans"
                   />
                 </div>
@@ -405,6 +429,7 @@ export default function LoginScreen({ members, onLogin, userEmail, onResetPasswo
                     placeholder="********"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="new-password"
                     className="w-full bg-[#111827] border border-slate-800 rounded-xl pl-10 pr-4 py-3 text-xs focus:outline-none focus:border-[#0EA5E9] focus:bg-[#131a2e] text-white placeholder-slate-500 transition-all font-medium"
                   />
                 </div>

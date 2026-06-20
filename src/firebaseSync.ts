@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc, getDocFromServer } from 'firebase/firestore';
+import { doc, getDoc, setDoc, getDocFromServer, collection, addDoc, getDocs, deleteDoc, query, orderBy, writeBatch } from 'firebase/firestore';
 import { db, auth } from './driveBackup';
 import { Member, KixLog, Loan } from './types';
 
@@ -59,6 +59,16 @@ export interface SavedStatePayload {
   updatedAt: string;
 }
 
+export interface FirestoreBackupPoint {
+  id: string;
+  name: string;
+  type: 'automatic' | 'manual';
+  frequency?: 'daily' | 'weekly' | 'manual';
+  createdAt: string;
+  createdBy: string;
+  payload: SavedStatePayload;
+}
+
 const STATE_DOC_PATH = 'kix_fundo/state';
 
 // Validate connection on start as per CRITICAL CONSTRAINT
@@ -100,3 +110,62 @@ export async function saveStateToFirestore(payload: Omit<SavedStatePayload, 'upd
     handleFirestoreError(error, OperationType.WRITE, STATE_DOC_PATH);
   }
 }
+
+// Save a Restore Point to Firestore
+export async function saveBackupToFirestore(
+  name: string,
+  payload: Omit<SavedStatePayload, 'updatedAt'>,
+  type: 'automatic' | 'manual',
+  frequency?: 'daily' | 'weekly' | 'manual'
+): Promise<void> {
+  try {
+    const fullPayload: SavedStatePayload = {
+      ...payload,
+      updatedAt: new Date().toISOString()
+    };
+    const backupPoint: Omit<FirestoreBackupPoint, 'id'> = {
+      name,
+      type,
+      frequency: frequency || 'manual',
+      createdAt: new Date().toISOString(),
+      createdBy: auth.currentUser?.email || 'Administrador Coletivo',
+      payload: fullPayload
+    };
+    const sanitizedBackup = JSON.parse(JSON.stringify(backupPoint));
+    const collectionRef = collection(db, 'kix_fundo_backups');
+    await addDoc(collectionRef, sanitizedBackup);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, 'kix_fundo_backups');
+  }
+}
+
+// List Restore Points from Firestore
+export async function listBackupsFromFirestore(): Promise<FirestoreBackupPoint[]> {
+  try {
+    const collectionRef = collection(db, 'kix_fundo_backups');
+    const q = query(collectionRef, orderBy('createdAt', 'desc'));
+    const querySnapshot = await getDocs(q);
+    const backups: FirestoreBackupPoint[] = [];
+    querySnapshot.forEach((docSnap) => {
+      backups.push({
+        id: docSnap.id,
+        ...(docSnap.data() as Omit<FirestoreBackupPoint, 'id'>)
+      });
+    });
+    return backups;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, 'kix_fundo_backups');
+    return [];
+  }
+}
+
+// Delete a Restore Point from Firestore
+export async function deleteBackupFromFirestore(backupId: string): Promise<void> {
+  try {
+    const docRef = doc(db, 'kix_fundo_backups', backupId);
+    await deleteDoc(docRef);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `kix_fundo_backups/${backupId}`);
+  }
+}
+

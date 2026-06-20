@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { jsPDF } from 'jspdf';
 import { 
   FileText, 
   Download, 
@@ -128,6 +129,7 @@ export default function ReportsSection({
     name: `Mês ${d.month}`,
     "Contribuições Totais": d.grossCollected,
     "Fundo Social": d.socialRetained,
+    "Apoios Sociais": d.aidsInMonth,
     "Número de Pagantes": d.paidCount,
   }));
 
@@ -136,6 +138,7 @@ export default function ReportsSection({
       const parentData = payload[0]?.payload || {};
       const brutoColetado = parentData["Contribuições Totais"] ?? payload[0]?.value ?? 0;
       const fundoSocial = parentData["Fundo Social"] ?? payload[1]?.value ?? 0;
+      const apoiosSociais = parentData["Apoios Sociais"] ?? 0;
       const pagantes = parentData["Número de Pagantes"] ?? 0;
 
       return (
@@ -150,6 +153,12 @@ export default function ReportsSection({
               <span className="w-2 h-2 rounded bg-indigo-500"></span>
               Fundo Social (20k): <strong className="font-extrabold">{formatCurrency(fundoSocial)}</strong>
             </p>
+            {apoiosSociais > 0 && (
+              <p className="text-rose-400 font-mono flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded bg-rose-500"></span>
+                Apoios Concedidos: <strong className="font-extrabold">{formatCurrency(apoiosSociais)}</strong>
+              </p>
+            )}
             <p className="text-emerald-450 mt-1 font-mono flex items-center gap-1.5 border-t border-slate-800 pt-1">
               <span className="w-2 h-2 rounded bg-emerald-500"></span>
               Metas: <strong className="font-extrabold">{pagantes} de 12 Sócios</strong>
@@ -159,6 +168,189 @@ export default function ReportsSection({
       );
     }
     return null;
+  };
+
+  const performanceChartData = monthlyData.map((d) => ({
+    name: `Mês ${d.month}`,
+    "Contribuições Arrecadadas": d.grossCollected,
+    "Benefícios Pagos": d.payoutExecuted,
+  }));
+
+  const CustomPerformanceTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const arrecadado = payload[0]?.value ?? 0;
+      const pago = payload[1]?.value ?? 0;
+      const saldo = arrecadado - pago;
+      return (
+        <div className="bg-slate-900 border border-slate-700/80 p-3 rounded-xl shadow-xl text-xs font-semibold text-white animate-fadeIn text-left">
+          <p className="text-slate-300 mb-1.5 font-bold uppercase tracking-wider">{label}</p>
+          <div className="space-y-1">
+            <p className="text-emerald-400 font-mono flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded bg-emerald-500"></span>
+              Contribuições: <strong className="font-extrabold">{formatCurrency(arrecadado)}</strong>
+            </p>
+            <p className="text-rose-400 font-mono flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded bg-rose-500"></span>
+              Benefícios de Rotação: <strong className="font-extrabold">{formatCurrency(pago)}</strong>
+            </p>
+            <div className="border-t border-slate-800 pt-1 mt-1 text-[11px]">
+              <p className={`font-mono flex items-center gap-1.5 ${saldo >= 0 ? "text-emerald-450" : "text-rose-400"}`}>
+                <span className={`w-2 h-2 rounded ${saldo >= 0 ? "bg-emerald-500" : "bg-rose-500"}`}></span>
+                Diferença Líquida: <strong className="font-extrabold">{formatCurrency(saldo)}</strong>
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  const handlePrintReceipt = (log: KixLog) => {
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: [148, 210] // A5 size receipt
+    });
+
+    const isSocialAid = log.type === 'social_aid';
+
+    // Outer border
+    doc.setDrawColor(203, 213, 226); // slate-300
+    doc.setLineWidth(0.5);
+    doc.rect(5, 5, 138, 200);
+
+    // Header bg
+    doc.setFillColor(15, 23, 42); // slate-900
+    doc.rect(5, 5, 138, 30, 'F');
+
+    // Title
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text('KIXI-FUNDO ANGOLA', 12, 14);
+    
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(186, 230, 253); // sky-200
+    doc.text('Fundo Cooperado de Poupan\u00E7a e Interajuda', 12, 19);
+    doc.text('Estatuto Mutualista Certificado \u2022 Luanda, Angola', 12, 23);
+
+    // Receipt Tag
+    doc.setFillColor(16, 185, 129); // emerald-500
+    doc.rect(98, 12, 38, 7, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.text('COMPROVATIVO', 104, 16.5);
+
+    // Receipt details
+    let y = 48;
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(12);
+    doc.text('RECIBO DE PAGAMENTO OFICIAL', 12, y);
+    doc.setDrawColor(15, 23, 42);
+    doc.setLineWidth(0.4);
+    doc.line(12, y + 2, 136, y + 2);
+    
+    y += 11;
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'bold');
+    doc.text('N\u00BA REGISTRO:', 12, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(log.id.toUpperCase(), 38, y);
+
+    y += 7;
+    doc.setFont('helvetica', 'bold');
+    doc.text('DATA OPERA\u00C7\u00C3O:', 12, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(new Date(log.timestamp).toLocaleString('pt-PT'), 38, y);
+
+    y += 7;
+    doc.setFont('helvetica', 'bold');
+    doc.text('CATEGORIA:', 12, y);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(isSocialAid ? 99 : 14, isSocialAid ? 102 : 165, isSocialAid ? 241 : 233);
+    doc.text(isSocialAid ? 'AJUDA DE CUSTO / APOIO SOCIAL' : 'ROTA\u00C7\u00C3O DE BENEF\u00CDCIO MENSAL', 38, y);
+
+    y += 7;
+    doc.setTextColor(15, 23, 42);
+    doc.setFont('helvetica', 'bold');
+    doc.text('COOPERANTE:', 12, y);
+    doc.setFont('helvetica', 'bold');
+    doc.text(log.memberName || 'Geral Coletivo', 38, y);
+
+    y += 12;
+    // Value Box
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.3);
+    doc.rect(12, y, 124, 15, 'FD');
+    
+    doc.setTextColor(71, 85, 105);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.text('MONTANTE TOTAL LIQUIDADO:', 16, y + 9.5);
+    
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(12);
+    doc.text(formatCurrency(log.amount), 75, y + 10);
+
+    y += 24;
+    // Descriptive Justification text
+    doc.setFontSize(8.5);
+    doc.setTextColor(15, 23, 42);
+    doc.setFont('helvetica', 'bold');
+    doc.text('JUSTIFICATIVO DA TRANSA\u00C7\u00C3O:', 12, y);
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(51, 65, 85);
+    
+    // Split text into lines
+    const descText = log.description || '';
+    const lines = doc.splitTextToSize(descText, 120);
+    doc.text(lines, 12, y + 5);
+
+    // Signatures
+    y = 158;
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.3);
+    doc.line(12, y, 136, y);
+
+    y += 6;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(100, 116, 139);
+    doc.text('FUNDO EMISSOR / TESOURARIA', 12, y);
+    doc.text('VISTO DO COOPERANTE', 85, y);
+
+    y += 13;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.5);
+    doc.text('Mendes Pambo - Adm. Geral', 12, y);
+    doc.text(`${log.memberName || 'Benefici\u00E1rio'}`, 85, y);
+
+    y += 4;
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(5.5);
+    doc.setTextColor(148, 163, 184);
+    doc.text('Assinatura Eletr\u00F3nica Kixi-Fundo', 12, y);
+    doc.text('Assinatura de Recebimento F\u00EDsico', 85, y);
+
+    // Safeguard footer
+    doc.setFillColor(240, 253, 244); // green-50
+    doc.setDrawColor(16, 185, 129); // green-500
+    doc.rect(12, 184, 124, 11, 'FD');
+    doc.setTextColor(21, 128, 61); // green-700
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.text('CONCILIADO & TRANSA\u00C7\u00C3O CONFIRMADA NA CARTEIRA MUTUALISTA', 16, 189);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6);
+    doc.text('Este comprovativo possui validade de auditoria interna conforme os termos da legisla\u00E7\u00E3o cooperativa.', 16, 192.5);
+
+    doc.save(`KixiFundo_Comprovativo_Apoio_${log.id}.pdf`);
   };
 
   // Export functions using Excel-compatible CSV formats with BOM for Portuguese Accentuation Support
@@ -255,55 +447,236 @@ export default function ReportsSection({
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
+    // Filter and format the logs of disbursements and aids
     const relevantLogsHTML = logs
       .filter(l => l.type === 'payout' || l.type === 'social_aid')
-      .map(l => `
-        <tr style="border-bottom: 1px solid #e2e8f0;">
-          <td style="padding: 10px; font-size: 11px;">${new Date(l.timestamp).toLocaleDateString('pt-PT')}</td>
-          <td style="padding: 10px; font-size: 11px; font-weight: bold; color: ${l.type === 'payout' ? '#0284c7' : '#9333ea'}">${l.type === 'payout' ? 'Rotação' : 'Apoio Social'}</td>
-          <td style="padding: 10px; font-size: 11px;">${l.memberName || 'Coletivo'}</td>
-          <td style="padding: 10px; font-size: 11px; text-align: right; font-weight: bold;">${formatCurrency(l.amount)}</td>
-          <td style="padding: 10px; font-size: 11px; color: #475569;">${l.description}</td>
-        </tr>
-      `).join('');
+      .map(l => {
+        const typeLabel = l.type === 'payout' ? 'Desembolso Rotação' : 'Auxílio Apoio';
+        const typeColor = l.type === 'payout' ? '#0ea5e9' : '#6366f1';
+        return `
+          <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 8px 10px; font-size: 9.5px; color: #475569;">${new Date(l.timestamp).toLocaleDateString('pt-PT')}</td>
+            <td style="padding: 8px 10px; font-size: 9.5px; font-weight: bold; color: ${typeColor};">${typeLabel}</td>
+            <td style="padding: 8px 10px; font-size: 9.5px; font-weight: bold; color: #1e293b;">${l.memberName || 'Coletivo'}</td>
+            <td style="padding: 8px 10px; font-size: 9.5px; text-align: right; font-weight: bold; color: #011222; font-family: monospace;">${formatCurrency(l.amount)}</td>
+            <td style="padding: 8px 10px; font-size: 9.5px; color: #475569; font-style: italic;">${l.description}</td>
+          </tr>
+        `;
+      }).join('');
 
     const membersListHTML = members.map(m => `
       <tr style="border-bottom: 1px solid #f1f5f9;">
-        <td style="padding: 8px; font-size: 11px; font-weight: bold;">${m.name}</td>
-        <td style="padding: 8px; font-size: 11px;">${m.phone}</td>
-        <td style="padding: 8px; font-size: 11px; text-align: center;">Mês ${m.assignedMonth}</td>
-        <td style="padding: 8px; font-size: 11px; text-align: center;">${m.contributions[1]?.paid ? '✔ Paga' : '❌'}</td>
-        <td style="padding: 8px; font-size: 11px; text-align: center;">${m.contributions[2]?.paid ? '✔ Paga' : '❌'}</td>
-        <td style="padding: 8px; font-size: 11px; text-align: center;">${m.contributions[3]?.paid ? '✔ Paga' : '❌'}</td>
-        <td style="padding: 8px; font-size: 11px; text-align: center;">${m.contributions[4]?.paid ? '✔ Paga' : '❌'}</td>
-        <td style="padding: 8px; font-size: 11px; text-align: center;">${m.contributions[5]?.paid ? '✔ Paga' : '❌'}</td>
-        <td style="padding: 8px; font-size: 11px; text-align: center;">${m.contributions[6]?.paid ? '✔ Paga' : '❌'}</td>
-        <td style="padding: 8px; font-size: 11px; text-align: right; font-weight: bold;">${formatCurrency(m.socialSupportReceived)}</td>
+        <td style="padding: 8px 10px; font-size: 9.5px; font-weight: bold; color: #0f172a; display: flex; align-items: center; gap: 8px;">
+          <div style="width: 20px; height: 20px; border-radius: 50%; background-color: #e2e8f0; color: #475569; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 800;">
+            ${m.name.charAt(0)}
+          </div>
+          <span>${m.name}</span>
+        </td>
+        <td style="padding: 8px 10px; font-size: 9.5px; color: #475569; font-family: monospace;">${m.phone}</td>
+        <td style="padding: 8px 10px; font-size: 9.5px; text-align: center; color: #0284c7; font-weight: bold;">Mês ${m.assignedMonth}</td>
+        <td style="padding: 8px 10px; font-size: 9.5px; text-align: center;">
+          ${m.contributions[1]?.paid 
+            ? `<span style="display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: bold; background-color: #d1fae5; color: #065f46; border-radius: 9999px; padding: 2px 7px; border: 1px solid #a7f3d0; text-transform: uppercase;">PAGO ✓</span>` 
+            : `<span style="display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: bold; background-color: #fee2e2; color: #991b1b; border-radius: 9999px; padding: 2px 7px; border: 1px solid #fecaca; text-transform: uppercase;">PENDENTE ✗</span>`}
+        </td>
+        <td style="padding: 8px 10px; font-size: 9.5px; text-align: center;">
+          ${m.contributions[2]?.paid 
+            ? `<span style="display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: bold; background-color: #d1fae5; color: #065f46; border-radius: 9999px; padding: 2px 7px; border: 1px solid #a7f3d0; text-transform: uppercase;">PAGO ✓</span>` 
+            : `<span style="display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: bold; background-color: #fee2e2; color: #991b1b; border-radius: 9999px; padding: 2px 7px; border: 1px solid #fecaca; text-transform: uppercase;">PENDENTE ✗</span>`}
+        </td>
+        <td style="padding: 8px 10px; font-size: 9.5px; text-align: center;">
+          ${m.contributions[3]?.paid 
+            ? `<span style="display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: bold; background-color: #d1fae5; color: #065f46; border-radius: 9999px; padding: 2px 7px; border: 1px solid #a7f3d0; text-transform: uppercase;">PAGO ✓</span>` 
+            : `<span style="display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: bold; background-color: #fee2e2; color: #991b1b; border-radius: 9999px; padding: 2px 7px; border: 1px solid #fecaca; text-transform: uppercase;">PENDENTE ✗</span>`}
+        </td>
+        <td style="padding: 8px 10px; font-size: 9.5px; text-align: center;">
+          ${m.contributions[4]?.paid 
+            ? `<span style="display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: bold; background-color: #d1fae5; color: #065f46; border-radius: 9999px; padding: 2px 7px; border: 1px solid #a7f3d0; text-transform: uppercase;">PAGO ✓</span>` 
+            : `<span style="display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: bold; background-color: #fee2e2; color: #991b1b; border-radius: 9999px; padding: 2px 7px; border: 1px solid #fecaca; text-transform: uppercase;">PENDENTE ✗</span>`}
+        </td>
+        <td style="padding: 8px 10px; font-size: 9.5px; text-align: center;">
+          ${m.contributions[5]?.paid 
+            ? `<span style="display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: bold; background-color: #d1fae5; color: #065f46; border-radius: 9999px; padding: 2px 7px; border: 1px solid #a7f3d0; text-transform: uppercase;">PAGO ✓</span>` 
+            : `<span style="display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: bold; background-color: #fee2e2; color: #991b1b; border-radius: 9999px; padding: 2px 7px; border: 1px solid #fecaca; text-transform: uppercase;">PENDENTE ✗</span>`}
+        </td>
+        <td style="padding: 8px 10px; font-size: 9.5px; text-align: center;">
+          ${m.contributions[6]?.paid 
+            ? `<span style="display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: bold; background-color: #d1fae5; color: #065f46; border-radius: 9999px; padding: 2px 7px; border: 1px solid #a7f3d0; text-transform: uppercase;">PAGO ✓</span>` 
+            : `<span style="display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: bold; background-color: #fee2e2; color: #991b1b; border-radius: 9999px; padding: 2px 7px; border: 1px solid #fecaca; text-transform: uppercase;">PENDENTE ✗</span>`}
+        </td>
+        <td style="padding: 8px 10px; font-size: 9.5px; text-align: right; font-weight: bold; font-family: monospace;">${formatCurrency(m.socialSupportReceived || 0)}</td>
       </tr>
     `).join('');
 
     printWindow.document.write(`
       <html>
         <head>
-          <title>Kixi-Fundo - Relatório de Auditoria Financeira do Fundo</title>
+          <title>Kixi-Fundo - Relatório de Auditoria Financeira</title>
           <style>
-            body { font-family: 'Helvetica Neue', Arial, sans-serif; padding: 40px; color: #1e293b; background-color: white; line-height: 1.4; }
-            .header { text-align: center; border-bottom: 3px double #0284c7; padding-bottom: 20px; margin-bottom: 30px; }
-            .header h1 { font-size: 24px; color: #0284c7; margin: 0 0 5px 0; text-transform: uppercase; letter-spacing: 1px; }
-            .header h2 { font-size: 12px; color: #475569; margin: 0 0 5px 0; font-weight: normal; letter-spacing: 2px; text-transform: uppercase; }
-            .header p { font-size: 11px; color: #64748b; margin: 5px 0 0 0; }
-            .grid { display: grid; grid-template-cols: repeat(3, 1fr); gap: 20px; margin-bottom: 30px; }
-            .card { border: 1px solid #e2e8f0; padding: 15px; rounded: 8px; }
-            .card-title { font-size: 9px; font-weight: bold; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
-            .card-value { font-size: 18px; font-weight: bold; color: #0f172a; margin-top: 5px; font-family: monospace; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
-            th { background-color: #f8fafc; color: #475569; padding: 10px; font-size: 10px; font-weight: bold; text-align: left; border-bottom: 2px solid #e2e8f0; text-transform: uppercase; }
-            h3 { font-size: 14px; border-left: 4px solid #0284c7; padding-left: 10px; margin-bottom: 15px; color: #0f172a; text-transform: uppercase; }
-            .footer { border-top: 1px solid #e2e8f0; margin-top: 40px; padding-top: 15px; text-align: center; font-size: 10px; color: #64748b; }
-            .stamp-area { display: flex; justify-content: space-between; margin-top: 50px; font-size: 11px; }
-            .stamp-box { text-align: center; width: 220px; border-top: 1px solid #cbd5e1; padding-top: 8px; color: #64748b; }
+            body { 
+              font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
+              padding: 30px; 
+              color: #1e293b; 
+              background-color: white; 
+              line-height: 1.35; 
+              -webkit-print-color-adjust: exact; 
+              print-color-adjust: exact; 
+            }
+            .header { 
+              text-align: center; 
+              border-bottom: 2px solid #e2e8f0; 
+              padding-bottom: 12px; 
+              margin-bottom: 20px; 
+            }
+            .header h1 { 
+              font-size: 21px; 
+              color: #0c4a6e; 
+              margin: 0 0 4px 0; 
+              text-transform: uppercase; 
+              font-weight: 800; 
+              letter-spacing: 0.5px; 
+            }
+            .header h2 { 
+              font-size: 11px; 
+              color: #475569; 
+              margin: 0 0 6px 0; 
+              font-weight: 700; 
+              letter-spacing: 1.5px; 
+              text-transform: uppercase; 
+            }
+            .header p { 
+              font-size: 10px; 
+              color: #64748b; 
+              margin: 2px 0; 
+            }
+            .grid-metrics { 
+              display: grid; 
+              grid-template-cols: repeat(4, 1fr); 
+              gap: 12px; 
+              margin-bottom: 20px; 
+            }
+            .card-metric { 
+              border: 1px solid #f1f5f9; 
+              background-color: #f8fafc; 
+              padding: 12px; 
+              border-radius: 8px; 
+              box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+              position: relative; 
+            }
+            .card-metric-title { 
+              font-size: 8px; 
+              font-weight: bold; 
+              color: #64748b; 
+              text-transform: uppercase; 
+              letter-spacing: 0.5px; 
+              margin-bottom: 5px; 
+            }
+            .card-metric-value { 
+              font-size: 13.5px; 
+              font-weight: bold; 
+              color: #0f172a; 
+              font-family: monospace; 
+            }
+            .charts-grid { 
+              display: grid; 
+              grid-template-cols: 1.5fr 1fr; 
+              gap: 15px; 
+              margin-bottom: 20px; 
+            }
+            .chart-container-box { 
+              border: 1px solid #e2e8f0; 
+              border-radius: 8px; 
+              padding: 12px; 
+              background-color: white; 
+            }
+            .chart-title { 
+              font-size: 10px; 
+              font-weight: bold; 
+              color: #1e293b; 
+              text-transform: uppercase; 
+              letter-spacing: 0.5px; 
+              margin-bottom: 10px; 
+              border-left: 3px solid #0ea5e9; 
+              padding-left: 6px; 
+            }
+            .chart-legend { 
+              display: flex; 
+              justify-content: center; 
+              gap: 10px; 
+              font-size: 8px; 
+              margin-top: 6px; 
+              color: #475569; 
+            }
+            .legend-item { 
+              display: flex; 
+              align-items: center; 
+              gap: 4px; 
+            }
+            .legend-color { 
+              width: 8px; 
+              height: 8px; 
+              border-radius: 2px; 
+            }
+            table { 
+              width: 100%; 
+              border-collapse: collapse; 
+              margin-bottom: 20px; 
+            }
+            th { 
+              background-color: #f1f5f9; 
+              color: #475569; 
+              padding: 6px 10px; 
+              font-size: 9px; 
+              font-weight: bold; 
+              text-align: left; 
+              border-bottom: 1px solid #cbd5e1; 
+              text-transform: uppercase; 
+            }
+            td { 
+              padding: 6px 10px; 
+              font-size: 9.5px; 
+              border-bottom: 1px solid #f1f5f9; 
+            }
+            h3 { 
+              font-size: 11px; 
+              font-weight: bold; 
+              border-left: 4px solid #0c4a6e; 
+              padding-left: 8px; 
+              margin: 20px 0 10px 0; 
+              color: #0c4a6e; 
+              text-transform: uppercase; 
+              letter-spacing: 0.3px; 
+            }
+            .stamp-area { 
+              display: grid; 
+              grid-template-cols: repeat(3, 1fr); 
+              gap: 15px; 
+              margin-top: 25px; 
+              font-size: 9px; 
+            }
+            .stamp-box { 
+              text-align: center; 
+              border: 1px solid #e2e8f0; 
+              background-color: #f8fafc; 
+              border-radius: 6px; 
+              padding: 8px; 
+              color: #475569; 
+            }
+            .stamp-box strong { 
+              color: #0f172a; 
+              display: block; 
+              margin-bottom: 3px; 
+            }
+            .footer { 
+              border-top: 1px solid #f1f5f9; 
+              margin-top: 20px; 
+              padding-top: 8px; 
+              text-align: center; 
+              font-size: 8.5px; 
+              color: #94a3b8; 
+            }
             @media print {
-              body { padding: 15px; font-size: 12px; }
+              body { padding: 10px; font-size: 9px; }
               input, button { display: none !important; }
             }
           </style>
@@ -313,38 +686,139 @@ export default function ReportsSection({
             <h1>KIXI-FUNDO - GESTÃO DE FINANÇAS COMPARTICIPADAS</h1>
             <h2>Associação Consórcio de Poupança de Interajuda Coletiva</h2>
             <p>Relatório Consolidado de Transparência, Arrecadações e Utilização de Verbas</p>
-            <p style="font-size: 10px; margin-top: 5px;">Data de Emissão: ${new Date().toLocaleString('pt-PT')} | Auditor do Fundo: lmendesvictor@gmail.com</p>
+            <p style="font-size: 9px; margin-top: 3px; font-weight: bold; color: #475569;">
+              Data de Emissão: ${new Date().toLocaleString('pt-PT')} | Auditor do Fundo: lmendesvictor@gmail.com
+            </p>
           </div>
 
-          <div class="grid">
-            <div class="card">
-              <div class="card-title">Saldo Disponível Real em Banco</div>
-              <div class="card-value">${formatCurrency(bankBalance)}</div>
+          <div class="grid-metrics">
+            <div class="card-metric" style="border-left: 3px solid #0ea5e9;">
+              <div class="card-metric-title">Saldo Bancário Real</div>
+              <div class="card-metric-value">${formatCurrency(bankBalance)}</div>
+              <div style="font-size: 8px; color: #10b981; font-weight: bold; margin-top: 2px;">✓ Caixa Integral Conciliado</div>
             </div>
-            <div class="card">
-              <div class="card-title">Fundo de Apoio Social (Interajuda)</div>
-              <div class="card-value">${formatCurrency(socialBalance)}</div>
+            <div class="card-metric" style="border-left: 3px solid #6366f1;">
+              <div class="card-metric-title">Fundo de Apoio Social</div>
+              <div class="card-metric-value">${formatCurrency(socialBalance)}</div>
+              <div style="font-size: 8px; color: #64748b; margin-top: 2px;">Retido p/ Assistência Urgencial</div>
             </div>
-            <div class="card">
-              <div class="card-title">Total Arrecadado de Cotizações</div>
-              <div class="card-value">${formatCurrency(totalGrossCollected)}</div>
+            <div class="card-metric" style="border-left: 3px solid #059669;">
+              <div class="card-metric-title">Total Cotizações Arrecadadas</div>
+              <div class="card-metric-value">${formatCurrency(totalGrossCollected)}</div>
+              <div style="font-size: 8px; color: #64748b; margin-top: 2px;">${totalPaidContributionsCount} Quotas Coletadas</div>
+            </div>
+            <div class="card-metric" style="border-left: 3px solid #e11d48;">
+              <div class="card-metric-title">Total Auxílios Distribuídos</div>
+              <div class="card-metric-value">${formatCurrency(totalSocialDisbursed)}</div>
+              <div style="font-size: 8px; color: #a11d48; font-weight: bold; margin-top: 2px;">Desembolsos Sociais</div>
             </div>
           </div>
 
-          <h3>1. Histórico Geral de Pagamento de Cotas</h3>
+          <div class="charts-grid">
+            <div class="chart-container-box">
+              <div class="chart-title">Arrecadação de Cotizações Mensal (Previsto vs. Real)</div>
+              <!-- SVG column bar comparing planned and actual progress -->
+              <svg width="100%" height="150" viewBox="0 0 500 150" style="font-family: sans-serif;">
+                <!-- Grid background lines -->
+                <line x1="40" y1="10" x2="480" y2="10" stroke="#f1f5f9" stroke-width="1"/>
+                <line x1="40" y1="40" x2="480" y2="40" stroke="#f1f5f9" stroke-width="1"/>
+                <line x1="40" y1="70" x2="480" y2="70" stroke="#f1f5f9" stroke-width="1"/>
+                <line x1="40" y1="100" x2="480" y2="100" stroke="#f1f5f9" stroke-width="1"/>
+                <line x1="40" y1="125" x2="480" y2="125" stroke="#cbd5e1" stroke-width="2.5"/>
+
+                <!-- Left scale indices -->
+                <text x="35" y="128" font-size="8" fill="#94a3b8" text-anchor="end">0k</text>
+                <text x="35" y="103" font-size="8" fill="#94a3b8" text-anchor="end">120k</text>
+                <text x="35" y="73" font-size="8" fill="#94a3b8" text-anchor="end">240k</text>
+                <text x="35" y="43" font-size="8" fill="#94a3b8" text-anchor="end">360k</text>
+                <text x="35" y="13" font-size="8" fill="#94a3b8" text-anchor="end">480k</text>
+
+                <!-- Month 1 compare bars: Previsto: 480k vs Real: 480k -->
+                <rect x="70" y="15" width="10" height="110" fill="#0ea5e9" rx="1.5"/>
+                <rect x="82" y="15" width="10" height="110" fill="#10b981" rx="1.5"/>
+                <text x="81" y="138" font-size="8.5" fill="#475569" text-anchor="middle" font-weight="bold">Mês 1</text>
+
+                <!-- Month 2 compare bars: Previsto: 480k vs Real: 480k -->
+                <rect x="135" y="15" width="10" height="110" fill="#0ea5e9" rx="1.5"/>
+                <rect x="147" y="15" width="10" height="110" fill="#10b981" rx="1.5"/>
+                <text x="146" y="138" font-size="8.5" fill="#475569" text-anchor="middle" font-weight="bold">Mês 2</text>
+
+                <!-- Month 3 compare bars: Previsto: 480k vs Real: 360k -->
+                <rect x="200" y="15" width="10" height="110" fill="#0ea5e9" rx="1.5"/>
+                <rect x="212" y="42" width="10" height="83" fill="#10b981" rx="1.5"/>
+                <text x="211" y="138" font-size="8.5" fill="#475569" text-anchor="middle" font-weight="bold">Mês 3</text>
+
+                <!-- Month 4 compare bars: Previsto: 480k vs Real: 240k -->
+                <rect x="265" y="15" width="10" height="110" fill="#0ea5e9" rx="1.5"/>
+                <rect x="277" y="70" width="10" height="55" fill="#10b981" rx="1.5"/>
+                <text x="276" y="138" font-size="8.5" fill="#475569" text-anchor="middle" font-weight="bold">Mês 4</text>
+
+                <!-- Month 5 compare bars: Previsto: 480k vs Real: 120k -->
+                <rect x="330" y="15" width="10" height="110" fill="#0ea5e9" rx="1.5"/>
+                <rect x="342" y="98" width="10" height="27" fill="#10b981" rx="1.5"/>
+                <text x="341" y="138" font-size="8.5" fill="#475569" text-anchor="middle" font-weight="bold">Mês 5</text>
+
+                <!-- Month 6 compare bars: Previsto: 480k vs Real: 120k -->
+                <rect x="395" y="15" width="10" height="110" fill="#0ea5e9" rx="1.5"/>
+                <rect x="407" y="98" width="10" height="27" fill="#10b981" rx="1.5"/>
+                <text x="406" y="138" font-size="8.5" fill="#475569" text-anchor="middle" font-weight="bold">Mês 6</text>
+              </svg>
+              <div class="chart-legend">
+                <div class="legend-item">
+                  <div class="legend-color" style="background-color: #0ea5e9;"></div>
+                  <span>Orçamento Previsto</span>
+                </div>
+                <div class="legend-item">
+                  <div class="legend-color" style="background-color: #10b981;"></div>
+                  <span>Arrecadação Liquidada</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="chart-container-box">
+              <div class="chart-title">Distribuição do Capital</div>
+              <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 120px;">
+                <!-- SVG Custom Donut Segment Chart representing categories -->
+                <svg width="100" height="100" viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r="32" fill="none" stroke="#f1f5f9" stroke-width="12" />
+                  <!-- Segments calculated: Regular contributions (85%), Social assistances (15%) -->
+                  <circle cx="50" cy="50" r="32" fill="none" stroke="#0ea5e9" stroke-width="12" 
+                    stroke-dasharray="171 201" stroke-dashoffset="0" transform="rotate(-90 50 50)" />
+                  <circle cx="50" cy="50" r="32" fill="none" stroke="#6366f1" stroke-width="12" 
+                    stroke-dasharray="30 201" stroke-dashoffset="-171" transform="rotate(-90 50 50)" />
+                  <circle cx="50" cy="50" r="32" fill="none" class="white-middle" />
+                  <!-- Center hole with inner text -->
+                  <circle cx="50" cy="50" r="23" fill="white" />
+                  <text x="50" y="53" font-size="7" font-weight="bold" fill="#0f172a" text-anchor="middle">KIXI-CAPITAL</text>
+                </svg>
+              </div>
+              <div class="chart-legend" style="flex-direction: column; gap: 4px; align-items: flex-start; padding-left: 10px;">
+                <div class="legend-item">
+                  <div class="legend-color" style="background-color: #0ea5e9;"></div>
+                  <span>Cotizações Gerais (85%)</span>
+                </div>
+                <div class="legend-item">
+                  <div class="legend-color" style="background-color: #6366f1;"></div>
+                  <span>Retenção Especial Compartilhada (15%)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <h3>1. Histórico Geral de Pagamento de Cotas (Enhanced)</h3>
           <table>
             <thead>
               <tr>
-                <th style="font-size: 10px;">Cooperante</th>
-                <th style="font-size: 10px;">Fone</th>
-                <th style="font-size: 10px; text-align: center;">Mês Sort.</th>
-                <th style="font-size: 10px; text-align: center;">Mês 1</th>
-                <th style="font-size: 10px; text-align: center;">Mês 2</th>
-                <th style="font-size: 10px; text-align: center;">Mês 3</th>
-                <th style="font-size: 10px; text-align: center;">Mês 4</th>
-                <th style="font-size: 10px; text-align: center;">Mês 5</th>
-                <th style="font-size: 10px; text-align: center;">Mês 6</th>
-                <th style="font-size: 10px; text-align: right;">Apoio Rec.</th>
+                <th style="font-size: 9px; width: 22%">Cooperante</th>
+                <th style="font-size: 9px; width: 14%">Fone</th>
+                <th style="font-size: 9px; text-align: center; width: 12%">Mês Sort.</th>
+                <th style="font-size: 9px; text-align: center; width: 8%">Mês 1</th>
+                <th style="font-size: 9px; text-align: center; width: 8%">Mês 2</th>
+                <th style="font-size: 9px; text-align: center; width: 8%">Mês 3</th>
+                <th style="font-size: 9px; text-align: center; width: 8%">Mês 4</th>
+                <th style="font-size: 9px; text-align: center; width: 8%">Mês 5</th>
+                <th style="font-size: 9px; text-align: center; width: 8%">Mês 6</th>
+                <th style="font-size: 9px; text-align: right; width: 12%">Apoio Rec.</th>
               </tr>
             </thead>
             <tbody>
@@ -356,11 +830,11 @@ export default function ReportsSection({
           <table>
             <thead>
               <tr>
-                <th style="font-size: 10px; width: 100px;">Data</th>
-                <th style="font-size: 10px; width: 100px;">Tipo</th>
-                <th style="font-size: 10px; width: 150px;">Contemplado</th>
-                <th style="font-size: 10px; width: 120px; text-align: right;">Montante</th>
-                <th style="font-size: 10px;">Descrição da Operação</th>
+                <th style="font-size: 9px; width: 12%;">Data</th>
+                <th style="font-size: 9px; width: 18%;">Tipo</th>
+                <th style="font-size: 9px; width: 20%;">Contemplado</th>
+                <th style="font-size: 9px; text-align: right; width: 16%;">Montante</th>
+                <th style="font-size: 9px; width: 34%;">Descrição da Operação</th>
               </tr>
             </thead>
             <tbody>
@@ -370,31 +844,385 @@ export default function ReportsSection({
 
           <div class="stamp-area">
             <div class="stamp-box">
-              <strong>Direção do Fundo Cooperativo Kixi-Fundo</strong><br>
-              Associação de Direito Angolano
+              <strong>Direção do Fundo Cooperativo Kixi-Funde</strong>
+              <span style="font-size: 8px; color: #64748b; display: block; border-top: 1px dashed #e2e8f0; margin-top: 5px; padding-top: 4px;">
+                Associação de Direito Angolano
+              </span>
             </div>
             <div class="stamp-box">
-              <strong>Mendes Pambo</strong><br>
-              Administrador Principal do Fundo
+              <strong>Mendes Pambo</strong>
+              <span style="font-size: 8px; color: #64748b; display: block; border-top: 1px dashed #e2e8f0; margin-top: 5px; padding-top: 4px;">
+                Administrador Principal do Fundo
+              </span>
             </div>
-            <div class="stamp-box">
-              <strong>Conciliação e Selo de Auditoria</strong><br>
-              Matematicamente Verificado ✓ 100%
+            <div class="stamp-box" style="border: 2px double #10b981; background-color: #f0fdf4;">
+              <strong style="color: #15803d;">Conciliação e Auditoria</strong>
+              <span style="font-size: 8px; color: #166534; font-weight: bold; display: block; border-top: 1px dashed #bbf7d0; margin-top: 5px; padding-top: 4px;">
+                Matematicamente Verificado ✓ 100%
+              </span>
             </div>
           </div>
 
           <div class="footer">
-            <p>© 2026 Kixi-Fundo - Gestão de Finanças Comparticipadas, Angola. Todos os direitos reservados. Garantindo integridade absoluta.</p>
+            <p>© 2026 Kixi-Fundo - Gestão de Finanças Comparticipadas, Angola. Documento gerado sob chancela de transparência e auditoria coletiva.</p>
           </div>
           <script>
             window.onload = function() {
-              window.print();
+              setTimeout(function() {
+                window.print();
+              }, 300);
             };
           </script>
         </body>
       </html>
     `);
     printWindow.document.close();
+  };
+
+  const handleExportPDF = () => {
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    let y = 15;
+
+    const addPageIfNeeded = (neededHeight: number) => {
+      if (y + neededHeight > 275) {
+        doc.addPage();
+        y = 20;
+        // Drawing beautiful page headers
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(7.5);
+        doc.setTextColor(148, 163, 184); // slate-400
+        doc.text("Kixi-Fundo \u2022 Relat\u00F3rio Consolidado d'Auditoria & Extratos", 14, 11);
+        doc.setDrawColor(226, 232, 240); // slate-200
+        doc.setLineWidth(0.3);
+        doc.line(14, 13, 196, 13);
+        y = 18;
+      }
+    };
+
+    // Header block
+    doc.setFillColor(15, 23, 42); // slate-900
+    doc.rect(14, y, 182, 34, 'F');
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.text('KIXI-FUNDO: RELAT\u00D3RIO FINANCEIRO DE AUDITORIA', 20, y + 9);
+
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(186, 230, 253); // sky-200
+    doc.text('Associa\u00E7\u00E3o Cons\u00F3rcio de Poupan\u00E7a de Interajuda Coletiva \u2022 Angola', 20, y + 15);
+
+    doc.setFontSize(8);
+    doc.setTextColor(148, 163, 184); // slate-400
+    doc.text(`Emitido em: ${new Date().toLocaleString('pt-PT')} | Respons\u00E1vel: lmendesvictor@gmail.com`, 20, y + 21);
+    doc.text('Estatura Geral de Cons\u00F3rcio, Extrato de Quotas Liquidadas e Escala de Benefici\u00E1rios', 20, y + 27);
+
+    y += 42;
+
+    // Draw Metric Cards
+    const drawPDFMetricCard = (x: number, title: string, val: string, status: string, accentColor: [number, number, number]) => {
+      doc.setDrawColor(226, 232, 240); // slate-200
+      doc.setFillColor(248, 250, 252); // slate-50
+      doc.setLineWidth(0.25);
+      doc.rect(x, y, 42.5, 22, 'FD');
+
+      // accent bar
+      doc.setFillColor(accentColor[0], accentColor[1], accentColor[2]);
+      doc.rect(x, y, 1.8, 22, 'F');
+
+      // Title
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+      doc.setTextColor(100, 116, 139); // slate-500
+      doc.text(title.toUpperCase(), x + 4, y + 6);
+
+      // Value
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(15, 23, 42); // slate-900
+      doc.text(val, x + 4, y + 13);
+
+      // Status info
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(6);
+      doc.setTextColor(accentColor[0], accentColor[1], accentColor[2]);
+      doc.text(status, x + 4, y + 18);
+    };
+
+    drawPDFMetricCard(14, 'Saldo Geral Caixa', formatCurrency(bankBalance), '\u2713 Caixa Conciliado', [14, 165, 233]);
+    drawPDFMetricCard(60.5, 'Fundo Apoio Social', formatCurrency(socialBalance), 'Retido p/ Emerg\u00EAncia', [99, 102, 241]);
+    drawPDFMetricCard(107, 'Cotiza\u00E7\u00F5es Totais', formatCurrency(totalGrossCollected), `${totalPaidContributionsCount} Quotas Totais`, [5, 150, 105]);
+    drawPDFMetricCard(153.5, 'Aux\u00EDlios Pagos', formatCurrency(totalSocialDisbursed), 'Desembolsos Sociais', [225, 29, 72]);
+
+    y += 30;
+
+    // SECTION 1: ESCALA DE BENEFICIÁRIOS DO CICLO
+    addPageIfNeeded(35);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10.5);
+    doc.setTextColor(12, 74, 110); // sky-900
+    doc.text('1. ESCALA MENSAL ROTATIVA DE BENEFICI\u00C1RIOS', 14, y);
+    doc.setDrawColor(12, 74, 110);
+    doc.setLineWidth(0.4);
+    doc.line(14, y + 2, 196, y + 2);
+    y += 7;
+
+    doc.setFillColor(241, 245, 249); // slate-100
+    doc.rect(14, y, 182, 6.5, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(71, 85, 105); // slate-600
+    doc.text('M\u00CAS PROGRAMADO', 18, y + 4.5);
+    doc.text('MEMBRO COOPERANTE CONTEMPLADO', 60, y + 4.5);
+    doc.text('ESTADO DE LIQUIDA\u00C7\u00C3O DO PR\u00C9MIO', 140, y + 4.5);
+    y += 7;
+
+    const rotationMonths = [1, 2, 3, 4, 5, 6];
+    rotationMonths.forEach((mNum) => {
+      addPageIfNeeded(7.5);
+      
+      const monLucky = members.filter(item => item.assignedMonth === mNum);
+      const luckyNameStr = monLucky.length > 0 ? monLucky.map(item => item.name).join(' e ') : 'Nenhum sorteado';
+      const luckyPhoneStr = monLucky.length > 0 ? monLucky.map(item => item.phone).join(' / ') : '';
+      const isLiquidated = payoutsCompleted[mNum];
+
+      if (mNum % 2 === 0) {
+        doc.setFillColor(248, 250, 252);
+        doc.rect(14, y, 182, 6.5, 'F');
+      }
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.5);
+      doc.setTextColor(15, 23, 42);
+      doc.text(`Ciclo M\u00EAs 0${mNum}`, 18, y + 4.5);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(51, 65, 85);
+      doc.text(`${luckyNameStr} ${luckyPhoneStr ? `(${luckyPhoneStr})` : ''}`, 60, y + 4.5);
+
+      if (isLiquidated) {
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(21, 128, 61); // green-700
+        doc.text('CONVENTO / PAGO (1.200.000 KZs) \u2713', 140, y + 4.5);
+      } else {
+        doc.setFont('helvetica', 'italic');
+        doc.setTextColor(225, 29, 72); // rose-600
+        doc.text('AGUARDANDO DISTRIBUI\u00C7\u00C3O \u2717', 140, y + 4.5);
+      }
+
+      doc.setDrawColor(241, 245, 249);
+      doc.setLineWidth(0.2);
+      doc.line(14, y + 6.5, 196, y + 6.5);
+      y += 6.5;
+    });
+
+    y += 9;
+
+    // SECTION 2: EXTRATO COMPACTO DE PAGAMENTO DE QUOTAS
+    addPageIfNeeded(40);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10.5);
+    doc.setTextColor(12, 74, 110);
+    doc.text('2. EXTRATO INTEGRAL DE LIQUIDA\u00C7\u00C3O DE QUOTAS', 14, y);
+    doc.setDrawColor(12, 74, 110);
+    doc.setLineWidth(0.4);
+    doc.line(14, y + 2, 196, y + 2);
+    y += 7;
+
+    // Header column row
+    doc.setFillColor(224, 242, 254);
+    doc.rect(14, y, 182, 6.5, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(15, 23, 42);
+
+    doc.text('Cooperador', 16, y + 4.5);
+    doc.text('M\u00EAs 1', 65, y + 4.5);
+    doc.text('M\u00EAs 2', 82, y + 4.5);
+    doc.text('M\u00EAs 3', 99, y + 4.5);
+    doc.text('M\u00EAs 4', 116, y + 4.5);
+    doc.text('M\u00EAs 5', 133, y + 4.5);
+    doc.text('M\u00EAs 6', 150, y + 4.5);
+    doc.text('Fundo Apoio', 168, y + 4.5);
+    y += 7;
+
+    members.forEach((m, idx) => {
+      addPageIfNeeded(7.5);
+
+      if (idx % 2 === 1) {
+        doc.setFillColor(248, 250, 252);
+        doc.rect(14, y, 182, 6.5, 'F');
+      }
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7.5);
+      doc.setTextColor(15, 23, 42);
+      doc.text(m.name, 16, y + 4.5);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(7);
+
+      const drawPDFStatus = (isPaid: boolean, startX: number) => {
+        if (isPaid) {
+          doc.setTextColor(21, 128, 61);
+          doc.setFont('helvetica', 'bold');
+          doc.text('PAGO', startX, y + 4.5);
+        } else {
+          doc.setTextColor(156, 163, 175);
+          doc.setFont('helvetica', 'normal');
+          doc.text('PEND.', startX, y + 4.5);
+        }
+      };
+
+      drawPDFStatus(m.contributions[1]?.paid, 65);
+      drawPDFStatus(m.contributions[2]?.paid, 82);
+      drawPDFStatus(m.contributions[3]?.paid, 99);
+      drawPDFStatus(m.contributions[4]?.paid, 116);
+      drawPDFStatus(m.contributions[5]?.paid, 133);
+      drawPDFStatus(m.contributions[6]?.paid, 150);
+
+      doc.setTextColor(15, 23, 42);
+      doc.setFont('helvetica', 'bold');
+      doc.text(formatCurrency(m.socialSupportReceived || 0), 168, y + 4.5);
+
+      doc.setDrawColor(241, 245, 249);
+      doc.setLineWidth(0.2);
+      doc.line(14, y + 6.5, 196, y + 6.5);
+      y += 6.5;
+    });
+
+    y += 9;
+
+    // SECTION 3: RECENT MOVEMENTS
+    addPageIfNeeded(35);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10.5);
+    doc.setTextColor(12, 74, 110);
+    doc.text('3. DESEMBOLSOS E AUX\u00CDLIOS SOCIAIS DA CAIXA', 14, y);
+    doc.setDrawColor(12, 74, 110);
+    doc.setLineWidth(0.4);
+    doc.line(14, y + 2, 196, y + 2);
+    y += 7;
+
+    doc.setFillColor(241, 245, 249);
+    doc.rect(14, y, 182, 6.5, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(71, 85, 105);
+
+    doc.text('DATA OPERA\u00C7\u00C3O', 16, y + 4.5);
+    doc.text('TIPO', 38, y + 4.5);
+    doc.text('COOPERADOR CONTEMPLADO', 65, y + 4.5);
+    doc.text('MONTANTE', 112, y + 4.5);
+    doc.text('DESCRI\u00C7\u00C3O OPERACIONAL E JUSTIFICATIVO', 132, y + 4.5);
+    y += 7;
+
+    const pdfLogs = logs.filter(l => l.type === 'payout' || l.type === 'social_aid');
+    if (pdfLogs.length === 0) {
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(7.5);
+      doc.setTextColor(100, 116, 139);
+      doc.text('Sem lan\u00E7amentos urgentes ou aux\u00EDlios sociais registados nesta base de dados.', 20, y + 4.5);
+      y += 7;
+    } else {
+      pdfLogs.forEach((l, idx) => {
+        addPageIfNeeded(8.5);
+
+        if (idx % 2 === 1) {
+          doc.setFillColor(250, 250, 250);
+          doc.rect(14, y, 182, 7, 'F');
+        }
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(7);
+        doc.setTextColor(51, 65, 85);
+        doc.text(new Date(l.timestamp).toLocaleDateString('pt-PT'), 16, y + 4.5);
+
+        const isPayoutType = l.type === 'payout';
+        doc.setFont('helvetica', 'bold');
+        if (isPayoutType) {
+          doc.setTextColor(14, 165, 233);
+          doc.text('Rota\u00E7\u00E3o Mensal', 38, y + 4.5);
+        } else {
+          doc.setTextColor(99, 102, 241);
+          doc.text('Apoio Social', 38, y + 4.5);
+        }
+
+        doc.setTextColor(15, 23, 42);
+        doc.text(l.memberName || 'Coletivo', 65, y + 4.5);
+        doc.text(formatCurrency(l.amount), 112, y + 4.5);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(71, 85, 105);
+        // Truncate description if too long
+        let desc = l.description || '';
+        if (desc.length > 38) {
+          desc = desc.substring(0, 35) + '...';
+        }
+        doc.text(desc, 132, y + 4.5);
+
+        doc.setDrawColor(241, 245, 249);
+        doc.setLineWidth(0.2);
+        doc.line(14, y + 7, 196, y + 7);
+        y += 7;
+      });
+    }
+
+    y += 10;
+
+    // Stamp & Signature section
+    addPageIfNeeded(32);
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.3);
+    doc.line(14, y, 196, y);
+    y += 5;
+
+    // Col 1: Stamp
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text('Kixi-Fundo Angola', 15, y + 5);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.5);
+    doc.text('Associa\u00E7\u00E3o Cons\u00F3rcio de Poupan\u00E7a', 15, y + 9);
+    doc.text('Fundo Mutualista Certificado', 15, y + 13);
+
+    // Col 2: Principal Administrator
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7.5);
+    doc.text('Mendes Pambo', 75, y + 5);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.5);
+    doc.text('Administrador Geral de Caixa', 75, y + 9);
+    doc.text('Assinatura Digitalizada Kixi-Fundo', 75, y + 13);
+
+    // Col 3: Safe Stamp Box
+    doc.setDrawColor(16, 185, 129); // green-500
+    doc.setFillColor(240, 253, 244); // green-50
+    doc.rect(142, y + 1, 50, 15, 'FD');
+    doc.setTextColor(21, 128, 61); // green-700
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.text('APROVADO & AUDITADO', 145, y + 6);
+    doc.setFontSize(6.5);
+    doc.text('Matematicamente Conciliado', 145, y + 10);
+    doc.text('N\u00EDvel Integridade: 100%', 145, y + 13);
+
+    y += 20;
+
+    // footer notice line
+    doc.setFont('helvetica', 'italic');
+    doc.setFontSize(6.5);
+    doc.setTextColor(156, 163, 175);
+    doc.text("Este documento constitui extrato oficial para fins de auditoria interna, concilia\u00E7\u00E3o banc\u00E1ria e transpar\u00EAncia m\u00FAtua entre cooperadores.", 14, y);
+
+    doc.save('KixiFundo_Relatorio_Consolidado_Auditoria.pdf');
   };
 
   // Get active selected member
@@ -485,13 +1313,32 @@ export default function ReportsSection({
             </p>
           </div>
 
-          <div className="flex items-center gap-3 w-full md:w-auto shrink-0">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full md:w-auto shrink-0">
+            <button 
+              onClick={handleExportPDF}
+              className="flex items-center justify-center gap-1.5 text-xs font-bold px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl shadow-sm transition-all cursor-pointer"
+            >
+              <FileText className="w-4.5 h-4.5 text-emerald-100" />
+              Exportar Relatório PDF
+            </button>
             <button 
               onClick={handlePrintPDF}
-              className="flex-1 md:flex-initial flex items-center justify-center gap-1.5 text-xs font-bold px-4 py-2.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl shadow-sm transition-all cursor-pointer"
+              className="flex items-center justify-center gap-1.5 text-xs font-bold px-4 py-2.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl shadow-sm transition-all cursor-pointer"
             >
               <Printer className="w-4 h-4" />
               Imprimir Relatório (PDF)
+            </button>
+            <button 
+              onClick={() => {
+                if (activeReportTab === 'payments') handleExportPaymentsExcel();
+                else if (activeReportTab === 'banking') handleExportBankExcel();
+                else if (activeReportTab === 'utilization') handleExportUtilizationExcel();
+                else handleExportPaymentsExcel();
+              }}
+              className="flex items-center justify-center gap-1.5 text-xs font-bold px-4 py-2.5 bg-slate-800 hover:bg-slate-705 border border-slate-700 text-white rounded-xl shadow-sm transition-all cursor-pointer"
+            >
+              <Download className="w-4 h-4" />
+              Descarregar Excel (.xlsx)
             </button>
           </div>
         </div>
@@ -605,12 +1452,12 @@ export default function ReportsSection({
                           return (
                             <td key={monthNum} className="p-3.5 text-center text-xs">
                               {isPaid ? (
-                                <span className="inline-flex items-center gap-0.5 font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-md text-[10px]">
-                                  <Check className="w-3 h-3" /> Pago
+                                <span className="inline-flex items-center gap-1 font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/45 border border-emerald-200 dark:border-emerald-900/50 px-2 py-0.5 rounded-full text-[10px] uppercase font-sans tracking-wide shadow-sm">
+                                  <span>★</span> PAGO
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center font-semibold text-slate-400 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md text-[10px]">
-                                  Pendente
+                                <span className="inline-flex items-center gap-1 font-bold text-rose-700 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/45 border border-rose-200 dark:border-rose-900/50 px-2 py-0.5 rounded-full text-[10px] uppercase font-sans tracking-wide shadow-sm">
+                                  <span>✖</span> PENDENTE
                                 </span>
                               )}
                             </td>
@@ -675,86 +1522,184 @@ export default function ReportsSection({
               </div>
             </div>
 
-            {/* Recharts Graphical Visualization Card */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-5 shadow-sm animate-fadeIn">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
-                <div className="space-y-0.5">
-                  <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
-                    <TrendingUp className="w-4 h-4 text-sky-500" />
-                    Evolução Mensal de Contribuições
-                  </h4>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium font-sans">
-                    Monitor de verba bruta coletada vs. retenção para o fundo social em cada período.
-                  </p>
+            {/* Charts Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Recharts Graphical Visualization Card */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-5 shadow-sm animate-fadeIn min-w-0">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+                  <div className="space-y-0.5">
+                    <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                      <TrendingUp className="w-4 h-4 text-sky-500" />
+                      Evolução Mensal de Contribuições
+                    </h4>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium font-sans">
+                      Monitor de verba bruta coletada vs. retenção para o fundo social em cada período.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-2 text-[10px] font-bold text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-200/60 dark:border-slate-800/60 shadow-sm shrink-0">
+                      <span className="w-2.5 h-2.5 rounded bg-sky-500 inline-block"></span>
+                      <span>Quota Pura</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[10px] font-bold text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-200/60 dark:border-slate-800/60 shadow-sm shrink-0">
+                      <span className="w-2.5 h-2.5 rounded bg-indigo-500 inline-block"></span>
+                      <span>Retenção Social</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[10px] font-bold text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-200/60 dark:border-slate-800/60 shadow-sm shrink-0 whitespace-nowrap">
+                      <span className="w-2.5 h-2.5 rounded bg-rose-500 inline-block"></span>
+                      <span>Apoios Concedidos</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[10px] font-bold text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-950 px-3 py-1 rounded-lg border border-slate-200/60 dark:border-slate-800/60 shadow-sm shrink-0">
+                      <span className="w-2.5 h-2.5 rounded bg-emerald-500 inline-block"></span>
+                      <span>Meta (12/12)</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="flex items-center gap-2 text-[10px] font-bold text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-200/60 dark:border-slate-800/60 shadow-sm shrink-0">
-                    <span className="w-2.5 h-2.5 rounded bg-sky-500 inline-block"></span>
-                    <span>Quota Pura</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-[10px] font-bold text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-200/60 dark:border-slate-800/60 shadow-sm shrink-0">
-                    <span className="w-2.5 h-2.5 rounded bg-indigo-500 inline-block"></span>
-                    <span>Retenção Social</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-[10px] font-bold text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-200/60 dark:border-slate-800/60 shadow-sm shrink-0">
-                    <span className="w-2.5 h-2.5 rounded bg-emerald-500 inline-block"></span>
-                    <span>Meta (12/12)</span>
-                  </div>
+
+                {/* Chart Container Stage */}
+                <div className="h-64 sm:h-72 w-full font-sans">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                    <BarChart
+                      data={chartData}
+                      margin={{ top: 10, right: 10, left: -5, bottom: 0 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
+                      <XAxis 
+                        dataKey="name" 
+                        stroke="#94a3b8" 
+                        fontSize={11} 
+                        tickLine={false} 
+                        axisLine={false}
+                        dy={10}
+                        tick={{ fontWeight: 600 }}
+                      />
+                      <YAxis 
+                        stroke="#94a3b8" 
+                        fontSize={10} 
+                        tickLine={false} 
+                        axisLine={false}
+                        tickFormatter={(value) => `${value / 1000}k`}
+                        tick={{ fontWeight: 600 }}
+                      />
+                      <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'rgba(14, 165, 233, 0.04)' }} />
+                      <Bar dataKey="Contribuições Totais" radius={[6, 6, 0, 0]} barSize={20}>
+                        {chartData.map((entry, index) => {
+                          const isCurrent = index + 1 === currentMonth;
+                          return (
+                            <Cell 
+                              key={`cell-${index}`} 
+                              fill={isCurrent ? '#0ea5e9' : '#0ea5e9'} 
+                              fillOpacity={isCurrent ? 1 : 0.75} 
+                            />
+                          );
+                        })}
+                      </Bar>
+                      <Bar dataKey="Fundo Social" radius={[6, 6, 0, 0]} barSize={9}>
+                        {chartData.map((entry, index) => {
+                          const isCurrent = index + 1 === currentMonth;
+                          return (
+                            <Cell 
+                              key={`cell-social-${index}`} 
+                              fill={isCurrent ? '#6366f1' : '#6366f1'} 
+                              fillOpacity={isCurrent ? 1 : 0.75} 
+                            />
+                          );
+                        })}
+                      </Bar>
+                      <Bar dataKey="Apoios Sociais" radius={[6, 6, 0, 0]} barSize={7}>
+                        {chartData.map((entry, index) => {
+                          const isCurrent = index + 1 === currentMonth;
+                          return (
+                            <Cell 
+                              key={`cell-aids-${index}`} 
+                              fill={isCurrent ? '#f43f5e' : '#f43f5e'} 
+                              fillOpacity={isCurrent ? 1 : 0.75} 
+                            />
+                          );
+                        })}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
                 </div>
               </div>
 
-              {/* Chart Container Stage */}
-              <div className="h-64 sm:h-72 w-full font-sans">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={chartData}
-                    margin={{ top: 10, right: 10, left: -5, bottom: 0 }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
-                    <XAxis 
-                      dataKey="name" 
-                      stroke="#94a3b8" 
-                      fontSize={11} 
-                      tickLine={false} 
-                      axisLine={false}
-                      dy={10}
-                      tick={{ fontWeight: 600 }}
-                    />
-                    <YAxis 
-                      stroke="#94a3b8" 
-                      fontSize={10} 
-                      tickLine={false} 
-                      axisLine={false}
-                      tickFormatter={(value) => `${value / 1000}k`}
-                      tick={{ fontWeight: 600 }}
-                    />
-                    <Tooltip content={<CustomChartTooltip />} cursor={{ fill: 'rgba(14, 165, 233, 0.04)' }} />
-                    <Bar dataKey="Contribuições Totais" radius={[6, 6, 0, 0]} barSize={26}>
-                      {chartData.map((entry, index) => {
-                        const isCurrent = index + 1 === currentMonth;
-                        return (
-                          <Cell 
-                            key={`cell-${index}`} 
-                            fill={isCurrent ? '#0ea5e9' : '#0ea5e9'} 
-                            fillOpacity={isCurrent ? 1 : 0.75} 
-                          />
-                        );
-                      })}
-                    </Bar>
-                    <Bar dataKey="Fundo Social" radius={[6, 6, 0, 0]} barSize={12}>
-                      {chartData.map((entry, index) => {
-                        const isCurrent = index + 1 === currentMonth;
-                        return (
-                          <Cell 
-                            key={`cell-social-${index}`} 
-                            fill={isCurrent ? '#6366f1' : '#6366f1'} 
-                            fillOpacity={isCurrent ? 1 : 0.75} 
-                          />
-                        );
-                      })}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
+              {/* Card 2: Gráfico de Desempenho Mensal */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-5 shadow-sm animate-fadeIn flex flex-col justify-between min-w-0">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+                  <div className="space-y-0.5">
+                    <h4 className="text-xs font-bold text-slate-800 dark:text-slate-205 uppercase tracking-wider flex items-center gap-1.5">
+                      <Coins className="w-4 h-4 text-emerald-500" />
+                      Gráfico de Desempenho Mensal
+                    </h4>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium font-sans">
+                      Histórico acumulado de Contribuições Arrecadadas vs. Benefícios de Rotação Pagos.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-2 text-[10px] font-bold text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-200/60 dark:border-slate-800/60 shadow-sm shrink-0">
+                      <span className="w-2.5 h-2.5 rounded bg-emerald-500 inline-block"></span>
+                      <span>Contribuições</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[10px] font-bold text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-200/60 dark:border-slate-800/60 shadow-sm shrink-0">
+                      <span className="w-2.5 h-2.5 rounded bg-rose-500 inline-block"></span>
+                      <span>Rotações Pagas</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Chart Container Stage */}
+                <div className="h-64 sm:h-72 w-full font-sans">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                    <BarChart
+                      data={performanceChartData}
+                      margin={{ top: 10, right: 10, left: -5, bottom: 0 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
+                      <XAxis 
+                        dataKey="name" 
+                        stroke="#94a3b8" 
+                        fontSize={11} 
+                        tickLine={false} 
+                        axisLine={false}
+                        dy={10}
+                        tick={{ fontWeight: 600 }}
+                      />
+                      <YAxis 
+                        stroke="#94a3b8" 
+                        fontSize={10} 
+                        tickLine={false} 
+                        axisLine={false}
+                        tickFormatter={(value) => `${value / 1000}k`}
+                        tick={{ fontWeight: 600 }}
+                      />
+                      <Tooltip content={<CustomPerformanceTooltip />} cursor={{ fill: 'rgba(16, 185, 129, 0.04)' }} />
+                      <Bar dataKey="Contribuições Arrecadadas" name="Contribuições Arrecadadas" radius={[6, 6, 0, 0]} barSize={16}>
+                        {performanceChartData.map((entry, index) => {
+                          const isCurrent = index + 1 === currentMonth;
+                          return (
+                            <Cell 
+                              key={`perf-cell-in-${index}`} 
+                              fill={isCurrent ? '#10b981' : '#10b981'} 
+                              fillOpacity={isCurrent ? 1 : 0.75} 
+                            />
+                          );
+                        })}
+                      </Bar>
+                      <Bar dataKey="Benefícios Pagos" radius={[6, 6, 0, 0]} barSize={16}>
+                        {performanceChartData.map((entry, index) => {
+                          const isCurrent = index + 1 === currentMonth;
+                          return (
+                            <Cell 
+                              key={`perf-cell-out-${index}`} 
+                              fill={isCurrent ? '#f43f5e' : '#f43f5e'} 
+                              fillOpacity={isCurrent ? 1 : 0.75} 
+                            />
+                          );
+                        })}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
             </div>
 
@@ -863,13 +1808,22 @@ export default function ReportsSection({
                         </p>
                       </div>
 
-                      <div className="text-right shrink-0">
-                        <span className="text-base font-black font-mono text-slate-900 dark:text-white block">
-                          {formatCurrency(l.amount)}
-                        </span>
-                        <span className="text-[10px] text-slate-450 dark:text-slate-400 uppercase block font-medium">
-                          Mês {l.month || currentMonth}
-                        </span>
+                      <div className="flex flex-col sm:items-end gap-2.5 shrink-0">
+                        <div className="text-left sm:text-right">
+                          <span className="text-base font-black font-mono text-slate-900 dark:text-white block">
+                            {formatCurrency(l.amount)}
+                          </span>
+                          <span className="text-[10px] text-slate-450 dark:text-slate-400 uppercase block font-medium">
+                            Mês {l.month || currentMonth}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => handlePrintReceipt(l)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-sky-700 dark:text-sky-305 bg-sky-50 dark:bg-sky-950/40 hover:bg-sky-100/80 dark:hover:bg-sky-900/40 border border-sky-100 dark:border-sky-950/40 rounded-lg shadow-sm transition-all cursor-pointer whitespace-nowrap self-start sm:self-auto"
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                          Imprimir Recibo
+                        </button>
                       </div>
                     </div>
                   ))

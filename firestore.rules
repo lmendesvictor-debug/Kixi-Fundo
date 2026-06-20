@@ -21,7 +21,13 @@ service cloud.firestore {
                     && request.resource.data.logs is list
                     && request.resource.data.payoutsCompleted is map
                     && request.resource.data.appConfig is map
-                    && request.resource.data.updatedAt is string;
+                    && request.resource.data.updatedAt is string
+                    && (!('loans' in request.resource.data) || request.resource.data.loans is list);
+    }
+
+    // Histórico de Pontos de Restauro na Cloud Firestore kix_fundo_backups
+    match /kix_fundo_backups/{backupId} {
+      allow read, write: if true;
     }
   }
 }

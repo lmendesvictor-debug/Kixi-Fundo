@@ -166,4 +166,8 @@ export interface AppConfig {
   contractClauseGarantias?: string;
   contractTemplateWhole?: string;
   contractRepresentativeName?: string;
+  autoBackUpGDrive?: boolean;
+  autoBackupSchedule?: 'off' | 'daily' | 'weekly';
+  lastAutoBackupFirestore?: string;
+  lastAutoBackupGDrive?: string;
 }

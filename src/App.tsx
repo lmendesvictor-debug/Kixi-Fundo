@@ -30,6 +30,8 @@ import {
   Search,
   X,
   ChevronDown,
+  Calendar,
+  Check,
 } from 'lucide-react';
 
 import { Member, KixLog, CarouselSlide, getMemberIdCode, Loan, AppConfig } from './types';
@@ -119,10 +121,7 @@ export default function App() {
     }
     return null;
   });
-  const [isLoadingDb, setIsLoadingDb] = useState<boolean>(() => {
-    const saved = localStorage.getItem('kix_members');
-    return !saved; // If cached database exists, bypass blocking loading screen completely
-  });
+  const [isLoadingDb, setIsLoadingDb] = useState<boolean>(true);
   const [isInitialLoadCompleted, setIsInitialLoadCompleted] = useState<boolean>(false);
   const [dbLoadedSuccessfully, setDbLoadedSuccessfully] = useState<boolean>(false);
   const [currentMonth, setCurrentMonth] = useState<number>(() => {
@@ -133,7 +132,7 @@ export default function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed) && parsed.length > 1) {
           const FICTITIOUS_EMAILS = [
             'sgabriel@gmail.com',
             'delfina.antonio@gmail.com',
@@ -143,7 +142,7 @@ export default function App() {
           const filtered = parsed.filter(
             (m: any) => !FICTITIOUS_EMAILS.includes((m.email || '').trim().toLowerCase())
           );
-          if (filtered.length > 0) {
+          if (filtered.length > 1) {
             return filtered;
           }
         }
@@ -212,7 +211,7 @@ export default function App() {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 1) return parsed;
       } catch {}
     }
     return INITIAL_LOGS;
@@ -234,37 +233,7 @@ export default function App() {
         }
       } catch {}
     }
-    return [
-      {
-        id: 'L-7482-SOC',
-        borrowerName: 'Mendes Victor (Admin)',
-        borrowerType: 'socio',
-        memberId: 1,
-        documentId: '003429LA081',
-        phone: '+244 923 000 000',
-        email: 'lmendesvictor@gmail.com',
-        amountRequested: 500000,
-        interestRate: 6,
-        durationMonths: 6,
-        guarantees: 'Rúbrica e fiança sobre quotas pagas ativas no faturamento Kixi.',
-        status: 'active',
-        contractDate: '15/05/2026',
-        payments: Array.from({ length: 6 }, (_, i) => {
-          const m = i + 1;
-          const principalPaid = 500000 / 6;
-          const interestPaid = 500000 * 0.06;
-          return {
-            month: m,
-            dueDate: `15/${String(5 + m).padStart(2, '0')}/2026`,
-            amount: principalPaid + interestPaid,
-            interestPaid,
-            principalPaid,
-            paid: m <= 1,
-            paidAt: m <= 1 ? '15/06/2026' : undefined
-          };
-        }),
-      }
-    ];
+    return [];
   });
 
   const [activeTab, setActiveTab] = useState<string>('inicio');
@@ -365,8 +334,8 @@ export default function App() {
     const isSuperAdmin = currentUser.email.trim().toLowerCase() === 'lmendesvictor@gmail.com';
     if (isSuperAdmin) return true;
 
-    // Minha Área (membro-dashboard) não é parametrizável, está sempre disponível para membros comuns e gestores
-    if (tabId === 'membro-dashboard') return true;
+    // Ambos "Minha Área" (membro-dashboard) e "Início" (inicio) não são parametrizáveis e estão sempre disponíveis para todos os utilizadores para servir de painel inicial (Dashboard) obrigatório.
+    if (tabId === 'membro-dashboard' || tabId === 'inicio') return true;
 
     // 2. Custom permissions matrix (if initialized)
     const m = loggedInMember;
@@ -503,6 +472,10 @@ CLÁUSULA QUINTA - FORO E ASSINATURAS
 Para dirimir quaisquer controvérsias decorrentes da interpretação ou execução deste instrumento de crédito, as partes de comum acordo elegem o foro da Comarca de Luanda, Angola, com renúncia expressa a qualquer outro.
 
 E, por estarem de pleno acordo, as partes celebram e validam eletromagneticamente o presente contrato que passa a reger os direitos mútuos.`,
+      autoBackUpGDrive: false,
+      autoBackupSchedule: 'off' as 'off' | 'daily' | 'weekly',
+      lastAutoBackupFirestore: '',
+      lastAutoBackupGDrive: '',
     };
     if (saved) {
       try {
@@ -516,7 +489,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
 
   useEffect(() => {
     localStorage.setItem('kix_app_config', JSON.stringify(appConfig));
-    if (isInitialLoadCompleted && !isLoadingDb && dbLoadedSuccessfully) {
+    if (isInitialLoadCompleted && !isLoadingDb) {
       setIsDbSyncing(true);
       saveStateToFirestore({
         members,
@@ -532,7 +505,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
         setIsDbSyncing(false);
       });
     }
-  }, [appConfig, isInitialLoadCompleted, isLoadingDb, dbLoadedSuccessfully]);
+  }, [appConfig, isInitialLoadCompleted, isLoadingDb]);
 
   useEffect(() => {
     localStorage.setItem('kix_theme', theme);
@@ -547,6 +520,102 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
   useEffect(() => {
     document.title = "Kixi-Fundo | Gestão de Finanças Comparticipadas";
   }, []);
+
+  // Motor Scheduler de Backups Automáticos Periódicos
+  const runAutoBackupCheck = async (
+    currentConfig: AppConfig,
+    currentMembers: Member[],
+    currentLogs: KixLog[],
+    currentLoans: Loan[],
+    currentPayouts: { [month: number]: boolean },
+    currentMonthNum: number
+  ) => {
+    const schedule = currentConfig.autoBackupSchedule;
+    if (!schedule || schedule === 'off') {
+      console.log("[Scheduler] Agendamento de backups automáticos desligado.");
+      return;
+    }
+
+    const now = Date.now();
+    const lastFirestore = currentConfig.lastAutoBackupFirestore ? new Date(currentConfig.lastAutoBackupFirestore).getTime() : 0;
+    const interval = schedule === 'daily' ? 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
+
+    const firestoreDue = now - lastFirestore >= interval;
+    const lastGDrive = currentConfig.lastAutoBackupGDrive ? new Date(currentConfig.lastAutoBackupGDrive).getTime() : 0;
+    const googleToken = sessionStorage.getItem('gdrive_access_token');
+    const gdriveDue = (currentConfig.autoBackUpGDrive === true && googleToken && (now - lastGDrive >= interval));
+
+    if (firestoreDue || gdriveDue) {
+      console.log(`[Scheduler] Executando backups automáticos (${schedule})...`);
+      
+      const payoutsMap: { [month: string]: boolean } = {};
+      Object.entries(currentPayouts).forEach(([k, v]) => {
+        payoutsMap[String(k)] = v;
+      });
+
+      const payload = {
+        members: currentMembers,
+        logs: currentLogs,
+        loans: currentLoans,
+        payoutsCompleted: payoutsMap,
+        currentMonth: currentMonthNum,
+        appConfig: currentConfig,
+        updatedAt: new Date().toISOString()
+      };
+
+      let updatedConfig = { ...currentConfig };
+      let updatedLogs = [...currentLogs];
+
+      if (firestoreDue) {
+        try {
+          const dateStr = new Date().toLocaleDateString('pt-AO');
+          const backupName = `Ponto de Restauro Autónomo (${schedule === 'daily' ? 'Diário' : 'Semanal'}) - ${dateStr}`;
+          
+          const { saveBackupToFirestore } = await import('./firebaseSync');
+          await saveBackupToFirestore(backupName, payload, 'automatic', schedule);
+
+          const nowTime = new Date().toISOString();
+          const schedulerLog: KixLog = {
+            id: `scheduler-fs-${Date.now()}`,
+            timestamp: nowTime,
+            type: 'policy_change',
+            month: currentMonthNum,
+            amount: 0,
+            description: `[SCHEDULER] Ponto de restauro automático criado com sucesso na Cloud Firestore: "${backupName}"`
+          };
+
+          updatedLogs = [schedulerLog, ...updatedLogs];
+          updatedConfig.lastAutoBackupFirestore = nowTime;
+          console.log(`[Scheduler] Ponto de restauro gravado com sucesso no Firestore.`);
+        } catch (err) {
+          console.error(`[Scheduler] Erro ao gravar backup agendado no Firestore:`, err);
+        }
+      }
+
+      if (gdriveDue && googleToken) {
+        try {
+          const { uploadBackup } = await import('./driveBackup');
+          const gdrivePayload = {
+            ...payload,
+            logs: updatedLogs,
+            appConfig: updatedConfig
+          };
+          await uploadBackup(googleToken, gdrivePayload);
+          
+          const nowTime = new Date().toISOString();
+          updatedConfig.lastAutoBackupGDrive = nowTime;
+          console.log(`[Scheduler] Backup automático enviado para o Google Drive.`);
+        } catch (err) {
+          console.error(`[Scheduler] Erro ao submeter backup agendado no Google Drive:`, err);
+        }
+      }
+
+      // Gravamos as novas credenciais de data e o log agendado
+      await saveState(currentMembers, updatedLogs, currentPayouts, currentMonthNum, currentLoans, updatedConfig);
+    } else {
+      console.log("[Scheduler] Backups automáticos em dia. Próxima verificação agendada.");
+    }
+  };
 
   // Trigger backup upload to drive in the background
   const triggerAutoBackupGDrive = async (newMembers: Member[], newLogs: KixLog[], newPayouts = payoutsCompleted, newMonth = currentMonth) => {
@@ -635,7 +704,16 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
     const fetchDB = async () => {
       setIsDbSyncing(true);
       try {
+        await testFirestoreConnection();
         const dbState = await loadStateFromFirestore();
+        
+        let resolvedMembers: Member[] = [];
+        let resolvedLogs: KixLog[] = [];
+        let resolvedLoans: Loan[] = [];
+        let resolvedPayouts: { [month: number]: boolean } = {};
+        let resolvedMonth = 1;
+        let resolvedConfig = appConfig;
+
         if (dbState && active) {
           console.log("Dados carregados da Base de Dados Cloud com Sucesso!");
           let finalMembers = dbState.members || [];
@@ -677,7 +755,9 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
             });
             setPayoutsCompleted(parsedPayouts);
           }
-          if (dbState.currentMonth) setCurrentMonth(dbState.currentMonth);
+          if (dbState.currentMonth) {
+            setCurrentMonth(dbState.currentMonth);
+          }
           if (dbState.appConfig) setAppConfig(dbState.appConfig);
 
           // Local redundancy caching
@@ -688,6 +768,17 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
           localStorage.setItem('kix_app_config', JSON.stringify(dbState.appConfig || {}));
           
           setDbLoadedSuccessfully(true);
+
+          resolvedMembers = finalMembers;
+          resolvedLogs = dbState.logs || [];
+          resolvedLoans = dbState.loans || [];
+          if (dbState.payoutsCompleted) {
+            Object.entries(dbState.payoutsCompleted).forEach(([k, v]) => {
+              resolvedPayouts[Number(k)] = v;
+            });
+          }
+          resolvedMonth = dbState.currentMonth || 1;
+          resolvedConfig = dbState.appConfig || appConfig;
         } else if (active) {
           console.log("Base de dados vazia. Sincronizando com cache...");
           const defaultPayouts = {
@@ -722,14 +813,26 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
           const finalMonth = savedCurrentMonth ? Number(savedCurrentMonth) : 1;
           const finalLoans = savedLoans ? JSON.parse(savedLoans) : loans;
 
-          await saveStateToFirestore({
-            members: finalMembers,
-            logs: finalLogs,
-            payoutsCompleted: finalPayouts,
-            currentMonth: finalMonth,
-            appConfig: appConfig,
-            loans: finalLoans
-          });
+          // DETERMINAÇÃO DE SEGURANÇA: Só grava na Cloud se houver dados cadastrados reais (mais de 1 membro ou logs reais)
+          const hasRealDataLocal = finalMembers.length > 1 || finalLogs.length > 1;
+
+          if (hasRealDataLocal) {
+            console.log("Cofre local real detetado. A sincronizar dados com a Cloud...");
+            try {
+              await saveStateToFirestore({
+                members: finalMembers,
+                logs: finalLogs,
+                payoutsCompleted: finalPayouts,
+                currentMonth: finalMonth,
+                appConfig: appConfig,
+                loans: finalLoans
+              });
+            } catch (err) {
+              console.error("Falha ao salvar dados de inicialização local na cloud:", err);
+            }
+          } else {
+            console.log("Sem dados locais reais registados. Evitando gravação fantasma na Cloud.");
+          }
           
           setMembers(finalMembers);
           setLogs(finalLogs);
@@ -738,15 +841,30 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
           setLoans(finalLoans);
           
           setDbLoadedSuccessfully(true);
+
+          resolvedMembers = finalMembers;
+          resolvedLogs = finalLogs;
+          resolvedLoans = finalLoans;
+          resolvedPayouts = finalPayouts;
+          resolvedMonth = finalMonth;
+          resolvedConfig = appConfig;
         }
-      } catch (err) {
-        console.warn("Leitura em segundo plano da Cloud falhou (operando offline):", err);
-        // Fallback is already initialized synchronously in useState so user has 0 interruption!
-      } finally {
+
         if (active) {
           setIsLoadingDb(false);
           setIsDbSyncing(false);
           setIsInitialLoadCompleted(true);
+
+          // Executar o check de backups agendados automáticos
+          runAutoBackupCheck(
+            resolvedConfig,
+            resolvedMembers,
+            resolvedLogs,
+            resolvedLoans,
+            resolvedPayouts,
+            resolvedMonth
+          );
+
           const savedUser = localStorage.getItem('kix_current_user');
           if (savedUser) {
             try {
@@ -758,6 +876,12 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
             }
           }
         }
+      } catch (err) {
+        console.warn("Leitura em segundo plano da Cloud falhou (operando offline):", err);
+        // Fallback is already initialized synchronously in useState so user has 0 interruption!
+        setIsLoadingDb(false);
+        setIsDbSyncing(false);
+        setIsInitialLoadCompleted(true);
       }
     };
 
@@ -766,35 +890,51 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
   }, []);
 
   // Sync to local storage and Cloud database on changes
-  const saveState = async (newMembers: Member[], newLogs: KixLog[], newPayouts = payoutsCompleted, newMonth = currentMonth, newLoans = loans): Promise<void> => {
+  const saveState = async (
+    newMembers: Member[],
+    newLogs: KixLog[],
+    newPayouts = payoutsCompleted,
+    newMonth = currentMonth,
+    newLoans = loans,
+    newAppConfig = appConfig
+  ): Promise<void> => {
     const reconciledMembers = reconcileMembers(members, newMembers);
+    
+    // Update local React states synchronously so the UI and cache match perfectly without asynchronous lags
+    _setMembers(reconciledMembers);
+    setLogs(newLogs);
+    setPayoutsCompleted(newPayouts);
+    setCurrentMonth(newMonth);
+    setLoans(newLoans);
+    setAppConfig(newAppConfig);
+
     localStorage.setItem('kix_members', JSON.stringify(reconciledMembers));
     localStorage.setItem('kix_logs', JSON.stringify(newLogs));
     localStorage.setItem('kix_payouts', JSON.stringify(newPayouts));
     localStorage.setItem('kix_current_month', String(newMonth));
     localStorage.setItem('kix_loans', JSON.stringify(newLoans));
+    localStorage.setItem('kix_app_config', JSON.stringify(newAppConfig));
 
     let firestorePromise = Promise.resolve();
 
-    if (dbLoadedSuccessfully) {
-      // Save to Firestore Cloud database to run app outside of standard isolated browser
+    if (isInitialLoadCompleted) {
+      // Save directly to Firestore cloud database to ensure persistence on all other browsers and machines
       setIsDbSyncing(true);
       firestorePromise = saveStateToFirestore({
         members: reconciledMembers,
         logs: newLogs,
         payoutsCompleted: newPayouts,
         currentMonth: newMonth,
-        appConfig: appConfig,
+        appConfig: newAppConfig,
         loans: newLoans
       }).then(() => {
         setIsDbSyncing(false);
       }).catch((err) => {
         console.error("Firestore database write sync failed:", err);
         setIsDbSyncing(false);
-        // Do not crash or block the application main thread, keeping the service functional
       });
     } else {
-      console.warn("Sincronização com Cloud suspensa para evitar sobrescrever a base de dados principal.");
+      console.warn("Sincronização com Cloud suspensa para evitar sobrescrever a base de dados principal durante a inicialização.");
     }
 
     // Backup offline local automático redundante
@@ -806,7 +946,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
         logs: newLogs,
         payoutsCompleted: newPayouts,
         currentMonth: newMonth,
-        appConfig,
+        appConfig: newAppConfig,
         carouselSlides
       };
       localStorage.setItem('kix_redundant_autobackup', JSON.stringify(redundantPayload));
