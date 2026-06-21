@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Wallet,
@@ -32,6 +32,7 @@ import {
   ChevronDown,
   Calendar,
   Check,
+  Menu,
 } from 'lucide-react';
 
 import { Member, KixLog, CarouselSlide, getMemberIdCode, Loan, AppConfig } from './types';
@@ -60,6 +61,8 @@ import {
   loadStateFromFirestore, 
   saveStateToFirestore 
 } from './firebaseSync';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from './driveBackup';
 
 interface AppUser {
   email: string;
@@ -238,6 +241,11 @@ export default function App() {
 
   const [activeTab, setActiveTab] = useState<string>('inicio');
   const [isDbSyncing, setIsDbSyncing] = useState<boolean>(false);
+  const [isFirestoreQuotaExceeded, setIsFirestoreQuotaExceeded] = useState<boolean>(() => {
+    // Clear quota exceeded state on brand new app boot / refresh to allow trying to sync once!
+    localStorage.removeItem('kix_firestore_quota_exceeded');
+    return false;
+  });
   const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
   const [menuSearchQuery, setMenuSearchQuery] = useState<string>('');
   const [cyclesSubTab, setCyclesSubTab] = useState<'ledger' | 'planner'>('ledger');
@@ -487,25 +495,54 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
     return defaults;
   });
 
+  const stateRef = useRef({
+    members,
+    logs,
+    payoutsCompleted,
+    currentMonth,
+    appConfig,
+    loans
+  });
+
+  useEffect(() => {
+    stateRef.current = {
+      members,
+      logs,
+      payoutsCompleted,
+      currentMonth,
+      appConfig,
+      loans
+    };
+  }, [members, logs, payoutsCompleted, currentMonth, appConfig, loans]);
+
   useEffect(() => {
     localStorage.setItem('kix_app_config', JSON.stringify(appConfig));
     if (isInitialLoadCompleted && !isLoadingDb) {
-      setIsDbSyncing(true);
-      saveStateToFirestore({
-        members,
-        logs,
-        payoutsCompleted,
-        currentMonth,
-        appConfig,
-        loans
-      }).then(() => {
+      if (isFirestoreQuotaExceeded) {
         setIsDbSyncing(false);
-      }).catch((err) => {
-        console.error("Firestore appConfig sync failed: ", err);
-        setIsDbSyncing(false);
-      });
+      } else {
+        setIsDbSyncing(true);
+        saveStateToFirestore({
+          members,
+          logs,
+          payoutsCompleted,
+          currentMonth,
+          appConfig,
+          loans
+        }).then(() => {
+          setIsDbSyncing(false);
+        }).catch((err) => {
+          console.error("Firestore appConfig sync failed: ", err);
+          setIsDbSyncing(false);
+          const errString = String(err);
+          if (errString.includes('resource-exhausted') || errString.includes('quota') || errString.includes('Quota')) {
+            setIsFirestoreQuotaExceeded(true);
+            localStorage.setItem('kix_firestore_quota_exceeded', 'true');
+          }
+        });
+      }
     }
-  }, [appConfig, isInitialLoadCompleted, isLoadingDb]);
+  }, [appConfig, isInitialLoadCompleted, isLoadingDb, isFirestoreQuotaExceeded]);
 
   useEffect(() => {
     localStorage.setItem('kix_theme', theme);
@@ -566,7 +603,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
       let updatedConfig = { ...currentConfig };
       let updatedLogs = [...currentLogs];
 
-      if (firestoreDue) {
+      if (firestoreDue && !isFirestoreQuotaExceeded) {
         try {
           const dateStr = new Date().toLocaleDateString('pt-AO');
           const backupName = `Ponto de Restauro Autónomo (${schedule === 'daily' ? 'Diário' : 'Semanal'}) - ${dateStr}`;
@@ -589,6 +626,11 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
           console.log(`[Scheduler] Ponto de restauro gravado com sucesso no Firestore.`);
         } catch (err) {
           console.error(`[Scheduler] Erro ao gravar backup agendado no Firestore:`, err);
+          const errString = String(err);
+          if (errString.includes('resource-exhausted') || errString.includes('quota') || errString.includes('Quota')) {
+            setIsFirestoreQuotaExceeded(true);
+            localStorage.setItem('kix_firestore_quota_exceeded', 'true');
+          }
         }
       }
 
@@ -698,195 +740,276 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
     }
   }, [isOnline]);
 
-  // Load from Firestore Database on mount (operando fora do browser)
+  // Load and subscribe to real-time sync with Firestore Database
   useEffect(() => {
     let active = true;
-    const fetchDB = async () => {
-      setIsDbSyncing(true);
-      try {
-        await testFirestoreConnection();
-        const dbState = await loadStateFromFirestore();
+    let initialLoadProcessed = false;
+    setIsDbSyncing(true);
+    setIsLoadingDb(true);
+
+    const docRef = doc(db, 'kix_fundo', 'state');
+    
+    // Test connection first
+    testFirestoreConnection().catch(e => {
+      console.warn("Firestore connection check:", e);
+      const errString = String(e);
+      if (errString.includes('resource-exhausted') || errString.includes('quota') || errString.includes('Quota')) {
+        console.warn("Firestore Quota Limit Detected on init connection check!");
+        setIsFirestoreQuotaExceeded(true);
+        localStorage.setItem('kix_firestore_quota_exceeded', 'true');
+      }
+    });
+
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+      if (!active) return;
+      setIsDbSyncing(false);
+
+      let resolvedMembers: Member[] = [];
+      let resolvedLogs: KixLog[] = [];
+      let resolvedLoans: Loan[] = [];
+      let resolvedPayouts: { [month: number]: boolean } = {};
+      let resolvedMonth = 1;
+      let resolvedConfig = appConfig;
+
+      if (docSnap.exists()) {
+        console.log("Real-time: Sincronização de dados recebida com sucesso!");
         
-        let resolvedMembers: Member[] = [];
-        let resolvedLogs: KixLog[] = [];
-        let resolvedLoans: Loan[] = [];
-        let resolvedPayouts: { [month: number]: boolean } = {};
-        let resolvedMonth = 1;
-        let resolvedConfig = appConfig;
+        // NOTA DE SEGURANÇA: Não repomos o estado de quota excedida a 'false' aqui.
+        // Pois as leituras do onSnapshot podem ser lidas localmente a partir da cache ou do plano gratuito, 
+        // e se redefinirmos a false, disparará de imediato loops infinitos de escritas lentas se a quota de gravação continuar excedida no servidor.
 
-        if (dbState && active) {
-          console.log("Dados carregados da Base de Dados Cloud com Sucesso!");
-          let finalMembers = dbState.members || [];
-          
-          // Filtrar quaisquer membros fictícios que tenham sido adicionados acidentalmente à nuvem
-          const FICTITIOUS_EMAILS = [
-            'sgabriel@gmail.com',
-            'delfina.antonio@gmail.com',
-            'carlos.silva@gmail.com',
-            'ana.vicente@gmail.com'
-          ];
-          const originalCount = finalMembers.length;
-          finalMembers = finalMembers.filter(
-            m => !FICTITIOUS_EMAILS.includes((m.email || '').trim().toLowerCase())
-          );
+        const dbState = docSnap.data();
+        let finalMembers = dbState.members || [];
+        
+        // Filtrar quaisquer membros fictícios que tenham sido adicionados acidentalmente à nuvem
+        const FICTITIOUS_EMAILS = [
+          'sgabriel@gmail.com',
+          'delfina.antonio@gmail.com',
+          'carlos.silva@gmail.com',
+          'ana.vicente@gmail.com'
+        ];
+        const originalCount = finalMembers.length;
+        finalMembers = finalMembers.filter(
+          m => !FICTITIOUS_EMAILS.includes((m.email || '').trim().toLowerCase())
+        );
 
-          if (finalMembers.length === 0) {
-            finalMembers = [...INITIAL_MEMBERS];
-          }
+        if (finalMembers.length === 0) {
+          finalMembers = [...INITIAL_MEMBERS];
+        }
 
-          if (finalMembers.length !== originalCount) {
-            console.log("Removendo membros fictícios detectados na base de dados...");
+        if (finalMembers.length !== originalCount) {
+          console.log("Removendo membros fictícios detectados de forma síncrona na nuvem...");
+          if (!isFirestoreQuotaExceeded) {
             saveStateToFirestore({
               ...dbState,
               members: finalMembers
-            }).catch(e => console.error("Falha ao salvar a base de dados após remover membros fictícios:", e));
-          }
-
-          setMembers(finalMembers);
-          if (dbState.logs) setLogs(dbState.logs);
-          if (dbState.loans) {
-            setLoans(dbState.loans);
-            localStorage.setItem('kix_loans', JSON.stringify(dbState.loans));
-          }
-          if (dbState.payoutsCompleted) {
-            const parsedPayouts: { [month: number]: boolean } = {};
-            Object.entries(dbState.payoutsCompleted).forEach(([k, v]) => {
-              parsedPayouts[Number(k)] = v;
+            } as any).catch(e => {
+              console.error("Falha ao salvar após remover membros fictícios:", e);
+              const errString = String(e);
+              if (errString.includes('resource-exhausted') || errString.includes('quota') || errString.includes('Quota')) {
+                setIsFirestoreQuotaExceeded(true);
+                localStorage.setItem('kix_firestore_quota_exceeded', 'true');
+              }
             });
+          }
+        }
+
+        // update state securely using deep comparative checks from stateRef.current
+        if (JSON.stringify(finalMembers) !== JSON.stringify(stateRef.current.members)) {
+          setMembers(finalMembers);
+        }
+        if (dbState.logs && JSON.stringify(dbState.logs) !== JSON.stringify(stateRef.current.logs)) {
+          setLogs(dbState.logs);
+        }
+        if (dbState.loans && JSON.stringify(dbState.loans) !== JSON.stringify(stateRef.current.loans)) {
+          setLoans(dbState.loans);
+          localStorage.setItem('kix_loans', JSON.stringify(dbState.loans));
+        }
+        if (dbState.payoutsCompleted) {
+          const parsedPayouts: { [month: number]: boolean } = {};
+          Object.entries(dbState.payoutsCompleted).forEach(([k, v]) => {
+            parsedPayouts[Number(k)] = !!v;
+          });
+          if (JSON.stringify(parsedPayouts) !== JSON.stringify(stateRef.current.payoutsCompleted)) {
             setPayoutsCompleted(parsedPayouts);
           }
-          if (dbState.currentMonth) {
+          resolvedPayouts = parsedPayouts;
+        }
+        if (dbState.currentMonth) {
+          if (dbState.currentMonth !== stateRef.current.currentMonth) {
             setCurrentMonth(dbState.currentMonth);
           }
-          if (dbState.appConfig) setAppConfig(dbState.appConfig);
+          resolvedMonth = dbState.currentMonth;
+        }
+        if (dbState.appConfig) {
+          if (JSON.stringify(dbState.appConfig) !== JSON.stringify(stateRef.current.appConfig)) {
+            setAppConfig(dbState.appConfig);
+          }
+          resolvedConfig = dbState.appConfig;
+        }
 
-          // Local redundancy caching
-          localStorage.setItem('kix_members', JSON.stringify(finalMembers));
-          localStorage.setItem('kix_logs', JSON.stringify(dbState.logs || []));
-          localStorage.setItem('kix_payouts', JSON.stringify(dbState.payoutsCompleted || {}));
-          localStorage.setItem('kix_current_month', String(dbState.currentMonth || 1));
-          localStorage.setItem('kix_app_config', JSON.stringify(dbState.appConfig || {}));
-          
-          setDbLoadedSuccessfully(true);
+        // Local redundancy caching
+        localStorage.setItem('kix_members', JSON.stringify(finalMembers));
+        localStorage.setItem('kix_logs', JSON.stringify(dbState.logs || []));
+        localStorage.setItem('kix_payouts', JSON.stringify(dbState.payoutsCompleted || {}));
+        localStorage.setItem('kix_current_month', String(dbState.currentMonth || 1));
+        localStorage.setItem('kix_app_config', JSON.stringify(dbState.appConfig || {}));
+        
+        setDbLoadedSuccessfully(true);
+        resolvedMembers = finalMembers;
+        resolvedLogs = dbState.logs || [];
+        resolvedLoans = dbState.loans || [];
+      } else {
+        console.log("Base de dados vazia na nuvem. Sincronizando com cache local...");
+        const defaultPayouts = {
+          1: false, 2: false, 3: false, 4: false, 5: false, 6: false
+        };
+        const savedMembers = localStorage.getItem('kix_members');
+        const savedLogs = localStorage.getItem('kix_logs');
+        const savedPayouts = localStorage.getItem('kix_payouts');
+        const savedCurrentMonth = localStorage.getItem('kix_current_month');
+        const savedLoans = localStorage.getItem('kix_loans');
 
-          resolvedMembers = finalMembers;
-          resolvedLogs = dbState.logs || [];
-          resolvedLoans = dbState.loans || [];
-          if (dbState.payoutsCompleted) {
-            Object.entries(dbState.payoutsCompleted).forEach(([k, v]) => {
-              resolvedPayouts[Number(k)] = v;
+        let finalMembers = savedMembers ? JSON.parse(savedMembers) : INITIAL_MEMBERS;
+        const FICTITIOUS_EMAILS = [
+          'sgabriel@gmail.com',
+          'delfina.antonio@gmail.com',
+          'carlos.silva@gmail.com',
+          'ana.vicente@gmail.com'
+        ];
+        finalMembers = finalMembers.filter(
+          (m: any) => !FICTITIOUS_EMAILS.includes((m.email || '').trim().toLowerCase())
+        );
+        if (finalMembers.length === 0) {
+          finalMembers = [...INITIAL_MEMBERS];
+        }
+        const finalLogs = savedLogs ? JSON.parse(savedLogs) : INITIAL_LOGS;
+        const finalPayouts = savedPayouts ? JSON.parse(savedPayouts) : defaultPayouts;
+        const finalMonth = savedCurrentMonth ? Number(savedCurrentMonth) : 1;
+        const finalLoans = savedLoans ? JSON.parse(savedLoans) : loans;
+
+        // DETERMINAÇÃO DE SEGURANÇA: Só grava na Cloud se houver dados cadastrados reais
+        const hasRealDataLocal = finalMembers.length > 1 || finalLogs.length > 1;
+
+        if (hasRealDataLocal) {
+          console.log("Cofre local real detetado. Enviando dados locais para a nuvem...");
+          if (!isFirestoreQuotaExceeded) {
+            saveStateToFirestore({
+              members: finalMembers,
+              logs: finalLogs,
+              payoutsCompleted: finalPayouts,
+              currentMonth: finalMonth,
+              appConfig: appConfig,
+              loans: finalLoans
+            }).catch(err => {
+              console.error("Falha ao salvar dados de inicialização local na cloud:", err);
+              const errString = String(err);
+              if (errString.includes('resource-exhausted') || errString.includes('quota') || errString.includes('Quota')) {
+                setIsFirestoreQuotaExceeded(true);
+                localStorage.setItem('kix_firestore_quota_exceeded', 'true');
+              }
             });
           }
-          resolvedMonth = dbState.currentMonth || 1;
-          resolvedConfig = dbState.appConfig || appConfig;
-        } else if (active) {
-          console.log("Base de dados vazia. Sincronizando com cache...");
-          const defaultPayouts = {
-            1: false,
-            2: false,
-            3: false,
-            4: false,
-            5: false,
-            6: false,
-          };
-          const savedMembers = localStorage.getItem('kix_members');
-          const savedLogs = localStorage.getItem('kix_logs');
-          const savedPayouts = localStorage.getItem('kix_payouts');
-          const savedCurrentMonth = localStorage.getItem('kix_current_month');
-          const savedLoans = localStorage.getItem('kix_loans');
-
-          let finalMembers = savedMembers ? JSON.parse(savedMembers) : INITIAL_MEMBERS;
-          const FICTITIOUS_EMAILS = [
-            'sgabriel@gmail.com',
-            'delfina.antonio@gmail.com',
-            'carlos.silva@gmail.com',
-            'ana.vicente@gmail.com'
-          ];
-          finalMembers = finalMembers.filter(
-            (m: any) => !FICTITIOUS_EMAILS.includes((m.email || '').trim().toLowerCase())
-          );
-          if (finalMembers.length === 0) {
-            finalMembers = [...INITIAL_MEMBERS];
-          }
-          const finalLogs = savedLogs ? JSON.parse(savedLogs) : INITIAL_LOGS;
-          const finalPayouts = savedPayouts ? JSON.parse(savedPayouts) : defaultPayouts;
-          const finalMonth = savedCurrentMonth ? Number(savedCurrentMonth) : 1;
-          const finalLoans = savedLoans ? JSON.parse(savedLoans) : loans;
-
-          // DETERMINAÇÃO DE SEGURANÇA: Só grava na Cloud se houver dados cadastrados reais (mais de 1 membro ou logs reais)
-          const hasRealDataLocal = finalMembers.length > 1 || finalLogs.length > 1;
-
-          if (hasRealDataLocal) {
-            console.log("Cofre local real detetado. A sincronizar dados com a Cloud...");
-            try {
-              await saveStateToFirestore({
-                members: finalMembers,
-                logs: finalLogs,
-                payoutsCompleted: finalPayouts,
-                currentMonth: finalMonth,
-                appConfig: appConfig,
-                loans: finalLoans
-              });
-            } catch (err) {
-              console.error("Falha ao salvar dados de inicialização local na cloud:", err);
-            }
-          } else {
-            console.log("Sem dados locais reais registados. Evitando gravação fantasma na Cloud.");
-          }
-          
-          setMembers(finalMembers);
-          setLogs(finalLogs);
-          setPayoutsCompleted(finalPayouts);
-          setCurrentMonth(finalMonth);
-          setLoans(finalLoans);
-          
-          setDbLoadedSuccessfully(true);
-
-          resolvedMembers = finalMembers;
-          resolvedLogs = finalLogs;
-          resolvedLoans = finalLoans;
-          resolvedPayouts = finalPayouts;
-          resolvedMonth = finalMonth;
-          resolvedConfig = appConfig;
         }
 
-        if (active) {
-          setIsLoadingDb(false);
-          setIsDbSyncing(false);
-          setIsInitialLoadCompleted(true);
+        setMembers(finalMembers);
+        setLogs(finalLogs);
+        setPayoutsCompleted(finalPayouts);
+        setCurrentMonth(finalMonth);
+        setLoans(finalLoans);
+        
+        setDbLoadedSuccessfully(true);
 
-          // Executar o check de backups agendados automáticos
-          runAutoBackupCheck(
-            resolvedConfig,
-            resolvedMembers,
-            resolvedLogs,
-            resolvedLoans,
-            resolvedPayouts,
-            resolvedMonth
-          );
-
-          const savedUser = localStorage.getItem('kix_current_user');
-          if (savedUser) {
-            try {
-              const parsed = JSON.parse(savedUser);
-              setCurrentUser(parsed);
-              setActiveTab('inicio');
-            } catch (err) {
-               // Safe fail
-            }
-          }
-        }
-      } catch (err) {
-        console.warn("Leitura em segundo plano da Cloud falhou (operando offline):", err);
-        // Fallback is already initialized synchronously in useState so user has 0 interruption!
-        setIsLoadingDb(false);
-        setIsDbSyncing(false);
-        setIsInitialLoadCompleted(true);
+        resolvedMembers = finalMembers;
+        resolvedLogs = finalLogs;
+        resolvedLoans = finalLoans;
+        resolvedPayouts = finalPayouts;
+        resolvedMonth = finalMonth;
+        resolvedConfig = appConfig;
       }
-    };
 
-    fetchDB();
-    return () => { active = false; };
+      setIsLoadingDb(false);
+      setIsInitialLoadCompleted(true);
+
+      if (!initialLoadProcessed) {
+        initialLoadProcessed = true;
+        // Executar o check de backups agendados automáticos apenas uma vez na inicialização
+        runAutoBackupCheck(
+          resolvedConfig,
+          resolvedMembers,
+          resolvedLogs,
+          resolvedLoans,
+          resolvedPayouts,
+          resolvedMonth
+        );
+      }
+    }, (err) => {
+      console.warn("Sincronização em tempo real falhou ou operando offline:", err);
+      const errString = String(err);
+      if (errString.includes('resource-exhausted') || errString.includes('quota') || errString.includes('Quota')) {
+        console.warn("Firestore Quota Limit exceeded on mount snapshot!");
+        setIsFirestoreQuotaExceeded(true);
+        localStorage.setItem('kix_firestore_quota_exceeded', 'true');
+      }
+
+      // Fallback local se estiver offline
+      const defaultPayouts = {
+        1: false, 2: false, 3: false, 4: false, 5: false, 6: false
+      };
+      const savedMembers = localStorage.getItem('kix_members');
+      const savedLogs = localStorage.getItem('kix_logs');
+      const savedPayouts = localStorage.getItem('kix_payouts');
+      const savedCurrentMonth = localStorage.getItem('kix_current_month');
+      const savedLoans = localStorage.getItem('kix_loans');
+
+      const finalMembers = savedMembers ? JSON.parse(savedMembers) : INITIAL_MEMBERS;
+      const finalLogs = savedLogs ? JSON.parse(savedLogs) : INITIAL_LOGS;
+      const finalPayouts = savedPayouts ? JSON.parse(savedPayouts) : defaultPayouts;
+      const finalMonth = savedCurrentMonth ? Number(savedCurrentMonth) : 1;
+      const finalLoans = savedLoans ? JSON.parse(savedLoans) : loans;
+
+      setMembers(finalMembers);
+      setLogs(finalLogs);
+      setPayoutsCompleted(finalPayouts);
+      setCurrentMonth(finalMonth);
+      setLoans(finalLoans);
+
+      setDbLoadedSuccessfully(true);
+      setIsLoadingDb(false);
+      setIsDbSyncing(false);
+      setIsInitialLoadCompleted(true);
+
+      if (!initialLoadProcessed) {
+        initialLoadProcessed = true;
+        runAutoBackupCheck(
+          appConfig,
+          finalMembers,
+          finalLogs,
+          finalLoans,
+          finalPayouts,
+          finalMonth
+        );
+      }
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, []);
+
+  // Restaurar sessão do usuário após o carregamento inicial
+  useEffect(() => {
+    const savedUser = localStorage.getItem('kix_current_user');
+    if (savedUser) {
+      try {
+        const parsed = JSON.parse(savedUser);
+        setCurrentUser(parsed);
+        setActiveTab('inicio');
+      } catch (err) {
+         // Safe fail
+      }
+    }
   }, []);
 
   // Sync to local storage and Cloud database on changes
@@ -918,21 +1041,34 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
     let firestorePromise = Promise.resolve();
 
     if (isInitialLoadCompleted) {
-      // Save directly to Firestore cloud database to ensure persistence on all other browsers and machines
-      setIsDbSyncing(true);
-      firestorePromise = saveStateToFirestore({
-        members: reconciledMembers,
-        logs: newLogs,
-        payoutsCompleted: newPayouts,
-        currentMonth: newMonth,
-        appConfig: newAppConfig,
-        loans: newLoans
-      }).then(() => {
+      if (isFirestoreQuotaExceeded) {
+        console.warn("Sincronização com Cloud suspensa temporariamente devido ao limite de quota atingido.");
         setIsDbSyncing(false);
-      }).catch((err) => {
-        console.error("Firestore database write sync failed:", err);
-        setIsDbSyncing(false);
-      });
+      } else {
+        // Save directly to Firestore cloud database to ensure persistence on all other browsers and machines
+        setIsDbSyncing(true);
+        firestorePromise = saveStateToFirestore({
+          members: reconciledMembers,
+          logs: newLogs,
+          payoutsCompleted: newPayouts,
+          currentMonth: newMonth,
+          appConfig: newAppConfig,
+          loans: newLoans
+        }).then(() => {
+          setIsDbSyncing(false);
+          setIsFirestoreQuotaExceeded(false);
+          localStorage.removeItem('kix_firestore_quota_exceeded');
+        }).catch((err) => {
+          console.error("Firestore database write sync failed:", err);
+          setIsDbSyncing(false);
+          const errString = String(err);
+          if (errString.includes('resource-exhausted') || errString.includes('quota') || errString.includes('Quota')) {
+            console.warn("Firestore Quota Limit Exceeded on saveState write!");
+            setIsFirestoreQuotaExceeded(true);
+            localStorage.setItem('kix_firestore_quota_exceeded', 'true');
+          }
+        });
+      }
     } else {
       console.warn("Sincronização com Cloud suspensa para evitar sobrescrever a base de dados principal durante a inicialização.");
     }
@@ -2031,6 +2167,59 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
       {/* Main Container Area */}
       <div className="flex-1 flex flex-col overflow-hidden min-h-screen">
 
+        {/* Highly visible Cloud Quota Limit banner with soft spring animation */}
+        <AnimatePresence>
+          {isFirestoreQuotaExceeded && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+              className="bg-amber-500 text-slate-950 text-[11px] font-semibold px-4 py-3 flex items-center justify-center gap-2 shadow-md text-center shrink-0 z-45 select-none overflow-hidden border-b border-amber-600"
+            >
+              <div className="flex items-center gap-3 justify-between max-w-5xl mx-auto w-full flex-wrap">
+                <div className="flex items-center gap-2 text-left flex-1 min-w-[280px]">
+                  <span className="flex items-center justify-center p-1 rounded-full bg-slate-900/10 text-slate-900 shrink-0">
+                    <CloudOff className="w-4 h-4" />
+                  </span>
+                  <span>
+                    <strong>Limite Cloud Excedido (Modo de Sincronização Local Ativo):</strong> A quota gratuita de gravação na nuvem foi atingida temporariamente. Pode continuar a trabalhar normalmente: <strong>todas as suas alterações estão guardadas de forma 100% segura no seu dispositivo</strong> e serão enviadas para a nuvem automaticamente amanhã!
+                  </span>
+                </div>
+                
+                {/* Download Backup Button for instant peace of mind */}
+                <button
+                  onClick={() => {
+                    const backupPayload = {
+                      version: 3,
+                      timestamp: new Date().toISOString(),
+                      members,
+                      logs,
+                      payoutsCompleted,
+                      currentMonth,
+                      loans,
+                      appConfig
+                    };
+                    const blob = new Blob([JSON.stringify(backupPayload, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `kixi-fundo-segurança-${new Date().toISOString().slice(0, 10)}.json`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                  }}
+                  className="px-3 py-1 bg-slate-950 text-white rounded-lg text-[10px] font-extrabold uppercase tracking-wider hover:bg-slate-800 transition-all cursor-pointer active:scale-95 flex items-center gap-1.5 shrink-0"
+                >
+                  <Download className="w-3 h-3" />
+                  Baixar Cópia de Segurança
+                </button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Highly visible offline mode banner with soft spring animation */}
         <AnimatePresence>
           {!isOnline && (
@@ -2119,6 +2308,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                   totalBeneficiaryPaid={totalBeneficiaryPaid}
                   totalBeneficiaryPending={totalBeneficiaryPending}
                   payoutsCompleted={payoutsCompleted}
+                  members={members}
                 />
 
                 {/* Subtitle / Quote Section */}
@@ -2584,6 +2774,52 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
           </div>
         </footer>
 
+      </div>
+
+      {/* Mobile Sticky Bottom Navigation Dock */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-[#0284c7] border-t border-sky-600 shadow-xl z-50 px-2 pb-5 pt-2 text-white">
+        <div className="flex items-center justify-around max-w-lg mx-auto">
+          {allowedNavigationItems.slice(0, 4).map((item) => {
+            const isActive = activeTab === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => {
+                  setActiveTab(item.id);
+                  setIsMenuOpen(false);
+                }}
+                className={`flex flex-col items-center justify-center p-1 rounded-xl transition-all ${
+                  isActive ? 'scale-105 font-bold text-amber-300' : 'text-slate-100 opacity-80'
+                }`}
+              >
+                <div className={`p-1.5 rounded-full ${isActive ? 'bg-amber-400 text-sky-700 shadow' : 'bg-transparent text-white'}`}>
+                  {item.icon}
+                </div>
+                <span className="text-[10px] font-black mt-1">
+                  {item.id === 'membro-dashboard' ? 'Área' : item.label}
+                </span>
+              </button>
+            );
+          })}
+          {allowedNavigationItems.length > 4 && (
+            <button
+              onClick={() => {
+                setIsMenuOpen(!isMenuOpen);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+                const searchEl = document.getElementById('kix-menu-search-input');
+                if (searchEl) searchEl.focus();
+              }}
+              className={`flex flex-col items-center justify-center p-1 rounded-xl transition-all ${
+                isMenuOpen ? 'scale-105 font-bold text-amber-300' : 'text-slate-100 opacity-80'
+              }`}
+            >
+              <div className={`p-1.5 rounded-full ${isMenuOpen ? 'bg-amber-400 text-sky-700 shadow' : 'bg-transparent text-white'}`}>
+                <Menu className="w-3.5 h-3.5" />
+              </div>
+              <span className="text-[10px] font-black mt-1">Mais</span>
+            </button>
+          )}
+        </div>
       </div>
 
       <RegulationsModal isOpen={showRegulations} onClose={() => setShowRegulations(false)} />

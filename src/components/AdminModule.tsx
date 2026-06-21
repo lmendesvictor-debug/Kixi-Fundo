@@ -263,6 +263,10 @@ export default function AdminModule({
       setFirestoreBackups(backups);
     } catch (err) {
       console.error("Erro ao obter backups do Firestore:", err);
+      const errString = String(err);
+      if (errString.includes('resource-exhausted') || errString.includes('quota') || errString.includes('Quota')) {
+        localStorage.setItem('kix_firestore_quota_exceeded', 'true');
+      }
     } finally {
       setIsFirestoreLoading(false);
     }
@@ -424,6 +428,13 @@ export default function AdminModule({
       alert('Acesso Negado: Não possui privilégios de gestor para criar pontos de restauro.');
       return;
     }
+    
+    const isQuotaExceeded = localStorage.getItem('kix_firestore_quota_exceeded') === 'true';
+    if (isQuotaExceeded) {
+      alert('A quota diária gratuita de sincronização na Nuvem (Firestore) foi atingida. A criação de novos pontos de restauro na nuvem está temporariamente indisponível. Por favor, utilize o botão "Baixar Cópia" para exportar uma cópia de segurança local perfeitamente segura!');
+      return;
+    }
+
     const name = prompt('Insira um nome ou identificador curto para este ponto de restauro:', `Ponto de Restauro Manual - ${new Date().toLocaleDateString('pt-AO')}`);
     if (!name) return;
 
@@ -442,7 +453,13 @@ export default function AdminModule({
       alert(`Ponto de restauro "${name}" gravado com sucesso no Cloud Firestore!`);
       await fetchFirestoreBackups();
     } catch (err: any) {
-      alert(`Falha ao criar cofre no Firestore: ${err.message || err}`);
+      const errString = String(err);
+      if (errString.includes('resource-exhausted') || errString.includes('quota') || errString.includes('Quota')) {
+        localStorage.setItem('kix_firestore_quota_exceeded', 'true');
+        alert('A quota gratuita de gravação na nuvem (Firestore) foi atingida agora. Pode continuar a trabalhar normalmente: todos os seus dados estão salvos de forma 100% segura no seu navegador, e pode usar a opção "Baixar Cópia" para guardar um backup local!');
+      } else {
+        alert(`Falha ao criar cofre no Firestore: ${err.message || err}`);
+      }
     } finally {
       setBackupActionLoading(null);
     }

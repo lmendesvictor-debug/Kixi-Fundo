@@ -577,7 +577,7 @@ export default function CreditManagement({
     <div id="credit-system-workspace" className="space-y-6">
       
       {/* Header and top navigation row */}
-      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-5">
+      <div className="border-b border-slate-100 dark:border-slate-800 pb-5">
         <div>
           <span className="bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-305 text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border border-sky-100 dark:border-sky-900/40">
             Escalar & Rentabilidade
@@ -589,70 +589,87 @@ export default function CreditManagement({
             Geração de renda coletiva através da rentabilização de poupanças ativas com empréstimos de confiança assegurados para Sócios e Clientes Singulares.
           </p>
         </div>
+      </div>
 
-        {/* Tab switch control */}
-        <div className="flex border border-slate-200/65 dark:border-slate-805 p-0.8 bg-slate-50 dark:bg-[#0e1320] rounded-xl flex-wrap">
-          {isAdmin && (
-            <button
-              onClick={() => setActiveSubTab('dashboard')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeSubTab === 'dashboard'
-                  ? 'bg-white dark:bg-slate-850 text-sky-700 dark:text-sky-305 shadow-sm'
-                  : 'text-slate-450 hover:text-slate-700 dark:hover:text-slate-200'
-              }`}
-            >
-              <TrendingUp className="w-3.5 h-3.5" /> Métricas
-            </button>
-          )}
-          
-          {isAdmin && (
-            <button
-              onClick={() => setActiveSubTab('simulate')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeSubTab === 'simulate'
-                  ? 'bg-white dark:bg-slate-850 text-sky-700 dark:text-sky-305 shadow-sm'
-                  : 'text-slate-450 hover:text-slate-700 dark:hover:text-slate-200'
-              }`}
-            >
-              <Plus className="w-3.5 h-3.5" /> Novo devedor
-            </button>
-          )}
-
-          <button
-            onClick={() => setActiveSubTab('portfolio')}
-            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeSubTab === 'portfolio'
-                ? 'bg-white dark:bg-slate-850 text-sky-700 dark:text-sky-305 shadow-sm'
-                : 'text-slate-450 hover:text-slate-700 dark:hover:text-slate-200'
-            }`}
-          >
-            <FileText className="w-3.5 h-3.5" /> Contratos e Amortizações
-          </button>
-
-          <button
-            onClick={() => setActiveSubTab('contracts')}
-            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
-              activeSubTab === 'contracts'
-                ? 'bg-white dark:bg-slate-850 text-sky-700 dark:text-sky-305 shadow-sm'
-                : 'text-slate-450 hover:text-slate-700 dark:hover:text-slate-200'
-            }`}
-          >
-            <FileIcon className="w-3.5 h-3.5" /> Contratos
-          </button>
-
-          {isAdmin && (
-            <button
-              onClick={() => setActiveSubTab('debtors')}
-              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
-                activeSubTab === 'debtors'
-                  ? 'bg-white dark:bg-slate-850 text-sky-700 dark:text-sky-305 shadow-sm'
-                  : 'text-slate-450 hover:text-slate-700 dark:hover:text-slate-200'
-              }`}
-            >
-              <User className="w-3.5 h-3.5" /> Diretório Jurídico
-            </button>
-          )}
-        </div>
+      {/* Navigation Table with cell-style tabs */}
+      <div className="w-full overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm bg-white dark:bg-[#111625]">
+        <table className="w-full border-collapse min-w-[750px] lg:min-w-0">
+          <thead>
+            <tr className="divide-x divide-slate-150 dark:divide-slate-800/85">
+              {isAdmin && (
+                <th 
+                  onClick={() => setActiveSubTab('dashboard')}
+                  className={`p-4 text-center cursor-pointer select-none transition-all hover:bg-slate-50/75 dark:hover:bg-slate-905/30 ${
+                    activeSubTab === 'dashboard' 
+                      ? 'bg-sky-50/50 dark:bg-sky-950/15 text-sky-650 dark:text-sky-400 font-extrabold border-b-2 border-b-sky-600 dark:border-b-sky-500' 
+                      : 'text-slate-500 dark:text-slate-400 font-semibold'
+                  }`}
+                >
+                  <div className="flex items-center justify-center gap-2 text-xs uppercase tracking-wider">
+                    <TrendingUp className="w-4 h-4 shrink-0 text-sky-500" />
+                    <span>Métricas</span>
+                  </div>
+                </th>
+              )}
+              {isAdmin && (
+                <th 
+                  onClick={() => setActiveSubTab('simulate')}
+                  className={`p-4 text-center cursor-pointer select-none transition-all hover:bg-slate-50/75 dark:hover:bg-slate-905/30 ${
+                    activeSubTab === 'simulate' 
+                      ? 'bg-sky-50/50 dark:bg-sky-950/15 text-sky-650 dark:text-sky-400 font-extrabold border-b-2 border-b-sky-600 dark:border-b-sky-500' 
+                      : 'text-slate-500 dark:text-slate-400 font-semibold'
+                  }`}
+                >
+                  <div className="flex items-center justify-center gap-2 text-xs uppercase tracking-wider">
+                    <Plus className="w-4 h-4 shrink-0 text-sky-500" />
+                    <span>Novo devedor</span>
+                  </div>
+                </th>
+              )}
+              <th 
+                onClick={() => setActiveSubTab('portfolio')}
+                className={`p-4 text-center cursor-pointer select-none transition-all hover:bg-slate-50/75 dark:hover:bg-slate-905/30 ${
+                  activeSubTab === 'portfolio' 
+                    ? 'bg-sky-50/50 dark:bg-sky-950/15 text-sky-650 dark:text-sky-400 font-extrabold border-b-2 border-b-sky-600 dark:border-b-sky-500' 
+                    : 'text-slate-500 dark:text-slate-400 font-semibold'
+                }`}
+              >
+                <div className="flex items-center justify-center gap-2 text-xs uppercase tracking-wider">
+                  <FileText className="w-4 h-4 shrink-0 text-sky-500" />
+                  <span>Contratos e Amortizações</span>
+                </div>
+              </th>
+              <th 
+                onClick={() => setActiveSubTab('contracts')}
+                className={`p-4 text-center cursor-pointer select-none transition-all hover:bg-slate-50/75 dark:hover:bg-slate-905/30 ${
+                  activeSubTab === 'contracts' 
+                    ? 'bg-sky-50/50 dark:bg-sky-950/15 text-sky-650 dark:text-sky-400 font-extrabold border-b-2 border-b-sky-600 dark:border-b-sky-500' 
+                    : 'text-slate-500 dark:text-slate-400 font-semibold'
+                }`}
+              >
+                <div className="flex items-center justify-center gap-2 text-xs uppercase tracking-wider">
+                  <FileIcon className="w-4 h-4 shrink-0 text-sky-500" />
+                  <span>Contratos</span>
+                </div>
+              </th>
+              {isAdmin && (
+                <th 
+                  onClick={() => setActiveSubTab('debtors')}
+                  className={`p-4 text-center cursor-pointer select-none transition-all hover:bg-slate-50/75 dark:hover:bg-slate-905/30 ${
+                    activeSubTab === 'debtors' 
+                      ? 'bg-sky-50/50 dark:bg-sky-950/15 text-sky-650 dark:text-sky-400 font-extrabold border-b-2 border-b-sky-600 dark:border-b-sky-500' 
+                      : 'text-slate-500 dark:text-slate-400 font-semibold'
+                  }`}
+                >
+                  <div className="flex items-center justify-center gap-2 text-xs uppercase tracking-wider">
+                    <User className="w-4 h-4 shrink-0 text-sky-500" />
+                    <span>Diretório Jurídico</span>
+                  </div>
+                </th>
+              )}
+            </tr>
+          </thead>
+        </table>
       </div>
 
       {/* DASHBOARD TAB CONTROLS */}

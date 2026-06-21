@@ -66,6 +66,10 @@ export default function ReportsSection({
   }>>([]);
   const [showNotifySuccess, setShowNotifySuccess] = useState(false);
 
+  // Dynamic monitor states for cycles and contemplates
+  const [selectedReportCycle, setSelectedReportCycle] = useState<number>(currentMonth);
+  const [cycleFilterType, setCycleFilterType] = useState<'all' | 'past' | 'future'>('all');
+
   // Math variables
   const totalPaidContributionsCount = members.reduce((acc, m) => {
     const paidInMember = Object.keys(m.contributions).filter(
@@ -132,6 +136,20 @@ export default function ReportsSection({
     "Apoios Sociais": d.aidsInMonth,
     "Número de Pagantes": d.paidCount,
   }));
+
+  // Filter cycles based on past/future option
+  const filteredCyclesData = monthlyData.filter(d => {
+    if (cycleFilterType === 'past') return d.month < currentMonth;
+    if (cycleFilterType === 'future') return d.month >= currentMonth;
+    return true;
+  }).map(d => ({
+    ...d,
+    name: `Mês ${d.month}`
+  }));
+
+  const selectedCycleData = monthlyData.find(d => d.month === selectedReportCycle);
+  const selectedCycleBeneficiaries = members.filter(m => m.assignedMonth === selectedReportCycle);
+  const isPayoutDoneForSelectedCycle = payoutsCompleted[selectedReportCycle] === true;
 
   const CustomChartTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
@@ -1699,6 +1717,263 @@ export default function ReportsSection({
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
+                </div>
+              </div>
+            </div>
+
+            {/* Interactive Cycle Contribution & Beneficiary Monitor */}
+            <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-6 shadow-sm animate-fadeIn">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                <div>
+                  <h4 className="text-sm font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
+                    <Calendar className="w-4 h-4 text-[#0d5c3a]" />
+                    Monitor Interativo de Ciclos & Contemplações
+                  </h4>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    Consulte as contribuições arrecadadas por mês de rotação, filtre as projeções passadas ou futuras, e explore os beneficiários de cada ciclo correspondente.
+                  </p>
+                </div>
+                
+                {/* Period Filters */}
+                <div className="flex bg-slate-100 dark:bg-slate-950 p-1 rounded-xl border border-slate-200/60 dark:border-slate-800/60 self-start md:self-auto shrink-0 gap-1 font-sans">
+                  <button
+                    onClick={() => {
+                      setCycleFilterType('all');
+                    }}
+                    className={`px-3 py-1.5 text-[10.5px] font-black rounded-lg cursor-pointer transition-all ${
+                      cycleFilterType === 'all'
+                        ? 'bg-[#0d5c3a] text-white shadow-xs animate-fadeIn'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-200/50'
+                    }`}
+                  >
+                    Todos os Ciclos
+                  </button>
+                  <button
+                    onClick={() => {
+                      setCycleFilterType('past');
+                      // If current selection is not a past cycle, select first past cycle
+                      if (selectedReportCycle >= currentMonth) {
+                        setSelectedReportCycle(currentMonth - 1 > 0 ? currentMonth - 1 : 1);
+                      }
+                    }}
+                    className={`px-3 py-1.5 text-[10.5px] font-black rounded-lg cursor-pointer transition-all ${
+                      cycleFilterType === 'past'
+                        ? 'bg-[#0d5c3a] text-white shadow-xs animate-fadeIn'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-200/50'
+                    }`}
+                  >
+                    Ciclos Passados
+                  </button>
+                  <button
+                    onClick={() => {
+                      setCycleFilterType('future');
+                      // If current selection is not a future cycle, select active cycle
+                      if (selectedReportCycle < currentMonth) {
+                        setSelectedReportCycle(currentMonth);
+                      }
+                    }}
+                    className={`px-3 py-1.5 text-[10.5px] font-black rounded-lg cursor-pointer transition-all ${
+                      cycleFilterType === 'future'
+                        ? 'bg-[#0d5c3a] text-white shadow-xs animate-fadeIn'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-200/50'
+                    }`}
+                  >
+                    Ciclos Futuros
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+                {/* Interactive Bar Chart Panel */}
+                <div className="lg:col-span-7 bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-850 p-4.5 rounded-2xl flex flex-col justify-between">
+                  <div>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-550 tracking-wider">
+                        Toque numa barra para ver os contemplados ({cycleFilterType === 'all' ? 'Todos' : cycleFilterType === 'past' ? 'Passados' : 'Futuros'})
+                      </span>
+                      <span className="text-[10.5px] font-extrabold text-[#0d5c3a] dark:text-emerald-450 bg-[#0d5c3a]/10 px-2 py-0.5 rounded-md self-start sm:self-auto">
+                        Ciclo Atual: Mês {selectedReportCycle} {selectedReportCycle === currentMonth ? '(Ativo)' : selectedReportCycle < currentMonth ? '(Concluído)' : '(Projeção)'}
+                      </span>
+                    </div>
+
+                    {/* Dynamic Chart */}
+                    <div className="h-56 w-full font-mono">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart
+                          data={filteredCyclesData}
+                          onClick={(state: any) => {
+                            if (state && state.activePayload && state.activePayload.length > 0) {
+                              const clickedMonth = state.activePayload[0].payload.month;
+                              setSelectedReportCycle(clickedMonth);
+                            }
+                          }}
+                          margin={{ top: 10, right: 10, left: -5, bottom: 0 }}
+                        >
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" className="dark:stroke-slate-805/30" />
+                          <XAxis 
+                            dataKey="name" 
+                            stroke="#64748b" 
+                            fontSize={10} 
+                            tickLine={false} 
+                            axisLine={false}
+                            tick={{ fontWeight: 700 }}
+                          />
+                          <YAxis 
+                            stroke="#64748b" 
+                            fontSize={9} 
+                            tickLine={false} 
+                            axisLine={false}
+                            tickFormatter={(value) => `${value / 1000}k`}
+                            tick={{ fontWeight: 700 }}
+                          />
+                          <Tooltip 
+                            cursor={{ fill: 'rgba(13, 92, 58, 0.05)', radius: 4 }}
+                            content={({ active, payload }) => {
+                              if (active && payload && payload.length) {
+                                const data = payload[0].payload;
+                                return (
+                                  <div className="bg-slate-900 border border-slate-700/85 p-3 rounded-xl shadow-xl text-xs font-semibold text-white">
+                                    <p className="text-slate-350 uppercase font-extrabold mb-1">Mês {data.month}</p>
+                                    <p className="text-[#38bdf8] font-mono flex items-center gap-1.5">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-[#38bdf8]"></span>
+                                      Contribuições: {formatCurrency(data.grossCollected)}
+                                    </p>
+                                    <p className="text-emerald-450 font-mono flex items-center gap-1.5">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                                      Regularizados: {data.paidCount} Sócios
+                                    </p>
+                                    <p className="text-slate-450 text-[9.5px] mt-1 italic font-sans">Toque para selecionar este mês</p>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            }}
+                          />
+                          <Bar 
+                            dataKey="grossCollected" 
+                            radius={[6, 6, 0, 0]} 
+                            barSize={32}
+                            cursor="pointer"
+                          >
+                            {filteredCyclesData.map((entry, index) => {
+                              const isSelected = entry.month === selectedReportCycle;
+                              const isCurrent = entry.month === currentMonth;
+                              return (
+                                <Cell 
+                                  key={`cell-${index}`} 
+                                  fill={isSelected ? '#0d5c3a' : isCurrent ? '#f59e0b' : '#38bdf8'} 
+                                  fillOpacity={isSelected ? 1.0 : 0.65}
+                                  stroke={isSelected ? '#044227' : 'none'}
+                                  strokeWidth={isSelected ? 1.5 : 0}
+                                />
+                              );
+                            })}
+                          </Bar>
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between text-[10px] text-slate-450 dark:text-slate-500 font-bold border-t border-slate-200/50 dark:border-slate-800/60 pt-3 mt-4 gap-2">
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded bg-[#0d5c3a]"></span>
+                        <span>Foco Activo</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded bg-[#f59e0b]" style={{ opacity: 0.65 }}></span>
+                        <span>Mês em Curso</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2.5 h-2.5 rounded bg-[#38bdf8]" style={{ opacity: 0.65 }}></span>
+                        <span>Outro Mês</span>
+                      </div>
+                    </div>
+                    <span>💡 Toque nas barras do gráfico para alternar de ciclo</span>
+                  </div>
+                </div>
+
+                {/* Beneficiaries and Cycle Status Details Panel */}
+                <div className="lg:col-span-5 bg-slate-50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-850 p-5 rounded-2xl flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center justify-between border-b border-slate-200/50 dark:border-slate-800/60 pb-3 mb-4">
+                      <span className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
+                        🎁 Contemplados do Ciclo {selectedReportCycle}
+                      </span>
+                      <span className="text-[10px] font-black uppercase text-slate-450 dark:text-slate-550 font-mono">
+                        Selecção Activa
+                      </span>
+                    </div>
+
+                    {/* Selected cycle stats summary */}
+                    <div className="grid grid-cols-2 gap-3 mb-4 text-left">
+                      <div className="bg-white dark:bg-slate-950 border border-slate-150 dark:border-slate-850 p-2.5 rounded-xl">
+                        <span className="text-[8.5px] font-bold text-slate-400 dark:text-slate-550 uppercase block tracking-wider">Total Cotizado</span>
+                        <span className="text-[12.5px] font-mono font-black text-[#0d5c3a] dark:text-emerald-450 block mt-0.5">
+                          {formatCurrency(selectedCycleData?.grossCollected || 0)}
+                        </span>
+                      </div>
+                      <div className="bg-white dark:bg-slate-950 border border-slate-150 dark:border-slate-850 p-2.5 rounded-xl">
+                        <span className="text-[8.5px] font-bold text-slate-400 dark:text-slate-550 uppercase block tracking-wider">Status Liberação</span>
+                        <span className={`text-[10px] font-black block mt-0.5 tracking-tight ${isPayoutDoneForSelectedCycle ? 'text-emerald-600 dark:text-emerald-400' : 'text-[#ea580c]'}`}>
+                          {isPayoutDoneForSelectedCycle ? '✓ LIQUIDADO' : '⏳ AGUARDANDO'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2.5">
+                      {selectedCycleBeneficiaries.length === 0 ? (
+                        <div className="text-center py-8 text-xs font-bold text-slate-450 dark:text-slate-500 uppercase tracking-widest border border-dashed border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-950/20">
+                          Sem alocações neste mês
+                        </div>
+                      ) : (
+                        selectedCycleBeneficiaries.map((b) => {
+                          return (
+                            <div 
+                              key={b.id} 
+                              className="flex flex-col gap-2.5 bg-white dark:bg-slate-950 p-3.5 rounded-xl border border-slate-200/50 dark:border-slate-850 shadow-xs text-left"
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-7 h-7 rounded-lg bg-[#0d5c3a]/10 text-[#0d5c3a] dark:bg-emerald-500/10 dark:text-emerald-450 flex items-center justify-center font-black text-xs shrink-0 uppercase">
+                                    {b.name.substring(0, 2)}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <h5 className="text-[11.5px] font-black text-slate-800 dark:text-slate-100 truncate uppercase tracking-tight">
+                                      {b.name}
+                                    </h5>
+                                    <p className="text-[9px] text-slate-450 dark:text-slate-500">
+                                      Contacto: {b.phone}
+                                    </p>
+                                  </div>
+                                </div>
+                                {isPayoutDoneForSelectedCycle ? (
+                                  <span className="text-[8px] font-black text-emerald-700 bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400 rounded-lg py-0.5 px-2 uppercase tracking-wider">
+                                    Pago
+                                  </span>
+                                ) : (
+                                  <span className="text-[8px] font-black text-[#ea580c] bg-[#ffedd5] dark:bg-amber-950/20 dark:text-amber-500 rounded-lg py-0.5 px-2 uppercase tracking-wider">
+                                    Aguardando
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex justify-between items-center text-[9.5px] border-t border-slate-100 dark:border-slate-900 pt-2 font-mono">
+                                <span className="text-slate-450 font-sans font-bold">Provento de Roda do Fundo</span>
+                                <span className="font-extrabold text-[#0d5c3a] dark:text-emerald-450">
+                                  {formatCurrency(600000)}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Audit information footnote */}
+                  <div className="mt-4 text-[9.5px] text-slate-400 dark:text-slate-500 text-left font-sans leading-relaxed border-t border-slate-200/50 dark:border-slate-800/60 pt-3">
+                    * Informações oficiais auditadas. Os beneficiários recebem o seu provento rotativo correspondente de acordo com as regras de regularização do Kixi-Fundo.
+                  </div>
                 </div>
               </div>
             </div>

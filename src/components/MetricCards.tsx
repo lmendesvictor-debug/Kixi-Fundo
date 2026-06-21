@@ -10,9 +10,13 @@ import {
   AlertCircle,
   RefreshCw,
   Trophy,
-  Heart
+  Heart,
+  Search,
+  Calendar,
+  Check
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import { Member } from '../types';
 
 interface MetricCardsProps {
   currentMonth: number;
@@ -29,6 +33,7 @@ interface MetricCardsProps {
   totalBeneficiaryPaid: number;
   totalBeneficiaryPending: number;
   payoutsCompleted: { [month: number]: boolean };
+  members?: Member[];
 }
 
 export default function MetricCards({
@@ -46,21 +51,80 @@ export default function MetricCards({
   totalBeneficiaryPaid,
   totalBeneficiaryPending,
   payoutsCompleted,
+  members,
 }: MetricCardsProps) {
-  const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'pending'>('all');
+  const [selectedCycle, setSelectedCycle] = useState<number>(currentMonth);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'pending' | 'beneficiaries'>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   
   const currentCollected = customCollected !== undefined ? customCollected : currentPaidCount * 120000;
   const targetArrecadacao = totalMembersCount * 120000; // 1,440,000.00
   const progressPercent = Math.min((currentCollected / targetArrecadacao) * 100, 100);
 
-  // Filter beneficiaries based on selected filter
-  const filteredBeneficiaries = beneficiaries.filter((b) => {
-    const isPaidOrLiberado = isPayoutDone || b.isPaid;
-    if (statusFilter === 'paid') return isPaidOrLiberado;
-    if (statusFilter === 'pending') return !isPaidOrLiberado;
-    return true;
+  // fallback in case members list is empty or under development
+  const membersList = members || [];
+
+  // 1. Quotas (monthly contribution stats of all members for the selectedMonth)
+  const allContributorsForCycle = membersList.map(m => {
+    const contr = m.contributions[selectedCycle];
+    return {
+      id: m.id,
+      name: m.name,
+      paid: contr?.paid || false,
+      amount: contr?.amount !== undefined ? contr.amount : 120000,
+      paidAt: contr?.paidAt,
+      isBeneficiary: m.assignedMonth === selectedCycle
+    };
   });
+
+  // Filter these contributors based on Search Query
+  const searchedContributors = allContributorsForCycle.filter(c => 
+    c.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const paidContributors = searchedContributors.filter(c => c.paid);
+  const pendingContributors = searchedContributors.filter(c => !c.paid);
+
+  // Beneficiaries of the selected cycle
+  const cycleBeneficiaries = membersList.filter(m => m.assignedMonth === selectedCycle);
+  const isPayoutDoneForCycle = payoutsCompleted[selectedCycle] === true;
+
+  // Searched beneficiaries
+  const searchedBeneficiaries = cycleBeneficiaries.filter(b => 
+    b.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  // Counts for the active indicators (all contributors, paid contributors, pending contributors, beneficiaries)
+  const totalContributorsCount = allContributorsForCycle.length;
+  const paidContributorsCount = allContributorsForCycle.filter(c => c.paid).length;
+  const pendingContributorsCount = allContributorsForCycle.filter(c => !c.paid).length;
+  const cycleBeneficiariesCount = cycleBeneficiaries.length;
+
+  // Bottom values matching prompt: "informar a baixo os valores pagos. E informar os valores de membros pendentes"
+  const totalValoresPagosCycle = allContributorsForCycle
+    .filter(c => c.paid)
+    .reduce((sum, c) => sum + c.amount, 0);
+
+  const totalValoresPendentesCycle = allContributorsForCycle
+    .filter(c => !c.paid)
+    .reduce((sum, c) => sum + 120000, 0);
+
+  // Filter list based on sub-tab choice
+  const displayedItems = (() => {
+    if (statusFilter === 'all') return searchedContributors;
+    if (statusFilter === 'paid') return paidContributors;
+    if (statusFilter === 'pending') return pendingContributors;
+    // beneficiaries tab returns mapped elements mimicking the format
+    return searchedBeneficiaries.map(b => ({
+      id: b.id,
+      name: b.name,
+      paid: isPayoutDoneForCycle || (b.contributions[selectedCycle]?.paid && false), // handled specifically below
+      amount: 600000,
+      paidAt: undefined,
+      isBeneficiary: true
+    }));
+  })();
 
   const paidCount = beneficiaries.filter(b => isPayoutDone || b.isPaid).length;
   const pendingCount = beneficiaries.filter(b => !isPayoutDone && !b.isPaid).length;
@@ -206,10 +270,17 @@ export default function MetricCards({
                 3
               </span>
               <h2 className="text-[13.5px] font-black tracking-tight text-slate-900 dark:text-white uppercase">
-                Progresso do Ciclo Atual (4/6)
+                {selectedCycle === currentMonth ? "Progresso do Ciclo Corrente" : "Progresso do Ciclo Selecionado"} ({selectedCycle}/6)
               </h2>
             </div>
-            <button className="p-1 px-1.5 text-sky-600 hover:text-sky-700 bg-sky-100/50 dark:bg-sky-950/20 rounded-md shrink-0 cursor-pointer">
+            <button 
+              onClick={() => {
+                setSelectedCycle(currentMonth);
+                setStatusFilter('all');
+              }}
+              className="p-1 px-1.5 text-sky-600 hover:text-sky-700 bg-sky-100/50 dark:bg-sky-950/20 rounded-md shrink-0 cursor-pointer hover:scale-105 active:scale-95 transition-all"
+              title="Restaurar para o Mês Ativo"
+            >
               <RefreshCw className="w-4 h-4" />
             </button>
           </div>
@@ -217,10 +288,10 @@ export default function MetricCards({
           {/* Current collected status labels */}
           <div className="text-center py-5 space-y-1">
             <p className="text-[10px] font-black tracking-wider text-slate-500 uppercase">
-              Mensal Arrecadado
+              Mensal Arrecadado (Cota)
             </p>
             <p className="text-xl font-black font-mono text-slate-950 dark:text-white">
-              ({formatCurrency(currentCollected)})
+              ({formatCurrency(allContributorsForCycle.reduce((sum, c) => c.paid ? sum + c.amount : sum, 0))})
             </p>
           </div>
 
@@ -236,7 +307,7 @@ export default function MetricCards({
               {/* Dynamic filled bar */}
               <div 
                 className="bg-[#0b5a3e] h-full rounded-full transition-all duration-500 ease-out"
-                style={{ width: `${progressPercent}%` }}
+                style={{ width: `${Math.min((allContributorsForCycle.reduce((sum, c) => c.paid ? sum + c.amount : sum, 0) / targetArrecadacao) * 100, 100)}%` }}
               />
               
               {/* Ticks on progress bar */}
@@ -248,7 +319,7 @@ export default function MetricCards({
             <div className="relative h-4 mb-2">
               <div 
                 className="absolute flex flex-col items-center -translate-x-1/2 transition-all duration-500"
-                style={{ left: `${progressPercent}%` }}
+                style={{ left: `${Math.min((allContributorsForCycle.reduce((sum, c) => c.paid ? sum + c.amount : sum, 0) / targetArrecadacao) * 100, 100)}%` }}
               >
                 <span className="text-[10px] text-[#0d5c3a] leading-none">▲</span>
               </div>
@@ -267,7 +338,7 @@ export default function MetricCards({
             </div>
 
             <div className="text-center mt-3 text-[11px] font-bold text-slate-400 dark:text-slate-500">
-              Progresso: ({currentPaidCount}/12 membros)
+              Progresso: ({allContributorsForCycle.filter(c => c.paid).length}/12 membros)
             </div>
           </div>
         </div>
@@ -334,13 +405,13 @@ export default function MetricCards({
       <div className="bg-slate-50 dark:bg-slate-900/40 rounded-3xl border border-slate-200/70 dark:border-slate-800 p-6 flex flex-col justify-between shadow-xs">
         <div>
           {/* Header */}
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <span className="w-8 h-8 rounded-full bg-[#0d5c3a] text-white flex items-center justify-center font-black text-sm">
                 4
               </span>
               <h2 className="text-[13.5px] font-black tracking-tight text-slate-900 dark:text-white uppercase">
-                Status de Contemplações - Mês {currentMonth}
+                Status de Contemplações - Ciclo {selectedCycle}
               </h2>
             </div>
             <div className="p-1.5 bg-amber-50 dark:bg-amber-950/20 text-amber-500 rounded-lg shrink-0">
@@ -348,84 +419,205 @@ export default function MetricCards({
             </div>
           </div>
 
-          {/* Tabs perfectly aligned to Image 1: Orange Tab style */}
-          <div className="flex bg-slate-200/60 dark:bg-slate-900/60 rounded-xl p-1 mb-5">
+          {/* Dynamic Cycle / Month Switcher Selector Row */}
+          <div className="grid grid-cols-6 gap-1.5 mb-4 bg-slate-100 dark:bg-slate-950/40 p-1 rounded-xl border border-slate-200/30 dark:border-slate-800/40">
+            {[1, 2, 3, 4, 5, 6].map((num) => {
+              const isActive = num === selectedCycle;
+              const isCurrent = num === currentMonth;
+              const isComp = payoutsCompleted[num] === true;
+              return (
+                <button
+                  key={num}
+                  onClick={() => {
+                    setSelectedCycle(num);
+                    setStatusFilter('all');
+                  }}
+                  className={`py-2 px-1 rounded-lg text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-0.5 ${
+                    isActive
+                      ? 'bg-[#0d5c3a] text-white shadow-xs font-black scale-102'
+                      : 'hover:bg-slate-200 dark:hover:bg-slate-800/60 text-slate-655 dark:text-slate-400 font-bold bg-transparent'
+                  }`}
+                >
+                  <span className="text-[10px] tracking-tight leading-3">Mês {num}</span>
+                  <span className="text-[7.5px] scale-90 whitespace-nowrap opacity-90 font-mono">
+                    {isComp ? (
+                      <span className="text-emerald-500 dark:text-emerald-400 font-extrabold flex items-center gap-0.5">✓ Pago</span>
+                    ) : isCurrent ? (
+                      <span className="text-amber-500 font-extrabold">Ativo</span>
+                    ) : (
+                      <span className="text-slate-400 font-medium">Agend.</span>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Search box within cycle */}
+          <div className="relative mb-4">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Pesquisar cooperante no Ciclo..."
+              className="w-full text-xs pl-9 pr-4 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-950/30 focus:border-[#0d5c3a] dark:focus:border-[#0d5c3a] focus:ring-0 transition-colors uppercase placeholder:normal-case placeholder:text-slate-450 text-slate-800 dark:text-white"
+            />
+          </div>
+
+          {/* Sub-Tabs: Quotas and Beneficiaries filtered dynamically */}
+          <div className="flex bg-slate-200/60 dark:bg-slate-900/60 rounded-xl p-1 mb-4 gap-1 overflow-x-auto">
             <button
               onClick={() => setStatusFilter('all')}
-              className={`flex-1 text-[11px] py-1.5 font-extrabold rounded-lg transition-all cursor-pointer text-center ${
+              className={`flex-1 min-w-[70px] text-[10.5px] py-1.5 font-extrabold rounded-lg transition-all cursor-pointer text-center ${
                 statusFilter === 'all'
                   ? 'bg-[#f59e0b] text-white shadow-xs'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-750'
               }`}
             >
-              Todas ({beneficiaries.length})
+              Todas ({totalContributorsCount})
             </button>
             <button
               onClick={() => setStatusFilter('paid')}
-              className={`flex-1 text-[11px] py-1.5 font-extrabold rounded-lg transition-all cursor-pointer text-center ${
+              className={`flex-1 min-w-[70px] text-[10.5px] py-1.5 font-extrabold rounded-lg transition-all cursor-pointer text-center ${
                 statusFilter === 'paid'
                   ? 'bg-[#f59e0b] text-white shadow-xs'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-750'
               }`}
             >
-              Pagas ({paidCount})
+              Pagas ({paidContributorsCount})
             </button>
             <button
               onClick={() => setStatusFilter('pending')}
-              className={`flex-1 text-[11px] py-1.5 font-extrabold rounded-lg transition-all cursor-pointer text-center ${
+              className={`flex-1 min-w-[70px] text-[10.5px] py-1.5 font-extrabold rounded-lg transition-all cursor-pointer text-center ${
                 statusFilter === 'pending'
                   ? 'bg-[#f59e0b] text-white shadow-xs'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-750'
               }`}
             >
-              Pendentes ({pendingCount})
+              Pendentes ({pendingContributorsCount})
+            </button>
+            <button
+              onClick={() => setStatusFilter('beneficiaries')}
+              className={`flex-1 min-w-[95px] text-[10.5px] py-1.5 font-extrabold rounded-lg transition-all cursor-pointer text-center ${
+                statusFilter === 'beneficiaries'
+                  ? 'bg-[#0d5c3a] text-white shadow-xs'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-750'
+              }`}
+            >
+              Beneficiários ({cycleBeneficiariesCount})
             </button>
           </div>
 
-          {/* List items with orange AGUARDANDO badges */}
-          <div className="space-y-3 max-h-[190px] overflow-y-auto pr-1">
-            {filteredBeneficiaries.length === 0 ? (
+          {/* Main Display List */}
+          <div className="space-y-2.5 max-h-[180px] overflow-y-auto pr-1">
+            {displayedItems.length === 0 ? (
               <div className="text-center py-8 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-                Sem registros
+                Nenhum registro encontrado
               </div>
             ) : (
-              filteredBeneficiaries.map((b, idx) => (
-                <div key={idx} className="flex items-center justify-between text-xs bg-white dark:bg-slate-950/40 px-4 py-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-xs hover:border-slate-300 dark:hover:border-slate-700 transition-colors">
-                  <span className="font-extrabold text-slate-800 dark:text-slate-200">
-                    {b.name} - {isPayoutDone ? 'LIQUIDADO' : b.isPaid ? 'LIBERADO' : 'AGUARDANDO'}
-                  </span>
-                  {isPayoutDone ? (
-                    <span className="text-[9.5px] font-black text-emerald-700 bg-emerald-100 rounded-full py-1 px-3 uppercase tracking-wider">
-                      Pago
-                    </span>
-                  ) : b.isPaid ? (
-                    <span className="text-[9.5px] font-black text-sky-700 bg-sky-100 rounded-full py-1 px-3 uppercase tracking-wider">
-                      Liberado
-                    </span>
-                  ) : (
-                    <span className="text-[9.5px] font-black text-[#ea580c] bg-[#ffedd5] rounded-full py-1 px-3 uppercase tracking-wider border border-[#fed7aa]/60 animate-pulse">
-                      Aguardando
-                    </span>
-                  )}
-                </div>
-              ))
+              displayedItems.map((item, idx) => {
+                // If displaying contributors
+                if (statusFilter !== 'beneficiaries') {
+                  return (
+                    <div key={item.id || idx} className="flex items-center justify-between text-xs bg-white dark:bg-slate-950/40 px-4 py-3 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-xs hover:border-slate-300 dark:hover:border-slate-700 transition-colors">
+                      <div className="flex flex-col text-left">
+                        <span className="font-extrabold text-slate-800 dark:text-slate-200">
+                          {item.name}
+                        </span>
+                        <span className="text-[10px] font-semibold text-slate-450 dark:text-slate-500">
+                          {item.paid ? `Cota regularizada: ${formatCurrency(item.amount)}` : `Quota de rotação em falta: ${formatCurrency(item.amount)}`}
+                        </span>
+                      </div>
+                      <div>
+                        {item.paid ? (
+                          <span className="text-[9.5px] font-black text-emerald-700 bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400 rounded-full py-1 px-3 uppercase tracking-wider">
+                            Pago
+                          </span>
+                        ) : (
+                          <span className="text-[9.5px] font-black text-[#ea580c] bg-[#ffedd5] dark:bg-amber-950/20 dark:text-amber-500 rounded-full py-1 px-2.5 uppercase tracking-wider border border-[#fed7aa]/30 animate-pulse">
+                            Aguardando
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                } else {
+                  // If displaying beneficiaries
+                  const isPaid = isPayoutDoneForCycle;
+                  return (
+                    <div key={item.id || idx} className="flex items-center justify-between text-xs bg-white dark:bg-slate-950/40 px-4 py-3 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-xs hover:border-emerald-500/20 dark:hover:border-emerald-500/10 transition-colors">
+                      <div className="flex flex-col text-left">
+                        <span className="font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                          🎁 {item.name}
+                        </span>
+                        <span className="text-[10px] font-bold text-[#0d5c3a] dark:text-emerald-400">
+                          Recebe Provento Rotativo: {formatCurrency(600000)}
+                        </span>
+                      </div>
+                      <div>
+                        {isPaid ? (
+                          <span className="text-[9.5px] font-black text-emerald-700 bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400 rounded-full py-1 px-3 uppercase tracking-wider">
+                            Liquidado
+                          </span>
+                        ) : (
+                          <span className="text-[9.5px] font-black text-[#ea580c] bg-[#ffedd5] dark:bg-amber-950/20 dark:text-amber-500 rounded-full py-1 px-2.5 uppercase tracking-wider border border-[#fed7aa]/30 animate-pulse">
+                            Aguardando
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
+              })
             )}
           </div>
 
-          {/* Summary bottom banner matching Image 1 exactly */}
-          <div className="mt-5 p-4 bg-white dark:bg-slate-950/40 rounded-2xl border border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-            <div className="text-left space-y-1">
-              <span className="block font-black text-slate-900 dark:text-white text-[10.5px] uppercase tracking-wider">
+          {/* Highly detailed financial audit and summary cards at the bottom */}
+          <div className="mt-4 p-3 py-3.5 bg-gradient-to-r from-slate-100/70 to-slate-200/40 dark:from-slate-900/60 dark:to-slate-950/40 rounded-2xl border border-slate-200/40 dark:border-slate-800/80 space-y-2.5 text-[11px]">
+            <div className="flex justify-between items-center text-slate-800 dark:text-slate-200 border-b border-slate-200/50 dark:border-slate-850 pb-1.5">
+              <span className="font-extrabold text-[#0d5c3a] dark:text-emerald-400 uppercase tracking-wider text-[10px]">
                 Beneficiários do Ciclo:
               </span>
-              <span className="block text-slate-500 dark:text-slate-400 font-medium">
-                {pendingCount} Membros pendentes de pagamento.
+              <span className="font-extrabold text-slate-900 dark:text-white uppercase tracking-wider text-[10px]">
+                {cycleBeneficiaries.length === 0 ? 'Sem Alocação' : `${cycleBeneficiaries.length} Membros`}
               </span>
             </div>
-            <div className="text-right shrink-0">
-              <span className="text-[12.5px] font-black text-slate-900 dark:text-white">
-                Valor total de <strong>{formatCurrency(600000 * pendingCount)}</strong> a pagar.
-              </span>
+            
+            {/* Beneficiaries named */}
+            {cycleBeneficiaries.length > 0 ? (
+              <div className="text-left font-bold text-slate-655 dark:text-slate-350 leading-relaxed -mt-1">
+                {cycleBeneficiaries.map((b, idx) => (
+                  <span key={b.id} className="inline-block mr-2">
+                    {idx + 1}. {b.name} <span className="text-[8px] font-black text-slate-400 dark:text-slate-500">({isPayoutDoneForCycle ? 'LIQUIDADO' : 'PENDENTE'})</span>{idx < cycleBeneficiaries.length - 1 ? ' •' : ''}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <div className="text-left text-slate-400 dark:text-slate-600 font-medium">
+                Nenhum cooperante contemplado para recebimento neste ciclo.
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-4 pt-1 text-left border-t border-slate-200/40 dark:border-slate-800/60">
+              <div>
+                <span className="block font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-[8.5px]"> Valores Arrecadados</span>
+                <span className="font-mono font-black text-slate-900 dark:text-white text-xs block mt-0.5">
+                  {formatCurrency(totalValoresPagosCycle)}
+                </span>
+                <span className="text-[9px] text-slate-455 block leading-tight">
+                  ({paidContributorsCount} de 12 cotas regularizadas)
+                </span>
+              </div>
+              <div className="border-l border-slate-200/50 dark:border-slate-850 pl-4">
+                <span className="block font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-[8.5px]">Valores Pendentes</span>
+                <span className="font-mono font-black text-[#ea580c] dark:text-amber-500 text-xs block mt-0.5">
+                  {formatCurrency(totalValoresPendentesCycle)}
+                </span>
+                <span className="text-[9px] text-slate-455 block leading-tight">
+                  ({pendingContributorsCount} cooperantes em atraso)
+                </span>
+              </div>
             </div>
           </div>
 

@@ -327,7 +327,7 @@ export default function InteractiveCharts({
                             <span className={`font-bold font-mono text-[10px] ${
                               m.contributions[currentMonth]?.paid ? 'text-emerald-500' : 'text-amber-500'
                             }`}>
-                              {m.contributions[currentMonth]?.paid ? 'Mês 3 Pago' : 'Cota pendente'}
+                              {m.contributions[currentMonth]?.paid ? `Mês ${currentMonth} Pago` : 'Cota pendente'}
                             </span>
                           </div>
                         </div>
