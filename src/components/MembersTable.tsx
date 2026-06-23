@@ -30,6 +30,7 @@ interface MembersTableProps {
   theme?: string;
   currentUser?: any;
   onSimulateMember?: (memberId: number) => void;
+  onRegisterSecurityAttempt?: (userId: string) => void;
 }
 
 const AVATAR_COLORS = [
@@ -59,6 +60,7 @@ export default function MembersTable({
   theme = 'light',
   currentUser,
   onSimulateMember,
+  onRegisterSecurityAttempt,
 }: MembersTableProps) {
   const [isAdminMode, setIsAdminMode] = useState<boolean>(currentUser?.role === 'admin');
   const [showFormModal, setShowFormModal] = useState<boolean>(false);
@@ -376,6 +378,29 @@ export default function MembersTable({
 
     let updatedMembers = [...members];
     const isSuperAdmin = currentUser?.email?.trim()?.toLowerCase() === 'lmendesvictor@gmail.com';
+    const isResettingPassword = editingMember && tempPassword !== '••••••' && editingMember.tempPassword !== tempPassword;
+
+    if (isResettingPassword && !isSuperAdmin) {
+      setErrorMsg('Acesso Proibido: Apenas o Super Administrador (lmendesvictor@gmail.com) tem permissão de governança para ver ou redefinir palavras-passe alheias.');
+      if (onRegisterSecurityAttempt) {
+        onRegisterSecurityAttempt(currentUser?.email || 'Membro Desconhecido');
+      } else {
+        const timestamp = new Date().toISOString();
+        const securityLog = {
+          id: `log-security-${Date.now()}`,
+          timestamp,
+          type: 'policy_change' as const,
+          amount: 0,
+          description: `ALERTA DE SEGURANÇA: Tentativa de acesso / redefinição de palavra-passe não autorizada pelo ID do Usuário: ${currentUser?.email || 'Membro Desconhecido'}. Timestamp: ${timestamp}`,
+          month: currentMonth || 1,
+          transactionCode: `SEC.${Date.now().toString().substring(7)}`
+        };
+        const updatedLogs = [securityLog, ...logs];
+        setLogs(updatedLogs);
+        saveState(updatedMembers, updatedLogs);
+      }
+      return;
+    }
 
     if (editingMember) {
       // Edit existing member

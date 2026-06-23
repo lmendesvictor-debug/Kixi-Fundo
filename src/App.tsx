@@ -830,6 +830,36 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
     }
   };
 
+  const registerSecurityAttempt = (userId: string) => {
+    const timestamp = new Date().toISOString();
+    const newLog: KixLog = {
+      id: `log-security-${Date.now()}`,
+      timestamp,
+      type: 'policy_change' as const,
+      amount: 0,
+      description: `ALERTA DE SEGURANÇA: Tentativa de acesso não autorizada. ID do Utilizador: ${userId}. Timestamp: ${timestamp}`,
+      month: currentMonth || 1,
+      transactionCode: `SEC.${Date.now().toString().substring(7)}`,
+    };
+    
+    setLogs((prev) => {
+      const updated = [newLog, ...prev];
+      localStorage.setItem('kix_logs', JSON.stringify(updated));
+      triggerAutoBackupGDrive(members, updated);
+      return updated;
+    });
+  };
+
+  const navigateToTab = (tabId: string) => {
+    if (!currentUser) return;
+    const isTabAllowed = isAllowed(tabId);
+    if (!isTabAllowed) {
+      registerSecurityAttempt(currentUser.email);
+      return;
+    }
+    setActiveTab(tabId);
+  };
+
   // Helper function to sync pending changes manually or automatically
   const handleSyncPendingChanges = async (quiet = true) => {
     const token = sessionStorage.getItem('gdrive_access_token');
@@ -2146,7 +2176,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                 return (
                   <button
                     key={item.id}
-                    onClick={() => setActiveTab(item.id)}
+                    onClick={() => navigateToTab(item.id)}
                     className={`px-2.5 sm:px-3 py-1.8 rounded-xl text-xs font-bold transition-all duration-300 flex items-center gap-1 cursor-pointer hover:scale-105 active:scale-95 shrink-0 ${
                       isActive
                         ? 'bg-white text-sky-700 shadow-md font-black border border-white'
@@ -2233,7 +2263,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                             <button
                               key={item.id}
                               onClick={() => {
-                                setActiveTab(item.id);
+                                navigateToTab(item.id);
                                 setIsMenuOpen(false);
                                 setMenuSearchQuery('');
                               }}
@@ -2770,6 +2800,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                   setLogs={setLogs}
                   theme={theme}
                   currentUser={currentUser}
+                  onRegisterSecurityAttempt={registerSecurityAttempt}
                 />
               </motion.div>
             )}
@@ -2951,6 +2982,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                   carouselSlides={carouselSlides}
                   setCarouselSlides={setCarouselSlides}
                   onRestoreBackup={handleRestoreBackupState}
+                  onRegisterSecurityAttempt={registerSecurityAttempt}
                 />
               </motion.div>
             )}
@@ -3056,7 +3088,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
               <button
                 key={item.id}
                 onClick={() => {
-                  setActiveTab(item.id);
+                  navigateToTab(item.id);
                   setIsMenuOpen(false);
                 }}
                 className={`flex flex-col items-center justify-center p-1 rounded-xl transition-all ${

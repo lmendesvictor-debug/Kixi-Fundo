@@ -58,6 +58,7 @@ interface AdminModuleProps {
   setIsFirestoreQuotaExceeded?: (val: boolean) => void;
   firestorePendingOps?: { id: string; timestamp: string; description: string }[];
   setFirestorePendingOps?: React.Dispatch<React.SetStateAction<{ id: string; timestamp: string; description: string }[]>>;
+  onRegisterSecurityAttempt?: (userId: string) => void;
 }
 
 export default function AdminModule({
@@ -81,6 +82,7 @@ export default function AdminModule({
   setIsFirestoreQuotaExceeded,
   firestorePendingOps = [],
   setFirestorePendingOps,
+  onRegisterSecurityAttempt,
 }: AdminModuleProps) {
   const [activeSubTab, setActiveSubTab] = useState<'users' | 'receipts' | 'banking' | 'carousel' | 'audit' | 'backup' | 'privileges' | 'member-cleanup'>('users');
 
@@ -847,6 +849,7 @@ export default function AdminModule({
               theme={theme}
               appConfig={appConfig}
               setAppConfig={setAppConfig}
+              onRegisterSecurityAttempt={onRegisterSecurityAttempt}
             />
           </motion.div>
         )}

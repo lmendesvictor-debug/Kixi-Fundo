@@ -32,6 +32,7 @@ interface UserManagementProps {
   theme?: string;
   appConfig: any;
   setAppConfig: React.Dispatch<React.SetStateAction<any>>;
+  onRegisterSecurityAttempt?: (userId: string) => void;
 }
 
 export default function UserManagement({
@@ -43,7 +44,8 @@ export default function UserManagement({
   currentUserEmail,
   theme = 'light',
   appConfig,
-  setAppConfig
+  setAppConfig,
+  onRegisterSecurityAttempt
 }: UserManagementProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
@@ -379,10 +381,26 @@ export default function UserManagement({
     const isSuperAdmin = currentUserEmail.trim().toLowerCase() === 'lmendesvictor@gmail.com';
     // Check password reset permission
     const isResettingPassword = editingMember && formData.tempPassword !== '••••••' && editingMember.tempPassword !== formData.tempPassword;
-    const loggedInMember = members.find(m => m.email.trim().toLowerCase() === currentUserEmail.trim().toLowerCase());
     
-    if (isResettingPassword && !isSuperAdmin && loggedInMember?.permissions?.actionResetPasswords === false) {
-      setErrorMsg('Acesso Negado: Não possui privilégios de gestor para redefinir palavras-passe de cooperantes.');
+    if (isResettingPassword && !isSuperAdmin) {
+      setErrorMsg('Acesso Proibido: Apenas o Super Administrador (lmendesvictor@gmail.com) tem permissão de governança para ver ou redefinir palavras-passe alheias.');
+      if (onRegisterSecurityAttempt) {
+        onRegisterSecurityAttempt(currentUserEmail);
+      } else {
+        const timestamp = new Date().toISOString();
+        const securityLog = {
+          id: `log-security-${Date.now()}`,
+          timestamp,
+          type: 'policy_change' as const,
+          amount: 0,
+          description: `ALERTA DE SEGURANÇA: Tentativa de acesso / redefinição de palavra-passe não autorizada pelo ID do Usuário: ${currentUserEmail}. Timestamp: ${timestamp}`,
+          month: appConfig?.currentMonth || 1,
+          transactionCode: `SEC.${Date.now().toString().substring(7)}`
+        };
+        const updatedLogs = [securityLog, ...logs];
+        setLogs(updatedLogs);
+        saveState(members, updatedLogs);
+      }
       return;
     }
 
