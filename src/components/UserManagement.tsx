@@ -381,9 +381,10 @@ export default function UserManagement({
     const isSuperAdmin = currentUserEmail.trim().toLowerCase() === 'lmendesvictor@gmail.com';
     // Check password reset permission
     const isResettingPassword = editingMember && formData.tempPassword !== '••••••' && editingMember.tempPassword !== formData.tempPassword;
+    const isTargetAdmin = editingMember && editingMember.role === 'admin';
     
-    if (isResettingPassword && !isSuperAdmin) {
-      setErrorMsg('Acesso Proibido: Apenas o Super Administrador (lmendesvictor@gmail.com) tem permissão de governança para ver ou redefinir palavras-passe alheias.');
+    if (isResettingPassword && isTargetAdmin && !isSuperAdmin) {
+      setErrorMsg('Acesso Proibido: Apenas o Super Administrador (lmendesvictor@gmail.com) tem permissão de governança para redefinir palavras-passe de outros administradores.');
       if (onRegisterSecurityAttempt) {
         onRegisterSecurityAttempt(currentUserEmail);
       } else {
@@ -393,7 +394,7 @@ export default function UserManagement({
           timestamp,
           type: 'policy_change' as const,
           amount: 0,
-          description: `ALERTA DE SEGURANÇA: Tentativa de acesso / redefinição de palavra-passe não autorizada pelo ID do Usuário: ${currentUserEmail}. Timestamp: ${timestamp}`,
+          description: `ALERTA DE SEGURANÇA: Tentativa de redefinição de palavra-passe de administrador não autorizada pelo ID do Usuário: ${currentUserEmail}. Timestamp: ${timestamp}`,
           month: appConfig?.currentMonth || 1,
           transactionCode: `SEC.${Date.now().toString().substring(7)}`
         };
@@ -1270,6 +1271,7 @@ export default function UserManagement({
                     <input
                       type="text"
                       required
+                      autoComplete="new-password"
                       placeholder="Senha provisória"
                       value={formData.tempPassword}
                       onChange={(e) => setFormData({ ...formData, tempPassword: e.target.value })}

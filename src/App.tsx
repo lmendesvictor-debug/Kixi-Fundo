@@ -2575,10 +2575,10 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
 
                 {/* Custom Admin Announcement Message Banner */}
                 {appConfig.customDashboardMessage && (
-                  <div className={`p-4 rounded-2xl border flex items-start gap-4 relative overflow-hidden transition-all shadow-sm ${
+                  <div className={`p-4 rounded-2xl border flex items-start gap-4 relative overflow-hidden transition-all shadow-sm backdrop-blur-md ${
                     theme === 'dark' 
-                      ? 'bg-slate-900/60 border-slate-800 text-slate-200' 
-                      : 'bg-white border-slate-200 text-slate-800'
+                      ? 'bg-slate-900/40 border-slate-800/60 text-slate-200' 
+                      : 'bg-white/45 border-slate-200/50 text-slate-800'
                   }`}>
                     <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none" />
                     <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500 shrink-0 text-sm">
@@ -2636,7 +2636,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                   {/* Missão Card */}
                   <motion.div
                     whileHover={{ y: -8, scale: 1.02 }}
-                    className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 p-10 md:p-12 shadow-lg flex flex-col justify-between space-y-8 relative overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-sky-350 dark:hover:border-sky-850"
+                    className="bg-white/45 dark:bg-slate-900/40 backdrop-blur-md rounded-[2.5rem] border border-slate-200/55 dark:border-slate-800/60 p-10 md:p-12 shadow-lg flex flex-col justify-between space-y-8 relative overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-sky-350 dark:hover:border-sky-850"
                   >
                     <div className="absolute top-0 right-0 w-44 h-44 bg-sky-500/5 rounded-bl-full pointer-events-none" />
                     <div className="space-y-6 relative z-10">
@@ -2661,7 +2661,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                   {/* Visão Card */}
                   <motion.div
                     whileHover={{ y: -8, scale: 1.02 }}
-                    className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 p-10 md:p-12 shadow-lg flex flex-col justify-between space-y-8 relative overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-purple-350 dark:hover:border-purple-850"
+                    className="bg-white/45 dark:bg-slate-900/40 backdrop-blur-md rounded-[2.5rem] border border-slate-200/55 dark:border-slate-800/60 p-10 md:p-12 shadow-lg flex flex-col justify-between space-y-8 relative overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-purple-350 dark:hover:border-purple-850"
                   >
                     <div className="absolute top-0 right-0 w-44 h-44 bg-purple-500/5 rounded-bl-full pointer-events-none" />
                     <div className="space-y-6 relative z-10">
@@ -2685,7 +2685,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                   {/* Valores Card */}
                   <motion.div
                     whileHover={{ y: -8, scale: 1.02 }}
-                    className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 p-10 md:p-12 shadow-lg flex flex-col justify-between space-y-8 relative overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-amber-300 dark:hover:border-amber-850"
+                    className="bg-white/45 dark:bg-slate-900/40 backdrop-blur-md rounded-[2.5rem] border border-slate-200/55 dark:border-slate-800/60 p-10 md:p-12 shadow-lg flex flex-col justify-between space-y-8 relative overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-amber-300 dark:hover:border-amber-850"
                   >
                     <div className="absolute top-0 right-0 w-44 h-44 bg-amber-500/5 rounded-bl-full pointer-events-none" />
                     <div className="space-y-6 relative z-10">
@@ -2706,7 +2706,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                   {/* Objectivo Card */}
                   <motion.div
                     whileHover={{ y: -8, scale: 1.02 }}
-                    className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-200 dark:border-slate-800 p-10 md:p-12 shadow-lg flex flex-col justify-between space-y-8 relative overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-emerald-350 dark:hover:border-emerald-850"
+                    className="bg-white/45 dark:bg-slate-900/40 backdrop-blur-md rounded-[2.5rem] border border-slate-200/55 dark:border-slate-800/60 p-10 md:p-12 shadow-lg flex flex-col justify-between space-y-8 relative overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-emerald-350 dark:hover:border-emerald-850"
                   >
                     <div className="absolute top-0 right-0 w-44 h-44 bg-emerald-500/5 rounded-bl-full pointer-events-none" />
                     <div className="space-y-6 relative z-10">

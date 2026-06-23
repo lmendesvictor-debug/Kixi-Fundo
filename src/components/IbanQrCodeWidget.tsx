@@ -187,10 +187,10 @@ export default function IbanQrCodeWidget({
   };
 
   return (
-    <div id="iban-qr-widget" className={`p-6 sm:p-8 rounded-[2rem] border transition-all duration-300 shadow-md ${
+    <div id="iban-qr-widget" className={`p-6 sm:p-8 rounded-[2rem] border transition-all duration-300 shadow-md backdrop-blur-md ${
       theme === 'dark' 
-        ? 'bg-[#151c2c]/70 border-slate-800 text-slate-100' 
-        : 'bg-white border-slate-100 text-slate-800'
+        ? 'bg-[#151c2c]/50 border-slate-800/60 text-slate-100' 
+        : 'bg-white/45 border-slate-200/50 text-slate-800'
     }`}>
       
       {/* Widget Header */}

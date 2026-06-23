@@ -170,7 +170,7 @@ export default function MetricCards({
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-1 select-none font-sans text-slate-800 dark:text-slate-100" id="dashboard-widgets-panel">
       
       {/* 1. COMPOSIÇÃO DO PATRIMÓNIO COLETIVO */}
-      <div className="bg-slate-50 dark:bg-slate-900/40 rounded-3xl border border-slate-200/70 dark:border-slate-800 p-6 flex flex-col justify-between shadow-xs">
+      <div className="bg-white/45 dark:bg-slate-900/40 backdrop-blur-md rounded-3xl border border-slate-200/50 dark:border-slate-800/60 p-6 flex flex-col justify-between shadow-md hover:shadow-lg transition-all duration-300 hover:border-sky-350 dark:hover:border-sky-800/80">
         <div>
           {/* Header */}
           <div className="flex items-center gap-3 mb-6">
@@ -270,7 +270,7 @@ export default function MetricCards({
       </div>
 
       {/* 3. PROGRESSO DO CICLO ATUAL */}
-      <div className="bg-slate-50 dark:bg-slate-900/40 rounded-3xl border border-slate-200/70 dark:border-slate-800 p-6 flex flex-col justify-between shadow-xs">
+      <div className="bg-white/45 dark:bg-slate-900/40 backdrop-blur-md rounded-3xl border border-slate-200/50 dark:border-slate-800/60 p-6 flex flex-col justify-between shadow-md hover:shadow-lg transition-all duration-300 hover:border-[#0d5c3a]/30 dark:hover:border-[#0d5c3a]/50">
         <div>
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
@@ -354,7 +354,7 @@ export default function MetricCards({
       </div>
 
       {/* 2. STATUS DO FUNDO SOCIAL */}
-      <div className="bg-slate-50 dark:bg-slate-900/40 rounded-3xl border border-slate-200/70 dark:border-slate-800 p-6 flex flex-col justify-between shadow-xs">
+      <div className="bg-white/45 dark:bg-slate-900/40 backdrop-blur-md rounded-3xl border border-slate-200/50 dark:border-slate-800/60 p-6 flex flex-col justify-between shadow-md hover:shadow-lg transition-all duration-300 hover:border-[#0d5c3a]/30 dark:hover:border-[#0d5c3a]/50">
         <div>
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
@@ -411,7 +411,7 @@ export default function MetricCards({
       </div>
 
       {/* 4. STATUS DE CONTEMPLAÇÕES */}
-      <div className="bg-slate-50 dark:bg-slate-900/40 rounded-3xl border border-slate-200/70 dark:border-slate-800 p-6 flex flex-col justify-between shadow-xs">
+      <div className="bg-white/45 dark:bg-slate-900/40 backdrop-blur-md rounded-3xl border border-slate-200/50 dark:border-slate-800/60 p-6 flex flex-col justify-between shadow-md hover:shadow-lg transition-all duration-300 hover:border-amber-300/40 dark:hover:border-amber-800/50">
         <div>
           {/* Header */}
           <div className="flex items-center justify-between mb-4">
