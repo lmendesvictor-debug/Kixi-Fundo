@@ -55,6 +55,7 @@ import AdminModule from './components/AdminModule';
 import RegulationsModal from './components/RegulationsModal';
 import CreditManagement from './components/CreditManagement';
 import ContractsTab from './components/ContractsTab';
+import IbanQrCodeWidget from './components/IbanQrCodeWidget';
 
 import { 
   testFirestoreConnection, 
@@ -2610,6 +2611,14 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                   totalBeneficiaryPending={totalBeneficiaryPending}
                   payoutsCompleted={payoutsCompleted}
                   members={members}
+                />
+
+                {/* Coordenadas Bancárias & Código QR de Depósito Directo */}
+                <IbanQrCodeWidget 
+                  bankIban={appConfig.bankIban}
+                  bankName={appConfig.bankName || 'Banco BIC Angola'}
+                  accountOwner="KIXI-FUNDO"
+                  theme={theme}
                 />
 
                 {/* Subtitle / Quote Section */}
