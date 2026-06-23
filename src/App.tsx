@@ -1376,6 +1376,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
               return u;
             });
           }
+          // Do not rethrow the error, allowing the application to utilize the offline fallback state seamlessly
         });
       }
     } else {
