@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
   HeartHandshake, 
@@ -53,10 +53,20 @@ export default function MetricCards({
   payoutsCompleted,
   members,
 }: MetricCardsProps) {
-  const [selectedCycle, setSelectedCycle] = useState<number>(currentMonth);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'pending' | 'beneficiaries'>('all');
+  // Determine default value / last paid cycle (where payoutsCompleted is true)
+  const getLastPaidCycle = () => {
+    return [6, 5, 4, 3, 2, 1].find(num => payoutsCompleted[num] === true) || currentMonth || 1;
+  };
+
+  const [selectedCycle, setSelectedCycle] = useState<number>(getLastPaidCycle);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'pending' | 'beneficiaries'>('paid');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+
+  // Sync selectedCycle to the last paid cycle when payoutsCompleted or currentMonth changes
+  useEffect(() => {
+    setSelectedCycle(getLastPaidCycle());
+  }, [payoutsCompleted, currentMonth]);
   
   const currentCollected = customCollected !== undefined ? customCollected : currentPaidCount * 120000;
   const targetArrecadacao = totalMembersCount * 120000; // 1,440,000.00
@@ -110,11 +120,10 @@ export default function MetricCards({
     .filter(c => !c.paid)
     .reduce((sum, c) => sum + 120000, 0);
 
-  // Filter list based on sub-tab choice
+  // Filter list based on sub-tab choice - Only present paid contributors for the selected cycle
   const displayedItems = (() => {
-    if (statusFilter === 'all') return searchedContributors;
-    if (statusFilter === 'paid') return paidContributors;
-    if (statusFilter === 'pending') return pendingContributors;
+    if (statusFilter === 'all' || statusFilter === 'paid') return paidContributors;
+    if (statusFilter === 'pending') return []; // We only present paid members as requested
     // beneficiaries tab returns mapped elements mimicking the format
     return searchedBeneficiaries.map(b => ({
       id: b.id,
@@ -276,7 +285,7 @@ export default function MetricCards({
             <button 
               onClick={() => {
                 setSelectedCycle(currentMonth);
-                setStatusFilter('all');
+                setStatusFilter('paid');
               }}
               className="p-1 px-1.5 text-sky-600 hover:text-sky-700 bg-sky-100/50 dark:bg-sky-950/20 rounded-md shrink-0 cursor-pointer hover:scale-105 active:scale-95 transition-all"
               title="Restaurar para o Mês Ativo"
@@ -430,7 +439,7 @@ export default function MetricCards({
                   key={num}
                   onClick={() => {
                     setSelectedCycle(num);
-                    setStatusFilter('all');
+                    setStatusFilter('paid');
                   }}
                   className={`py-2 px-1 rounded-lg text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-0.5 ${
                     isActive
@@ -468,34 +477,14 @@ export default function MetricCards({
           {/* Sub-Tabs: Quotas and Beneficiaries filtered dynamically */}
           <div className="flex bg-slate-200/60 dark:bg-slate-900/60 rounded-xl p-1 mb-4 gap-1 overflow-x-auto">
             <button
-              onClick={() => setStatusFilter('all')}
-              className={`flex-1 min-w-[70px] text-[10.5px] py-1.5 font-extrabold rounded-lg transition-all cursor-pointer text-center ${
-                statusFilter === 'all'
-                  ? 'bg-[#f59e0b] text-white shadow-xs'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-750'
-              }`}
-            >
-              Todas ({totalContributorsCount})
-            </button>
-            <button
               onClick={() => setStatusFilter('paid')}
               className={`flex-1 min-w-[70px] text-[10.5px] py-1.5 font-extrabold rounded-lg transition-all cursor-pointer text-center ${
                 statusFilter === 'paid'
-                  ? 'bg-[#f59e0b] text-white shadow-xs'
+                  ? 'bg-[#0d5c3a] text-white shadow-xs'
                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-750'
               }`}
             >
-              Pagas ({paidContributorsCount})
-            </button>
-            <button
-              onClick={() => setStatusFilter('pending')}
-              className={`flex-1 min-w-[70px] text-[10.5px] py-1.5 font-extrabold rounded-lg transition-all cursor-pointer text-center ${
-                statusFilter === 'pending'
-                  ? 'bg-[#f59e0b] text-white shadow-xs'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-750'
-              }`}
-            >
-              Pendentes ({pendingContributorsCount})
+              Membros Pagos ({paidContributorsCount})
             </button>
             <button
               onClick={() => setStatusFilter('beneficiaries')}

@@ -150,9 +150,23 @@ export default function PaymentsLedger({
   });
 
   // Sum total collected for the active rows
-  const totalArrecadado = filteredRows
-    .filter((r) => r.isPaid)
-    .reduce((sum, r) => sum + r.amount, 0);
+  const totalArrecadado = filteredRows.reduce((sum, r) => {
+    const isPaid = r.isPaid === true || String(r.isPaid).toLowerCase() === 'true';
+    if (isPaid) {
+      let val = 0;
+      if (typeof r.amount === 'number') {
+        val = r.amount;
+      } else if (r.amount) {
+        const cleanStr = String(r.amount)
+          .replace(/[^0-9,.-]/g, '')
+          .replace(/\./g, '')
+          .replace(/,/g, '.');
+        val = parseFloat(cleanStr) || 0;
+      }
+      return sum + (isNaN(val) ? 0 : val);
+    }
+    return sum;
+  }, 0);
 
   const handleClearFilters = () => {
     setFilterMonth(getMonthName(currentMonth));

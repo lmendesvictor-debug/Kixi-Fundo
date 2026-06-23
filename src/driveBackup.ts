@@ -1,11 +1,19 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, setLogLevel } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
 // Inicializar aplicativo do Firebase com configurações persistentes
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
+
+// Silenciar logs internos do SDK do Firestore
+try {
+  setLogLevel('silent');
+} catch (e) {
+  // Ignorar erros na configuração silenciosa
+}
+
 export const db = getFirestore(app, (firebaseConfig as any).firestoreDatabaseId);
 
 const provider = new GoogleAuthProvider();

@@ -316,13 +316,25 @@ export default function MembersTable({
   };
 
   const handleOpenEditForm = (m: Member) => {
+    const isSuperAdmin = currentUser?.email?.trim()?.toLowerCase() === 'lmendesvictor@gmail.com';
+    const isEditingSuperAdmin = m.email.trim().toLowerCase() === 'lmendesvictor@gmail.com';
+
+    if (isEditingSuperAdmin && !isSuperAdmin) {
+      setAlertModal({
+        title: 'Acesso Proibido',
+        message: 'Por questões estritas de governança, integridade de segurança e controle de master dev, a conta de super administrador (lmendesvictor@gmail.com) é inalterável e as suas credenciais de segurança não podem ser lidas ou editadas por outros administradores promovidos.',
+        type: 'error'
+      });
+      return;
+    }
+
     setEditingMember(m);
     setName(m.name);
     setPhone(m.phone.startsWith('+244') ? m.phone : `+244 ${m.phone}`);
     setEmail(m.email);
     setBankIban(m.bankIban || '');
     setRole(m.role || 'membro');
-    setTempPassword(m.tempPassword || 'membro123');
+    setTempPassword(isSuperAdmin ? (m.tempPassword || 'membro123') : '••••••');
     setAssignedMonth(m.assignedMonth);
     setCurrentMonthState(m.contributions[currentMonth]?.paid ? 'paid' : 'pending');
     setAvatarImage(m.avatarImage || '');
@@ -363,6 +375,7 @@ export default function MembersTable({
     }
 
     let updatedMembers = [...members];
+    const isSuperAdmin = currentUser?.email?.trim()?.toLowerCase() === 'lmendesvictor@gmail.com';
 
     if (editingMember) {
       // Edit existing member
@@ -374,7 +387,7 @@ export default function MembersTable({
             phone: cleanedPhone,
             email: email.trim().toLowerCase(),
             role,
-            tempPassword,
+            tempPassword: (!isSuperAdmin && tempPassword === '••••••') ? (m.tempPassword || 'membro123') : tempPassword,
             assignedMonth,
             avatarColor,
             avatarImage,
@@ -403,14 +416,15 @@ export default function MembersTable({
       });
 
       // Audit Log
-      const isPasswordChanged = editingMember && editingMember.tempPassword !== tempPassword;
+      const isPasswordChanged = editingMember && tempPassword !== '••••••' && editingMember.tempPassword !== tempPassword;
+      const logPassValue = (!isSuperAdmin && tempPassword === '••••••') ? '••••••' : tempPassword;
       const newLog = {
         id: `edit-${Date.now()}`,
         timestamp: new Date().toISOString(),
         type: (isPasswordChanged ? 'password_reset' : 'member_management') as any,
         amount: 0,
         description: isPasswordChanged 
-          ? `REDEFINIÇÃO DE PALAVRA-PASSE: O administrador redefiniu a palavra-passe provisória de ${name} para "${tempPassword}".`
+          ? `REDEFINIÇÃO DE PALAVRA-PASSE: O administrador redefiniu a palavra-passe provisória de ${name} para "${logPassValue}".`
           : `ADMINISTRADOR: Perfil de utilizador de ${name} atualizado (Nível: ${role === 'admin' ? 'Administrador' : 'Membro'}).`,
         month: currentMonth,
       };
@@ -1205,8 +1219,11 @@ export default function MembersTable({
                       </div>
                       
                       <div>
-                        <label className="block text-slate-500 font-semibold mb-1 uppercase tracking-wider text-[10px]">
-                          Senha Provisória de Acesso
+                        <label className="block text-slate-500 font-semibold mb-1 uppercase tracking-wider text-[10px] flex items-center justify-between">
+                          <span>Senha Provisória de Acesso</span>
+                          {currentUser?.email?.trim()?.toLowerCase() !== 'lmendesvictor@gmail.com' && (
+                            <span className="text-[8.5px] text-amber-600 font-extrabold select-none">Filtro de Segurança</span>
+                          )}
                         </label>
                         <input
                           type="text"
@@ -1214,8 +1231,13 @@ export default function MembersTable({
                           placeholder="membro123"
                           value={tempPassword}
                           onChange={(e) => setTempPassword(e.target.value)}
-                          className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 focus:outline-none font-mono font-medium"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 focus:outline-none font-mono font-medium text-xs"
                         />
+                        {currentUser?.email?.trim()?.toLowerCase() !== 'lmendesvictor@gmail.com' && (
+                          <p className="text-[9.5px] text-slate-400 mt-1 leading-normal italic">
+                            As senhas ativas só são visíveis ao Super Administrador (lmendesvictor@gmail.com). Digite uma nova palavra-passe caso queira redefinir o acesso cooperativo.
+                          </p>
+                        )}
                       </div>
                     </div>
 

@@ -270,6 +270,18 @@ export default function UserManagement({
   };
 
   const openEditFlow = (member: Member) => {
+    const isSuperAdmin = currentUserEmail.trim().toLowerCase() === 'lmendesvictor@gmail.com';
+    const isEditingSuperAdmin = member.email.trim().toLowerCase() === 'lmendesvictor@gmail.com';
+
+    if (isEditingSuperAdmin && !isSuperAdmin) {
+      setAlertModal({
+        title: 'Acesso Proibido',
+        message: 'Por questões estritas de governança, integridade de segurança e controle de master dev, a conta de super administrador (lmendesvictor@gmail.com) é inalterável e as suas credenciais de segurança não podem ser lidas ou editadas por outros administradores promovidos.',
+        type: 'error'
+      });
+      return;
+    }
+
     const perms = member.permissions || {};
     setEditingMember(member);
     setFormData({
@@ -279,7 +291,7 @@ export default function UserManagement({
       bankIban: member.bankIban || '',
       assignedMonth: String(member.assignedMonth),
       role: member.role || 'membro',
-      tempPassword: member.tempPassword || 'membro123',
+      tempPassword: isSuperAdmin ? (member.tempPassword || 'membro123') : '••••••',
       allowFinancialReports: perms.accessReports !== false,
       allowAuditingLogs: perms.accessAudit !== false,
       allowSupportRequest: perms.accessSocial !== false,
@@ -299,6 +311,16 @@ export default function UserManagement({
   };
 
   const handleDeleteUser = (id: number, email: string) => {
+    const isEditingSuperAdmin = email.trim().toLowerCase() === 'lmendesvictor@gmail.com';
+    if (isEditingSuperAdmin) {
+      setAlertModal({
+        title: 'Operação Proibida',
+        message: 'A conta central do Super Administrador (lmendesvictor@gmail.com) jamais poderá ser excluída ou expurgada do KixiFundo.',
+        type: 'error'
+      });
+      return;
+    }
+
     if (appConfig.adminPrivilegeCanDelete === false) {
       setAlertModal({
         title: 'Acesso Negado',
@@ -354,9 +376,9 @@ export default function UserManagement({
 
     const targetEmail = formData.email.trim().toLowerCase();
     
-    // Check password reset permission
-    const isResettingPassword = editingMember && editingMember.tempPassword !== formData.tempPassword;
     const isSuperAdmin = currentUserEmail.trim().toLowerCase() === 'lmendesvictor@gmail.com';
+    // Check password reset permission
+    const isResettingPassword = editingMember && formData.tempPassword !== '••••••' && editingMember.tempPassword !== formData.tempPassword;
     const loggedInMember = members.find(m => m.email.trim().toLowerCase() === currentUserEmail.trim().toLowerCase());
     
     if (isResettingPassword && !isSuperAdmin && loggedInMember?.permissions?.actionResetPasswords === false) {
@@ -399,7 +421,7 @@ export default function UserManagement({
             bankIban: formData.bankIban.trim(),
             role: formData.role,
             assignedMonth: Number(formData.assignedMonth),
-            tempPassword: formData.tempPassword,
+            tempPassword: (!isSuperAdmin && formData.tempPassword === '••••••') ? (m.tempPassword || 'membro123') : formData.tempPassword,
             permissions: {
               accessInicio: formData.accessInicio,
               accessDashboard: formData.accessDashboard,
@@ -415,6 +437,7 @@ export default function UserManagement({
         }
         return m;
       });
+      const finalPassForLog = (!isSuperAdmin && formData.tempPassword === '••••••') ? '••••••' : formData.tempPassword;
       logDesc = `UTILIZADOR CONFIGURADO: O administrador editou e atualizou os dados do utilizador ${formData.name}. Nível de privilégio decretado: ${formData.role === 'admin' ? 'Administrador' : 'Membro com visualização regulada'}.`;
     } else {
       // ADD MODE
@@ -675,7 +698,7 @@ export default function UserManagement({
                     <td className="py-3 px-5">
                       <div className="flex items-center gap-1 font-mono text-xs font-semibold max-w-[130px] truncate bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded px-2 py-1 w-fit">
                         <Lock className="w-3 h-3 text-slate-400" />
-                        <span>{m.tempPassword || 'membro123'}</span>
+                        <span>{currentUserEmail.trim().toLowerCase() === 'lmendesvictor@gmail.com' ? (m.tempPassword || 'membro123') : '••••••'}</span>
                       </div>
                     </td>
 
@@ -1220,8 +1243,11 @@ export default function UserManagement({
 
                   {/* Temp Password */}
                   <div className="space-y-1">
-                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                      Senha de Acesso (Segurança)
+                    <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                      <span>Senha de Acesso (Segurança)</span>
+                      {currentUserEmail.trim().toLowerCase() !== 'lmendesvictor@gmail.com' && (
+                        <span className="text-[8.5px] text-amber-500 font-bold leading-none select-none">Preenchimento Mascarado</span>
+                      )}
                     </label>
                     <input
                       type="text"
@@ -1235,6 +1261,11 @@ export default function UserManagement({
                           : 'bg-slate-50 border-slate-200'
                       }`}
                     />
+                    {currentUserEmail.trim().toLowerCase() !== 'lmendesvictor@gmail.com' && (
+                      <p className="text-[9.5px] text-slate-400 mt-1 leading-normal italic">
+                        Por segurança, senhas ativas só são visíveis ao Super Administrador (lmendesvictor@gmail.com). Digite um novo valor se desejar redefinir o acesso, caso contrário a atual será mantida.
+                      </p>
+                    )}
                   </div>
                 </div>
 

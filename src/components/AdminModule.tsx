@@ -54,6 +54,10 @@ interface AdminModuleProps {
   carouselSlides?: any[];
   setCarouselSlides?: React.Dispatch<React.SetStateAction<any[]>>;
   onRestoreBackup: (backup: any) => boolean;
+  isFirestoreQuotaExceeded?: boolean;
+  setIsFirestoreQuotaExceeded?: (val: boolean) => void;
+  firestorePendingOps?: { id: string; timestamp: string; description: string }[];
+  setFirestorePendingOps?: React.Dispatch<React.SetStateAction<{ id: string; timestamp: string; description: string }[]>>;
 }
 
 export default function AdminModule({
@@ -73,6 +77,10 @@ export default function AdminModule({
   carouselSlides,
   setCarouselSlides,
   onRestoreBackup,
+  isFirestoreQuotaExceeded = false,
+  setIsFirestoreQuotaExceeded,
+  firestorePendingOps = [],
+  setFirestorePendingOps,
 }: AdminModuleProps) {
   const [activeSubTab, setActiveSubTab] = useState<'users' | 'receipts' | 'banking' | 'carousel' | 'audit' | 'backup' | 'privileges' | 'member-cleanup'>('users');
 
@@ -1875,6 +1883,105 @@ export default function AdminModule({
                       <RefreshCw className="w-3.5 h-3.5" />
                       Restaurar Cofre Local
                     </button>
+                  </div>
+                </div>
+
+                {/* FILA DE OPERAÇÕES LOCAIS (CONTINGÊNCIA FIRESTORE) CARD */}
+                <div className={`p-5 rounded-2xl border ${
+                  theme === 'dark' ? 'bg-slate-950 border-slate-855' : 'bg-slate-50 border-slate-150'
+                }`}>
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <h3 className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-2">
+                      <ShieldAlert className="w-4 h-4 text-amber-500" />
+                      Fila de Operações Locais e Contingência JSON
+                    </h3>
+                    <span className={`w-2.5 h-2.5 rounded-full ${isFirestoreQuotaExceeded ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`} />
+                  </div>
+
+                  <div className="text-xs text-slate-650 dark:text-slate-350 leading-relaxed mb-4">
+                    Quando a quota diária do Firestore é atingida, a plataforma guarda as suas alterações de forma persistente em <code className="p-0.5 bg-slate-200 dark:bg-slate-800 font-mono text-[11px] rounded">localStorage</code>. Use este ecrã explícito para acompanhar e descarregar/sincronizar estas alterações manualmente via arquivo JSON até que a quota diária seja redefinida amanhã.
+                  </div>
+
+                  {isFirestoreQuotaExceeded ? (
+                    <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl space-y-1.5">
+                      <span className="text-[10px] font-black uppercase text-amber-600 dark:text-amber-400 block tracking-widest leading-none">⚠️ MODO OFFLINE FIRESTORE ATIVO</span>
+                      <p className="text-[11px] text-slate-700 dark:text-slate-300 leading-normal">
+                        O limite de quota gratuita foi atingido. Tem atualmente <strong className="font-mono text-amber-550 dark:text-amber-400 underline">{firestorePendingOps.length}</strong> alterações acumuladas localmente.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="mb-4 p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl space-y-1">
+                      <span className="text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400 block tracking-widest leading-none">✓ SISTEMA DE NUVEM OPERACIONAL</span>
+                      <p className="text-[11px] text-slate-700 dark:text-slate-300">
+                        O Cloud Firestore está em comunicação perfeita. Não existem pendências offline críticas acumuladas neste navegador.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Operational Timeline Queue */}
+                  {firestorePendingOps.length > 0 && (
+                    <div className="mb-4">
+                      <span className="text-[10px] font-black uppercase text-slate-400 block mb-2 tracking-wider">Alt. Pendentes de Consolidação:</span>
+                      <div className="bg-white dark:bg-slate-900/60 rounded-xl p-3 max-h-[160px] overflow-y-auto space-y-2 border border-slate-200/60 dark:border-slate-800">
+                        {firestorePendingOps.map((op, oIdx) => (
+                          <div key={op.id || oIdx} className="text-[10.5px] space-y-0.5 border-b border-slate-100 dark:border-slate-800 pb-2 last:border-0 last:pb-0">
+                            <div className="flex justify-between items-center text-slate-400 dark:text-slate-500 text-[9px] font-semibold">
+                              <span>📅 {new Date(op.timestamp).toLocaleString('pt-AO')}</span>
+                              <span className="bg-amber-100 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 px-1 py-0.2 rounded font-mono font-bold scale-90 uppercase tracking-wider">Pendente</span>
+                            </div>
+                            <p className="font-bold text-slate-700 dark:text-slate-300 leading-tight">
+                              {op.description}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <button
+                      onClick={() => {
+                        const backupPayload = {
+                          version: 3,
+                          timestamp: new Date().toISOString(),
+                          members,
+                          logs,
+                          payoutsCompleted,
+                          currentMonth,
+                          appConfig
+                        };
+                        const blob = new Blob([JSON.stringify(backupPayload, null, 2)], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `kixi-fundo-contingência-offline-${new Date().toISOString().slice(0, 10)}.json`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                        alert("Estado atual descarregado com sucesso! Pode importar este ficheiro noutro dispositivo ou utilizá-lo mais tarde para reestabelecer os dados.");
+                      }}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-4 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+                    >
+                      <CloudDownload className="w-4 h-4 text-white" />
+                      Baixar Alterações (JSON)
+                    </button>
+
+                    {firestorePendingOps.length > 0 && setFirestorePendingOps && (
+                      <button
+                        onClick={() => {
+                          if (window.confirm("Pretende realmente limpar a fila local de operações pendentes? Esta ação é irreversível.")) {
+                            setFirestorePendingOps([]);
+                            localStorage.removeItem('kix_firestore_pending_ops_queue');
+                            localStorage.removeItem('kix_firestore_pending_count');
+                            alert("Fila de operações descartada com sucesso.");
+                          }
+                        }}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-4 border border-slate-300 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-900 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 transition-all cursor-pointer"
+                      >
+                        Descartar Fila
+                      </button>
+                    )}
                   </div>
                 </div>
 

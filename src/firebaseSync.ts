@@ -79,6 +79,8 @@ export async function testFirestoreConnection() {
   } catch (error) {
     if (error instanceof Error && error.message.includes('offline')) {
       console.warn("Firestore está operando em cache local/offline.");
+    } else {
+      throw error;
     }
   }
 }
@@ -97,12 +99,12 @@ export async function loadStateFromFirestore(): Promise<SavedStatePayload | null
   }
 }
 
-export async function saveStateToFirestore(payload: Omit<SavedStatePayload, 'updatedAt'>): Promise<void> {
+export async function saveStateToFirestore(payload: Omit<SavedStatePayload, 'updatedAt'> & { updatedAt?: string }): Promise<void> {
   try {
     const docRef = doc(db, 'kix_fundo', 'state');
     const fullPayload: SavedStatePayload = {
       ...payload,
-      updatedAt: new Date().toISOString()
+      updatedAt: payload.updatedAt || new Date().toISOString()
     };
     const sanitizedPayload = JSON.parse(JSON.stringify(fullPayload));
     await setDoc(docRef, sanitizedPayload);
