@@ -22,6 +22,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { Member, KixLog, getMemberIdCode, getMemberDisplayCode, Loan } from '../types';
+import { saveReceiptToFirestore } from '../firebaseSync';
 
 interface MemberProfileWorkspaceProps {
   member: Member;
@@ -382,6 +383,8 @@ export default function MemberProfileWorkspace({
 
       currentReceipts = [newReceiptItem, ...currentReceipts];
       localStorage.setItem('kix_comprovativos', JSON.stringify(currentReceipts));
+
+      saveReceiptToFirestore(newReceiptItem).catch(e => console.error("Erro ao salvar comprovativo na Firestore:", e));
 
       // 5. Update parent states and trigger re-saves
       setMembers(updatedMembers);
@@ -1175,7 +1178,7 @@ export default function MemberProfileWorkspace({
             </div>
 
             {/* Numerical Results Block */}
-            <div className="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-xl border border-slate-150 dark:border-slate-800/60 grid grid-cols-2 gap-4 mt-2">
+            <div className="bg-slate-50 dark:bg-slate-900/60 p-4 rounded-xl border border-slate-150 dark:border-slate-800/60 grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
               <div className="space-y-1">
                 <span className="text-[10px] text-slate-450 dark:text-slate-500 font-bold uppercase tracking-wider block">Total Bruto Estimado</span>
                 <p className="text-sm font-extrabold text-slate-800 dark:text-white font-mono">

@@ -60,7 +60,10 @@ import IbanQrCodeWidget from './components/IbanQrCodeWidget';
 import { 
   testFirestoreConnection, 
   loadStateFromFirestore, 
-  saveStateToFirestore 
+  saveStateToFirestore,
+  handleFirestoreError,
+  OperationType,
+  saveBackupToFirestore
 } from './firebaseSync';
 import { doc, onSnapshot, disableNetwork, enableNetwork } from 'firebase/firestore';
 import { db } from './driveBackup';
@@ -264,6 +267,8 @@ export default function App() {
   });
 
   const unsubscribeRef = useRef<(() => void) | null>(null);
+  const isRemoteUpdateActiveRef = useRef<boolean>(false);
+  const lastSavedStateRef = useRef<any>(null);
 
   const [activeTab, setActiveTab] = useState<string>('inicio');
   const [isDbSyncing, setIsDbSyncing] = useState<boolean>(false);
@@ -634,7 +639,8 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
     payoutsCompleted,
     currentMonth,
     appConfig,
-    loans
+    loans,
+    carouselSlides
   });
 
   useEffect(() => {
@@ -644,20 +650,96 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
       payoutsCompleted,
       currentMonth,
       appConfig,
-      loans
+      loans,
+      carouselSlides
     };
-  }, [members, logs, payoutsCompleted, currentMonth, appConfig, loans]);
+  }, [members, logs, payoutsCompleted, currentMonth, appConfig, loans, carouselSlides]);
 
+  // Centralized, loop-safe and debounced auto-save effect for absolute data integrity
   useEffect(() => {
     localStorage.setItem('kix_app_config', JSON.stringify(appConfig));
-    if (isInitialLoadCompleted && !isLoadingDb) {
+    if (!isInitialLoadCompleted || isLoadingDb) return;
+    
+    // Initialize lastSavedStateRef on first ready load to prevent false differential queue logging
+    if (!lastSavedStateRef.current) {
+      lastSavedStateRef.current = {
+        members: JSON.parse(JSON.stringify(members)),
+        logs: JSON.parse(JSON.stringify(logs)),
+        payoutsCompleted: { ...payoutsCompleted },
+        currentMonth,
+        loans: JSON.parse(JSON.stringify(loans))
+      };
+    }
+
+    if (isRemoteUpdateActiveRef.current) {
+      console.log("[Autosave] Sincronização remota em progresso. Ignorando salvamento automático para evitar ecos redundantes.");
+      return;
+    }
+
+    const handler = setTimeout(() => {
+      console.log("[Autosave] Persistindo alterações na cache local e base de dados em nuvem...");
+      const generatedTimestamp = new Date().toISOString();
+      localStorage.setItem('kix_updated_at', generatedTimestamp);
+      
+      localStorage.setItem('kix_members', JSON.stringify(members));
+      localStorage.setItem('kix_logs', JSON.stringify(logs));
+      localStorage.setItem('kix_payouts', JSON.stringify(payoutsCompleted));
+      localStorage.setItem('kix_current_month', String(currentMonth));
+      localStorage.setItem('kix_loans', JSON.stringify(loans));
+
       if (isFirestoreQuotaExceededRef.current) {
         setIsDbSyncing(false);
+        console.warn("[Autosave] Quota excedida. Registando alterações no histórico offline...");
+        
+        if (lastSavedStateRef.current) {
+          const prev = lastSavedStateRef.current;
+          const changesTextArr: string[] = [];
+
+          if (currentMonth !== prev.currentMonth) {
+            changesTextArr.push(`Ciclo atual alterado: de Mês ${prev.currentMonth} para Mês ${currentMonth}`);
+          }
+          if (members.length !== prev.members.length) {
+            changesTextArr.push(`Lista de Sócio-Membros atualizada: ${members.length > prev.members.length ? 'Sócio adicionado' : 'Sócio removido'}`);
+          } else {
+            members.forEach(m => {
+              const oldM = prev.members.find((old: any) => old.id === m.id);
+              if (oldM) {
+                const oldContr = oldM.contributions || {};
+                const newContr = m.contributions || {};
+                for (let mIdx = 1; mIdx <= 6; mIdx++) {
+                  if (oldContr[mIdx]?.paid !== newContr[mIdx]?.paid) {
+                    changesTextArr.push(`Membro "${m.name}": Quota do Mês ${mIdx} marcada como ${newContr[mIdx]?.paid ? 'PAGA' : 'PENDENTE'}`);
+                  }
+                }
+              }
+            });
+          }
+          if (loans.length !== prev.loans.length) {
+            changesTextArr.push(`Lista de Empréstimos atualizada: de ${prev.loans.length} para ${loans.length} registos ativos`);
+          }
+          for (let mKey = 1; mKey <= 6; mKey++) {
+            if (payoutsCompleted[mKey] !== prev.payoutsCompleted[mKey]) {
+              changesTextArr.push(`Benefício de Contemplação do Mês ${mKey} marcado como ${payoutsCompleted[mKey] ? 'LIQUIDADO' : 'AGUARDANDO'}`);
+            }
+          }
+
+          if (changesTextArr.length > 0) {
+            const savedQueue = localStorage.getItem('kix_firestore_pending_ops_queue');
+            const currentQueue = savedQueue ? JSON.parse(savedQueue) : [];
+            const nextOps = [...currentQueue];
+            changesTextArr.forEach(txt => {
+              nextOps.push({
+                id: `op-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                timestamp: new Date().toISOString(),
+                description: txt
+              });
+            });
+            setFirestorePendingOps(nextOps);
+            localStorage.setItem('kix_firestore_pending_ops_queue', JSON.stringify(nextOps));
+          }
+        }
       } else {
         setIsDbSyncing(true);
-        const generatedTimestamp = new Date().toISOString();
-        localStorage.setItem('kix_updated_at', generatedTimestamp);
-        
         saveStateToFirestore({
           members,
           logs,
@@ -665,21 +747,48 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
           currentMonth,
           appConfig,
           loans,
+          carouselSlides,
+          customAdminPassword: localStorage.getItem('kix_admin_password_custom') || 'Historia100',
+          cloudFolderUrl: localStorage.getItem('kix_cloud_folder_url') || 'https://drive.google.com/drive/search?q=Kix_Fundo',
           updatedAt: generatedTimestamp
         }).then(() => {
           setIsDbSyncing(false);
+          setIsFirestoreQuotaExceeded(false);
+          localStorage.removeItem('kix_firestore_quota_exceeded');
         }).catch((err) => {
-          console.error("Firestore appConfig sync failed: ", err);
+          console.error("[Autosave] Escrita em Firestore falhou:", err);
           setIsDbSyncing(false);
           const errString = String(err);
           if (errString.includes('resource-exhausted') || errString.includes('quota') || errString.includes('Quota')) {
             setIsFirestoreQuotaExceeded(true);
             localStorage.setItem('kix_firestore_quota_exceeded', 'true');
+            
+            const initOp = {
+              id: `op-${Date.now()}`,
+              timestamp: new Date().toISOString(),
+              description: "Limite de quota da Firestore atingido. Sistema de contingência offline acionado com fila de operações ativada."
+            };
+            setFirestorePendingOps(prev => {
+              const u = [...prev, initOp];
+              localStorage.setItem('kix_firestore_pending_ops_queue', JSON.stringify(u));
+              return u;
+            });
           }
         });
       }
-    }
-  }, [appConfig, isInitialLoadCompleted, isLoadingDb, isFirestoreQuotaExceeded]);
+
+      // Sync trailing reference state
+      lastSavedStateRef.current = {
+        members: JSON.parse(JSON.stringify(members)),
+        logs: JSON.parse(JSON.stringify(logs)),
+        payoutsCompleted: { ...payoutsCompleted },
+        currentMonth,
+        loans: JSON.parse(JSON.stringify(loans))
+      };
+    }, 450); // Generous debounce of 450ms for reliable batching
+
+    return () => clearTimeout(handler);
+  }, [members, logs, payoutsCompleted, currentMonth, loans, appConfig, carouselSlides, isInitialLoadCompleted, isLoadingDb]);
 
   useEffect(() => {
     localStorage.setItem('kix_theme', theme);
@@ -745,7 +854,6 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
           const dateStr = new Date().toLocaleDateString('pt-AO');
           const backupName = `Ponto de Restauro Autónomo (${schedule === 'daily' ? 'Diário' : 'Semanal'}) - ${dateStr}`;
           
-          const { saveBackupToFirestore } = await import('./firebaseSync');
           await saveBackupToFirestore(backupName, payload, 'automatic', schedule);
 
           const nowTime = new Date().toISOString();
@@ -924,11 +1032,35 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
     const savedCurrentMonth = localStorage.getItem('kix_current_month');
     const savedLoans = localStorage.getItem('kix_loans');
 
-    const finalMembers = savedMembers ? JSON.parse(savedMembers) : INITIAL_MEMBERS;
-    const finalLogs = savedLogs ? JSON.parse(savedLogs) : INITIAL_LOGS;
-    const finalPayouts = savedPayouts ? JSON.parse(savedPayouts) : defaultPayouts;
-    const finalMonth = savedCurrentMonth ? Number(savedCurrentMonth) : 1;
-    const finalLoans = savedLoans ? JSON.parse(savedLoans) : loans;
+    let finalMembers = INITIAL_MEMBERS;
+    let finalLogs = INITIAL_LOGS;
+    let finalPayouts = defaultPayouts;
+    let finalMonth = 1;
+    let finalLoans = loans;
+
+    try {
+      if (savedMembers) finalMembers = JSON.parse(savedMembers);
+    } catch (e) {
+      console.warn("Failed to parse savedMembers from localStorage, using defaults", e);
+    }
+    try {
+      if (savedLogs) finalLogs = JSON.parse(savedLogs);
+    } catch (e) {
+      console.warn("Failed to parse savedLogs from localStorage, using defaults", e);
+    }
+    try {
+      if (savedPayouts) finalPayouts = JSON.parse(savedPayouts);
+    } catch (e) {
+      console.warn("Failed to parse savedPayouts from localStorage, using defaults", e);
+    }
+    try {
+      if (savedCurrentMonth) finalMonth = Number(savedCurrentMonth) || 1;
+    } catch (e) {}
+    try {
+      if (savedLoans) finalLoans = JSON.parse(savedLoans);
+    } catch (e) {
+      console.warn("Failed to parse savedLoans from localStorage, using defaults", e);
+    }
 
     setMembers(finalMembers);
     setLogs(finalLogs);
@@ -1029,6 +1161,9 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
               return;
             }
 
+            // Flag remote update active to avoid echoing changes back to the cloud
+            isRemoteUpdateActiveRef.current = true;
+
             if (dbState.updatedAt) {
               localStorage.setItem('kix_updated_at', dbState.updatedAt);
             }
@@ -1101,6 +1236,18 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
               }
               resolvedConfig = dbState.appConfig;
             }
+            if (dbState.carouselSlides && Array.isArray(dbState.carouselSlides)) {
+              if (JSON.stringify(dbState.carouselSlides) !== JSON.stringify(carouselSlides)) {
+                setCarouselSlides(dbState.carouselSlides);
+              }
+              localStorage.setItem('kix_carousel_slides', JSON.stringify(dbState.carouselSlides));
+            }
+            if (dbState.customAdminPassword) {
+              localStorage.setItem('kix_admin_password_custom', dbState.customAdminPassword);
+            }
+            if (dbState.cloudFolderUrl) {
+              localStorage.setItem('kix_cloud_folder_url', dbState.cloudFolderUrl);
+            }
 
             localStorage.setItem('kix_members', JSON.stringify(finalMembers));
             localStorage.setItem('kix_logs', JSON.stringify(dbState.logs || []));
@@ -1112,6 +1259,10 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
             resolvedMembers = finalMembers;
             resolvedLogs = dbState.logs || [];
             resolvedLoans = dbState.loans || [];
+
+            setTimeout(() => {
+              isRemoteUpdateActiveRef.current = false;
+            }, 800);
           } else {
             console.log("Base de dados vazia na nuvem. Sincronizando com cache local...");
             const defaultPayouts = {
@@ -1123,7 +1274,13 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
             const savedCurrentMonth = localStorage.getItem('kix_current_month');
             const savedLoans = localStorage.getItem('kix_loans');
 
-            let finalMembers = savedMembers ? JSON.parse(savedMembers) : INITIAL_MEMBERS;
+            let finalMembers = INITIAL_MEMBERS;
+            try {
+              if (savedMembers) finalMembers = JSON.parse(savedMembers);
+            } catch (e) {
+              console.warn("Failed to parse fallback members:", e);
+            }
+
             const FICTITIOUS_EMAILS = [
               'sgabriel@gmail.com',
               'delfina.antonio@gmail.com',
@@ -1136,10 +1293,29 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
             if (finalMembers.length === 0) {
               finalMembers = [...INITIAL_MEMBERS];
             }
-            const finalLogs = savedLogs ? JSON.parse(savedLogs) : INITIAL_LOGS;
-            const finalPayouts = savedPayouts ? JSON.parse(savedPayouts) : defaultPayouts;
-            const finalMonth = savedCurrentMonth ? Number(savedCurrentMonth) : 1;
-            const finalLoans = savedLoans ? JSON.parse(savedLoans) : loans;
+
+            let finalLogs = INITIAL_LOGS;
+            try {
+              if (savedLogs) finalLogs = JSON.parse(savedLogs);
+            } catch (e) {
+              console.warn("Failed to parse fallback logs:", e);
+            }
+
+            let finalPayouts = defaultPayouts;
+            try {
+              if (savedPayouts) finalPayouts = JSON.parse(savedPayouts);
+            } catch (e) {
+              console.warn("Failed to parse fallback payouts:", e);
+            }
+
+            const finalMonth = savedCurrentMonth ? (Number(savedCurrentMonth) || 1) : 1;
+
+            let finalLoans = loans;
+            try {
+              if (savedLoans) finalLoans = JSON.parse(savedLoans);
+            } catch (e) {
+              console.warn("Failed to parse fallback loans:", e);
+            }
 
             const hasRealDataLocal = finalMembers.length > 1 || finalLogs.length > 1;
 
@@ -1155,6 +1331,15 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                   currentMonth: finalMonth,
                   appConfig: appConfig,
                   loans: finalLoans,
+                  carouselSlides: (() => {
+                    try {
+                      return JSON.parse(localStorage.getItem('kix_carousel_slides') || 'null') || carouselSlides;
+                    } catch (e) {
+                      return carouselSlides;
+                    }
+                  })(),
+                  customAdminPassword: localStorage.getItem('kix_admin_password_custom') || 'Historia100',
+                  cloudFolderUrl: localStorage.getItem('kix_cloud_folder_url') || 'https://drive.google.com/drive/search?q=Kix_Fundo',
                   updatedAt: initTimestamp
                 }).catch(err => {
                   console.error("Falha ao salvar dados de inicialização local na cloud:", err);
@@ -1166,6 +1351,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
               }
             }
 
+            isRemoteUpdateActiveRef.current = true;
             setMembers(finalMembers);
             setLogs(finalLogs);
             setPayoutsCompleted(finalPayouts);
@@ -1180,6 +1366,10 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
             resolvedPayouts = finalPayouts;
             resolvedMonth = finalMonth;
             resolvedConfig = appConfig;
+
+            setTimeout(() => {
+              isRemoteUpdateActiveRef.current = false;
+            }, 800);
           }
 
           setIsLoadingDb(false);
@@ -1275,113 +1465,13 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
     const generatedTimestamp = new Date().toISOString();
     localStorage.setItem('kix_updated_at', generatedTimestamp);
 
+    // Save immediately to local storage to ensure 100% crash-resistance and zero data loss on immediate exit
     localStorage.setItem('kix_members', JSON.stringify(reconciledMembers));
     localStorage.setItem('kix_logs', JSON.stringify(newLogs));
     localStorage.setItem('kix_payouts', JSON.stringify(newPayouts));
     localStorage.setItem('kix_current_month', String(newMonth));
     localStorage.setItem('kix_loans', JSON.stringify(newLoans));
     localStorage.setItem('kix_app_config', JSON.stringify(newAppConfig));
-
-    let firestorePromise = Promise.resolve();
-
-    if (isInitialLoadCompleted) {
-      if (isFirestoreQuotaExceededRef.current) {
-        console.warn("Sincronização com Cloud suspensa temporariamente devido ao limite de quota atingido. Registando na fila local offline...");
-        setIsDbSyncing(false);
-
-        // Detect and record exact differences
-        const changesTextArr: string[] = [];
-
-        if (newMonth !== currentMonth) {
-          changesTextArr.push(`Ciclo atual alterado: de Mês ${currentMonth} para Mês ${newMonth}`);
-        }
-
-        if (reconciledMembers.length !== members.length) {
-          changesTextArr.push(`Lista de Sócio-Membros atualizada: ${reconciledMembers.length > members.length ? 'Sócio adicionado' : 'Sócio removido'}`);
-        } else {
-          reconciledMembers.forEach(m => {
-            const oldM = members.find(old => old.id === m.id);
-            if (oldM) {
-              const oldContr = oldM.contributions || {};
-              const newContr = m.contributions || {};
-              for (let mIdx = 1; mIdx <= 6; mIdx++) {
-                if (oldContr[mIdx]?.paid !== newContr[mIdx]?.paid) {
-                  changesTextArr.push(`Membro "${m.name}": Quota do Mês ${mIdx} marcada como ${newContr[mIdx]?.paid ? 'PAGA' : 'PENDENTE'}`);
-                }
-              }
-            }
-          });
-        }
-
-        if (newLoans.length !== loans.length) {
-          changesTextArr.push(`Lista de Empréstimos atualizada: de ${loans.length} para ${newLoans.length} registos ativos`);
-        }
-
-        for (let mKey = 1; mKey <= 6; mKey++) {
-          if (newPayouts[mKey] !== payoutsCompleted[mKey]) {
-            changesTextArr.push(`Benefício de Contemplação do Mês ${mKey} marcado como ${newPayouts[mKey] ? 'LIQUIDADO' : 'AGUARDANDO'}`);
-          }
-        }
-
-        if (changesTextArr.length === 0) {
-          changesTextArr.push("Utilização geral ou atualização de configurações locais.");
-        }
-
-        const savedQueue = localStorage.getItem('kix_firestore_pending_ops_queue');
-        const currentQueue = savedQueue ? JSON.parse(savedQueue) : [];
-        const nextOps = [...currentQueue];
-        changesTextArr.forEach(txt => {
-          nextOps.push({
-            id: `op-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-            timestamp: new Date().toISOString(),
-            description: txt
-          });
-        });
-
-        setFirestorePendingOps(nextOps);
-        localStorage.setItem('kix_firestore_pending_ops_queue', JSON.stringify(nextOps));
-      } else {
-        // Save directly to Firestore cloud database to ensure persistence on all other browsers and machines
-        setIsDbSyncing(true);
-        firestorePromise = saveStateToFirestore({
-          members: reconciledMembers,
-          logs: newLogs,
-          payoutsCompleted: newPayouts,
-          currentMonth: newMonth,
-          appConfig: newAppConfig,
-          loans: newLoans,
-          updatedAt: generatedTimestamp
-        }).then(() => {
-          setIsDbSyncing(false);
-          setIsFirestoreQuotaExceeded(false);
-          localStorage.removeItem('kix_firestore_quota_exceeded');
-        }).catch((err) => {
-          console.error("Firestore database write sync failed:", err);
-          setIsDbSyncing(false);
-          const errString = String(err);
-          if (errString.includes('resource-exhausted') || errString.includes('quota') || errString.includes('Quota')) {
-            console.warn("Firestore Quota Limit Exceeded on saveState write!");
-            setIsFirestoreQuotaExceeded(true);
-            localStorage.setItem('kix_firestore_quota_exceeded', 'true');
-
-            // Set initial detection record
-            const initOp = {
-              id: `op-${Date.now()}`,
-              timestamp: new Date().toISOString(),
-              description: "Limite de quota da Firestore atingido. Sistema de contingência offline acionado com fila persistente ativa."
-            };
-            setFirestorePendingOps(prev => {
-              const u = [...prev, initOp];
-              localStorage.setItem('kix_firestore_pending_ops_queue', JSON.stringify(u));
-              return u;
-            });
-          }
-          // Do not rethrow the error, allowing the application to utilize the offline fallback state seamlessly
-        });
-      }
-    } else {
-      console.warn("Sincronização com Cloud suspensa para evitar sobrescrever a base de dados principal durante a inicialização.");
-    }
 
     // Backup offline local automático redundante
     try {
@@ -1402,9 +1492,6 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
 
     // Auto-backup para Google Drive se o token e configuração estiverem ativos
     triggerAutoBackupGDrive(reconciledMembers, newLogs, newPayouts, newMonth);
-
-    // Wait for Firestore promise to resolve to ensure data integrity before proceeding
-    await firestorePromise;
   };
 
   const handleResetData = () => {
@@ -3044,48 +3131,48 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
             <div className="hidden" />
           )}
 
+          {/* Minimal Footer displaying dynamic Kix app information (integrated inside scroll area) */}
+          <footer className={`w-full mt-14 border-t pt-6 pb-2 text-xs transition-colors ${
+            theme === 'dark' ? 'border-slate-800 text-slate-400' : 'border-slate-200/60 text-slate-600'
+          }`}>
+            <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+              
+              {/* Left Column: Essential copyright and info */}
+              <div className="flex flex-col items-center md:items-start text-center md:text-left gap-1">
+                <p className="font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5 leading-none text-[10px]">
+                  <span>🛡️</span> Todos os direitos reservados a kurkita software e desenvolvimento copyright @2026
+                </p>
+                <div className="flex flex-wrap items-center justify-center md:justify-start gap-x-3 gap-y-1 text-[10px] text-slate-500 dark:text-slate-400 font-bold mt-1">
+                  <span>📧 <strong className="font-bold text-slate-700 dark:text-slate-300">E-mail:</strong> <a href="mailto:geral.kurkita.ao" className="hover:text-amber-500 hover:underline transition">geral.kurkita.ao</a></span>
+                  <span className="hidden sm:inline">•</span>
+                  <span>📞 <strong className="font-bold text-slate-700 dark:text-slate-300">Telefone:</strong> <a href="tel:925204065" className="hover:text-amber-500 hover:underline transition">925204065</a></span>
+                  <span className="hidden sm:inline">•</span>
+                  <span>🌐 <strong className="font-bold text-slate-700 dark:text-slate-300">Website:</strong> <a href="http://www.kurkita.ao" target="_blank" rel="noopener noreferrer" className="hover:text-amber-500 hover:underline transition">www.kurkita.ao</a></span>
+                </div>
+              </div>
+
+              {/* Right Column: Original shortcuts and deposit actions simplified */}
+              <div className="flex flex-wrap items-center justify-center md:justify-end gap-2.5 shrink-0">
+                <div 
+                  onClick={() => {
+                    navigator.clipboard.writeText(appConfig.bankIban);
+                    alert(`IBAN Copiado com Sucesso!\n\nCoordenadas da Plataforma para Depósito (Kixi-Fundo):\nIBAN: ${appConfig.bankIban}\nBanco: Banco BIC Angola\n\nGuarde este IBAN para efetuar as transferências das suas quotas.`);
+                  }}
+                  className="flex items-center gap-1.5 bg-red-500/10 dark:bg-rose-950/20 border border-red-500/30 text-slate-700 dark:text-red-200 px-2.5 py-1 rounded-lg cursor-pointer hover:bg-red-500/15 active:scale-95 transition-all text-[10px] font-black"
+                  title="Clique aqui para COPIAR o IBAN Coletivo de Depósito!"
+                >
+                  <span>🏦</span>
+                  <span>IBAN: <span className="font-mono">{appConfig.bankIban}</span></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setShowRegulations(true)} className="hover:text-emerald-500 dark:hover:text-emerald-400 border border-slate-205 dark:border-slate-800 text-[10px] font-bold px-2 py-1 rounded-md bg-slate-50 dark:bg-slate-800/40 hover:bg-slate-100 transition-colors cursor-pointer">Normativos do Kix</button>
+                </div>
+              </div>
+              
+            </div>
+          </footer>
+
         </main>
-
-        {/* Minimal Footer displaying dynamic Kix app information */}
-        <footer className={`fixed bottom-0 left-0 right-0 z-40 border-t py-2.5 text-xs transition-colors backdrop-blur-md ${
-          theme === 'dark' ? 'bg-[#151c2c]/95 border-slate-800 text-slate-400' : 'bg-white/95 border-slate-200 text-slate-600'
-        } shadow-[0_-4px_12px_rgba(0,0,0,0.06)]`}>
-          <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-3">
-            
-            {/* Left Column: Essential copyright and info */}
-            <div className="flex flex-col items-center md:items-start text-center md:text-left gap-0.5">
-              <p className="font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5 leading-none text-[10px]">
-                <span>🛡️</span> Todos os direitos reservados a kurkita software e desenvolvimento copyright @2026
-              </p>
-              <div className="flex flex-wrap items-center justify-center md:justify-start gap-x-3 gap-y-1 text-[10px] text-slate-500 dark:text-slate-400 font-bold mt-1">
-                <span>📧 <strong className="font-bold text-slate-700 dark:text-slate-300">E-mail:</strong> <a href="mailto:geral.kurkita.ao" className="hover:text-amber-500 hover:underline transition">geral.kurkita.ao</a></span>
-                <span className="hidden sm:inline">•</span>
-                <span>📞 <strong className="font-bold text-slate-700 dark:text-slate-300">Telefone:</strong> <a href="tel:925204065" className="hover:text-amber-500 hover:underline transition">925204065</a></span>
-                <span className="hidden sm:inline">•</span>
-                <span>🌐 <strong className="font-bold text-slate-700 dark:text-slate-300">Website:</strong> <a href="http://www.kurkita.ao" target="_blank" rel="noopener noreferrer" className="hover:text-amber-500 hover:underline transition">www.kurkita.ao</a></span>
-              </div>
-            </div>
-
-            {/* Right Column: Original shortcuts and deposit actions simplified */}
-            <div className="flex flex-wrap items-center justify-center md:justify-end gap-2.5 shrink-0">
-              <div 
-                onClick={() => {
-                  navigator.clipboard.writeText(appConfig.bankIban);
-                  alert(`IBAN Copiado com Sucesso!\n\nCoordenadas da Plataforma para Depósito (Kixi-Fundo):\nIBAN: ${appConfig.bankIban}\nBanco: Banco BIC Angola\n\nGuarde este IBAN para efetuar as transferências das suas quotas.`);
-                }}
-                className="flex items-center gap-1.5 bg-red-500/10 dark:bg-rose-950/20 border border-red-500/30 text-slate-700 dark:text-red-200 px-2.5 py-1 rounded-lg cursor-pointer hover:bg-red-500/15 active:scale-95 transition-all text-[10px] font-black"
-                title="Clique aqui para COPIAR o IBAN Coletivo de Depósito!"
-              >
-                <span>🏦</span>
-                <span>IBAN: <span className="font-mono">{appConfig.bankIban}</span></span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button onClick={() => setShowRegulations(true)} className="hover:text-emerald-500 dark:hover:text-emerald-400 border border-slate-205 dark:border-slate-800 text-[10px] font-bold px-2 py-1 rounded-md bg-slate-50 dark:bg-slate-800/40 hover:bg-slate-100 transition-colors cursor-pointer">Normativos do Kix</button>
-              </div>
-            </div>
-            
-          </div>
-        </footer>
 
       </div>
 

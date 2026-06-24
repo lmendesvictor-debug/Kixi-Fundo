@@ -33,6 +33,18 @@
           "type": "string",
           "format": "date-time",
           "description": "Instante do último sincronismo na cloud"
+        },
+        "carouselSlides": {
+          "type": "array",
+          "description": "Slides do carrossel sincronizados"
+        },
+        "customAdminPassword": {
+          "type": "string",
+          "description": "Palavra-passe de administrador personalizada"
+        },
+        "cloudFolderUrl": {
+          "type": "string",
+          "description": "URL da pasta de nuvem partilhada (Google Drive / OneDrive)"
         }
       },
       "required": [
@@ -42,12 +54,35 @@
         "logs",
         "appConfig"
       ]
+    },
+    "KixComprovativo": {
+      "title": "KixComprovativo",
+      "description": "Comprovativo de transferência bancária submetido pelos membros ou administradores",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "senderPhone": { "type": "string" },
+        "fileName": { "type": "string" },
+        "fileSize": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "detectedMemberName": { "type": "string" },
+        "detectedMemberId": { "type": "integer" },
+        "status": { "type": "string" },
+        "targetMonth": { "type": "integer" },
+        "uploadedBy": { "type": "string" },
+        "fileDataUrl": { "type": "string" }
+      },
+      "required": ["id", "fileName", "timestamp", "targetMonth", "status"]
     }
   },
   "firestore": {
     "/kix_fundo/state": {
       "schema": "KixFundoState",
-      "description": "Registro central persistente fora do browser para o Kixi-Fundo"
+      "description": "Registro central persistentente fora do browser para o Kixi-Fundo"
+    },
+    "/kix_comprovativos/{comprovativoId}": {
+      "schema": "KixComprovativo",
+      "description": "Comprovativos individuais guardados na nuvem de forma descentralizada"
     }
   }
 }

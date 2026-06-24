@@ -52,6 +52,10 @@ export default function ReportsSection({
 }: ReportsSectionProps) {
   const [activeReportTab, setActiveReportTab] = useState<'payments' | 'banking' | 'utilization' | 'notifications'>('payments');
   
+  // States for filtering transaction logs inside the "utilization" tab
+  const [selectedLogMemberId, setSelectedLogMemberId] = useState<string>('all');
+  const [logSearchQuery, setLogSearchQuery] = useState<string>('');
+  
   // Notification simulator states
   const [selectedMemberId, setSelectedMemberId] = useState<number>(members[0]?.id || 1);
   const [notificationType, setNotificationType] = useState<'receipt' | 'payout_alert'>('receipt');
@@ -2023,39 +2027,107 @@ export default function ReportsSection({
         )}
 
         {/* TAB 3: FUND DISBURSEMENTS / AIDS HISTORY */}
-        {activeReportTab === 'utilization' && (
-          <motion.div
-            key="utilization"
-            initial={{ opacity: 0, y: 5 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            className="space-y-4"
-          >
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div>
-                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider">Histórico de Utilização das Verbas</h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Listagem detalhada de todos os desembolsos de benefícios e subsídios concedidos ao longo do consórcio.</p>
-              </div>
-              <button 
-                onClick={handleExportUtilizationExcel}
-                className="flex items-center justify-center gap-1.5 text-xs font-bold px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 shadow-sm cursor-pointer"
-              >
-                <Download className="w-4 h-4" />
-                Descarregar Excel (.xlsx)
-              </button>
-            </div>
+        {activeReportTab === 'utilization' && (() => {
+          const filteredLogsForUtilization = logs
+            .filter(l => l.type === 'payout' || l.type === 'social_aid')
+            .filter(l => {
+              if (selectedLogMemberId !== 'all') {
+                const selectedMember = members.find(m => String(m.id) === selectedLogMemberId);
+                if (selectedMember) {
+                  const mName = l.memberName || '';
+                  const targetName = selectedMember.name;
+                  return mName.toLowerCase().includes(targetName.toLowerCase()) || 
+                         l.description.toLowerCase().includes(targetName.toLowerCase());
+                }
+              }
+              return true;
+            })
+            .filter(l => {
+              if (!logSearchQuery.trim()) return true;
+              const query = logSearchQuery.toLowerCase();
+              const desc = l.description.toLowerCase();
+              const mName = (l.memberName || '').toLowerCase();
+              return desc.includes(query) || mName.includes(query);
+            });
 
-            {/* List entries */}
-            <div className="space-y-3">
-              {logs.filter(l => l.type === 'payout' || l.type === 'social_aid').length === 0 ? (
-                <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 text-center rounded-xl text-slate-400 dark:text-slate-500">
-                  <Coins className="w-10 h-10 text-slate-300 dark:text-slate-700 mx-auto mb-2" />
-                  <p className="text-xs font-bold uppercase">Nenhum auxílio ou desembolso de rotação efetuado até ao momento.</p>
+          return (
+            <motion.div
+              key="utilization"
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="space-y-4"
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider">Histórico de Utilização das Verbas</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Listagem detalhada de todos os desembolsos de benefícios e subsídios concedidos ao longo do consórcio.</p>
                 </div>
-              ) : (
-                logs
-                  .filter(l => l.type === 'payout' || l.type === 'social_aid')
-                  .map((l) => (
+                <button 
+                  onClick={handleExportUtilizationExcel}
+                  className="flex items-center justify-center gap-1.5 text-xs font-bold px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 shadow-sm cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  Descarregar Excel (.xlsx)
+                </button>
+              </div>
+
+              {/* Search and Dropdown Filter Row */}
+              <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 p-3.5 rounded-xl flex flex-col md:flex-row items-stretch md:items-center gap-3 shadow-sm">
+                <div className="flex-1 min-w-0 relative">
+                  <input
+                    type="text"
+                    placeholder="Pesquisar registros de transações ou justificações..."
+                    value={logSearchQuery}
+                    onChange={(e) => setLogSearchQuery(e.target.value)}
+                    className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg pl-9 pr-8 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-sky-500 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-600"
+                  />
+                  <span className="absolute left-3 top-2.5 text-slate-400 dark:text-slate-500">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                  </span>
+                  {logSearchQuery && (
+                    <button 
+                      onClick={() => setLogSearchQuery('')}
+                      className="absolute right-3 top-2 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 text-xs p-0.5"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+                
+                <div className="w-full md:w-64 shrink-0 flex items-center gap-2">
+                  <select
+                    value={selectedLogMemberId}
+                    onChange={(e) => setSelectedLogMemberId(e.target.value)}
+                    className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-sky-500 text-slate-850 dark:text-slate-100"
+                  >
+                    <option value="all">🔍 Todos os Membros (Geral)</option>
+                    {members.map(m => (
+                      <option key={m.id} value={String(m.id)}>
+                        Sócio: {m.name}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedLogMemberId !== 'all' && (
+                    <button
+                      onClick={() => setSelectedLogMemberId('all')}
+                      className="text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 text-xs px-1.5 py-1 bg-slate-200/50 dark:bg-slate-800 rounded-md shrink-0 font-bold"
+                    >
+                      Limpar
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* List entries */}
+              <div className="space-y-3">
+                {filteredLogsForUtilization.length === 0 ? (
+                  <div className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 text-center rounded-xl text-slate-400 dark:text-slate-500">
+                    <Coins className="w-10 h-10 text-slate-300 dark:text-slate-700 mx-auto mb-2" />
+                    <p className="text-xs font-bold uppercase">Nenhum auxílio ou desembolso de rotação corresponde aos filtros de busca.</p>
+                  </div>
+                ) : (
+                  filteredLogsForUtilization.map((l) => (
                     <div 
                       key={l.id} 
                       className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all ${
@@ -2102,10 +2174,11 @@ export default function ReportsSection({
                       </div>
                     </div>
                   ))
-              )}
-            </div>
-          </motion.div>
-        )}
+                )}
+              </div>
+            </motion.div>
+          );
+        })()}
 
         {/* TAB 4: MOCK NOTIFICATIONS SENDER INTERACTION COMPONENTE */}
         {activeReportTab === 'notifications' && (
@@ -2143,7 +2216,7 @@ export default function ReportsSection({
 
                 <div>
                   <label className="block text-[10px] font-bold text-slate-450 dark:text-slate-400 uppercase mb-1.5 tracking-wider">Passo 2: Tipo de Comunicação</label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <button
                       type="button"
                       onClick={() => setNotificationType('receipt')}
@@ -2171,7 +2244,7 @@ export default function ReportsSection({
 
                 <div>
                   <label className="block text-[10px] font-bold text-slate-450 dark:text-slate-400 uppercase mb-1.5 tracking-wider">Passo 3: Canal de Envio</label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <button
                       type="button"
                       onClick={() => setNotificationChannel('whatsapp')}

@@ -57,6 +57,9 @@ export interface SavedStatePayload {
   currentMonth: number;
   appConfig: any;
   updatedAt: string;
+  carouselSlides?: any[];
+  customAdminPassword?: string;
+  cloudFolderUrl?: string;
 }
 
 export interface FirestoreBackupPoint {
@@ -168,6 +171,43 @@ export async function deleteBackupFromFirestore(backupId: string): Promise<void>
     await deleteDoc(docRef);
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, `kix_fundo_backups/${backupId}`);
+  }
+}
+
+// Save a Receipt to Firestore
+export async function saveReceiptToFirestore(receipt: any): Promise<void> {
+  try {
+    const docRef = doc(db, 'kix_comprovativos', receipt.id);
+    const sanitized = JSON.parse(JSON.stringify(receipt));
+    await setDoc(docRef, sanitized);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, `kix_comprovativos/${receipt.id}`);
+  }
+}
+
+// Load Receipts from Firestore
+export async function loadReceiptsFromFirestore(): Promise<any[]> {
+  try {
+    const collectionRef = collection(db, 'kix_comprovativos');
+    const querySnapshot = await getDocs(collectionRef);
+    const receipts: any[] = [];
+    querySnapshot.forEach((docSnap) => {
+      receipts.push(docSnap.data());
+    });
+    return receipts;
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, 'kix_comprovativos');
+    return [];
+  }
+}
+
+// Delete a Receipt from Firestore
+export async function deleteReceiptFromFirestore(receiptId: string): Promise<void> {
+  try {
+    const docRef = doc(db, 'kix_comprovativos', receiptId);
+    await deleteDoc(docRef);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `kix_comprovativos/${receiptId}`);
   }
 }
 

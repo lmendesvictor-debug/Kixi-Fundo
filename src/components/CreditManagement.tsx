@@ -1055,7 +1055,7 @@ export default function CreditManagement({
                 <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1.5">
                   Tipo de Beneficiário do Crédito
                 </label>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <button
                     type="button"
                     onClick={() => handleTypeChange('socio')}
@@ -1747,7 +1747,7 @@ export default function CreditManagement({
                     </div>
 
                     {/* Numeric accounts summary */}
-                    <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 dark:bg-[#0e1320] p-3 rounded-lg border border-slate-100 dark:border-slate-820 font-mono">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs bg-slate-50 dark:bg-[#0e1320] p-3 rounded-lg border border-slate-100 dark:border-slate-820 font-mono">
                       <div>
                         <span className="text-[10px] text-slate-400 block font-sans">Crédito Concedido:</span>
                         <span className="font-black text-slate-800 dark:text-white">{formatCurrency(debtor.amountRequested)}</span>

@@ -16,13 +16,21 @@ service cloud.firestore {
                     && request.resource.data.keys().hasAll(['currentMonth', 'payoutsCompleted', 'members', 'logs', 'appConfig', 'updatedAt'])
                     && request.resource.data.currentMonth is int
                     && request.resource.data.currentMonth >= 1
-                    && request.resource.data.currentMonth <= 6
+                    && request.resource.data.currentMonth <= 12
                     && request.resource.data.members is list
                     && request.resource.data.logs is list
                     && request.resource.data.payoutsCompleted is map
                     && request.resource.data.appConfig is map
                     && request.resource.data.updatedAt is string
-                    && (!('loans' in request.resource.data) || request.resource.data.loans is list);
+                    && (!('loans' in request.resource.data) || request.resource.data.loans is list)
+                    && (!('carouselSlides' in request.resource.data) || request.resource.data.carouselSlides is list)
+                    && (!('customAdminPassword' in request.resource.data) || request.resource.data.customAdminPassword is string)
+                    && (!('cloudFolderUrl' in request.resource.data) || request.resource.data.cloudFolderUrl is string);
+    }
+
+    // Comprovativos individuais na cloud
+    match /kix_comprovativos/{comprovativoId} {
+      allow read, write: if true;
     }
 
     // Histórico de Pontos de Restauro na Cloud Firestore kix_fundo_backups

@@ -19,6 +19,7 @@ import {
   Info
 } from 'lucide-react';
 import { Member, KixLog } from '../types';
+import { saveReceiptToFirestore, loadReceiptsFromFirestore, deleteReceiptFromFirestore } from '../firebaseSync';
 
 interface Receipt {
   id: string;
@@ -99,6 +100,47 @@ export default function ReceiptsAutomation({
     localStorage.setItem('kix_comprovativos', JSON.stringify(receiptsList));
   }, [receiptsList]);
 
+  // Load and sync from Firestore on mount
+  useEffect(() => {
+    loadReceiptsFromFirestore().then((remoteReceipts) => {
+      if (remoteReceipts && remoteReceipts.length > 0) {
+        const normalized: Receipt[] = remoteReceipts.map((r: any) => {
+          if (r.memberId && !r.detectedMemberId) {
+            return {
+              id: r.id,
+              senderPhone: '+244 900 000 000',
+              fileName: r.fileName,
+              fileSize: r.fileSize,
+              timestamp: r.uploadedAt || r.timestamp || new Date().toISOString(),
+              detectedMemberName: r.memberName,
+              detectedMemberId: r.memberId,
+              status: 'matched_paid',
+              targetMonth: r.month || 1,
+              uploadedBy: r.source || 'Upload Administrador',
+              fileDataUrl: r.fileDataUrl
+            };
+          }
+          return r;
+        });
+
+        setReceiptsList((prev) => {
+          const merged = [...prev];
+          normalized.forEach((r) => {
+            if (!merged.some((m) => m.id === r.id)) {
+              merged.push(r);
+            } else {
+              const existingIdx = merged.findIndex((m) => m.id === r.id);
+              if (existingIdx !== -1 && r.fileDataUrl && !merged[existingIdx].fileDataUrl) {
+                merged[existingIdx] = r;
+              }
+            }
+          });
+          return merged.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        });
+      }
+    }).catch(err => console.error("Erro ao carregar comprovativos da Firestore:", err));
+  }, []);
+
   // Handle local File selection
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -174,6 +216,8 @@ export default function ReceiptsAutomation({
       const updatedReceipts = [newReceipt, ...receiptsList];
       setReceiptsList(updatedReceipts);
 
+      saveReceiptToFirestore(newReceipt).catch(e => console.error("Erro ao salvar comprovativo na Firestore:", e));
+
       // Perform Direct Settlement (Transition contribution to Paid)
       const updatedMembers = members.map((m) => {
         if (m.id === chosenMember.id) {
@@ -247,6 +291,8 @@ export default function ReceiptsAutomation({
       const updatedReceipts = [newReceipt, ...receiptsList];
       setReceiptsList(updatedReceipts);
 
+      saveReceiptToFirestore(newReceipt).catch(e => console.error("Erro ao salvar comprovativo na Firestore:", e));
+
       if (foundMatch && matchedMember) {
         const alreadyPaid = matchedMember.contributions[currentMonth]?.paid;
         
@@ -312,6 +358,11 @@ export default function ReceiptsAutomation({
 
     setReceiptsList(updatedReceipts);
 
+    const matchedReceipt = updatedReceipts.find(r => r.id === receiptId);
+    if (matchedReceipt) {
+      saveReceiptToFirestore(matchedReceipt).catch(e => console.error("Erro ao atualizar comprovativo na Firestore:", e));
+    }
+
     const updatedMembers = members.map((m) => {
       if (m.id === targetMember.id) {
         return {
@@ -348,8 +399,12 @@ export default function ReceiptsAutomation({
   // Clean list back to defaults
   const handleClearList = () => {
     if (window.confirm('Tem a certeza que deseja limpar a lista de comprovativos carregados e restaurar os originais?')) {
-      localStorage.removeItem('kix_comprovativos');
-      setReceiptsList([
+      // Delete old from Firestore
+      receiptsList.forEach(rec => {
+        deleteReceiptFromFirestore(rec.id).catch(e => console.error("Erro ao apagar comprovativo na Firestore:", e));
+      });
+
+      const defaults: Receipt[] = [
         {
           id: 'rec-1',
           senderPhone: '+244 923 000 001',
@@ -374,7 +429,15 @@ export default function ReceiptsAutomation({
           targetMonth: 1,
           uploadedBy: 'Gaspar Neto',
         }
-      ]);
+      ];
+
+      localStorage.removeItem('kix_comprovativos');
+      setReceiptsList(defaults);
+
+      // Save defaults to Firestore
+      defaults.forEach(rec => {
+        saveReceiptToFirestore(rec).catch(e => console.error("Erro ao salvar comprovativo padrão na Firestore:", e));
+      });
     }
   };
 

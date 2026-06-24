@@ -35,7 +35,21 @@ import UserManagement from './UserManagement';
 import ReceiptsAutomation from './ReceiptsAutomation';
 import BankingReport from './BankingReport';
 import PrivilegesManagement from './PrivilegesManagement';
-import { loadStateFromFirestore } from '../firebaseSync';
+import { 
+  loadStateFromFirestore,
+  listBackupsFromFirestore,
+  saveBackupToFirestore,
+  deleteBackupFromFirestore
+} from '../firebaseSync';
+import {
+  initAuth as initGDriveAuth,
+  googleSignIn,
+  logoutGDrive,
+  uploadBackup,
+  listBackups as listGDriveBackups,
+  downloadBackupContent,
+  deleteBackupFile
+} from '../driveBackup';
 
 interface AdminModuleProps {
   currentMonth: number;
@@ -268,7 +282,6 @@ export default function AdminModule({
   const fetchFirestoreBackups = async () => {
     setIsFirestoreLoading(true);
     try {
-      const { listBackupsFromFirestore } = await import('../firebaseSync');
       const backups = await listBackupsFromFirestore();
       setFirestoreBackups(backups);
     } catch (err) {
@@ -293,27 +306,20 @@ export default function AdminModule({
     let unsubscribe: (() => void) | null = null;
     let isMounted = true;
 
-    import('../driveBackup').then((mod) => {
-      if (!isMounted) return;
-      unsubscribe = mod.initAuth(
-        (user, token) => {
-          setGoogleUser(user);
-          setGoogleToken(token);
-          setIsAuthInitializing(false);
-          fetchGoogleBackups(token);
-        },
-        () => {
-          setGoogleUser(null);
-          setGoogleToken(null);
-          setIsAuthInitializing(false);
-        }
-      );
-    }).catch(err => {
-      console.error("Failed to load driveBackup dynamically:", err);
-      if (isMounted) {
+    if (!isMounted) return;
+    unsubscribe = initGDriveAuth(
+      (user, token) => {
+        setGoogleUser(user);
+        setGoogleToken(token);
+        setIsAuthInitializing(false);
+        fetchGoogleBackups(token);
+      },
+      () => {
+        setGoogleUser(null);
+        setGoogleToken(null);
         setIsAuthInitializing(false);
       }
-    });
+    );
 
     return () => {
       isMounted = false;
@@ -324,8 +330,7 @@ export default function AdminModule({
   const fetchGoogleBackups = async (token: string) => {
     setIsGDriveLoading(true);
     try {
-      const mod = await import('../driveBackup');
-      const list = await mod.listBackups(token);
+      const list = await listGDriveBackups(token);
       setDriveBackups(list);
     } catch (e) {
       console.error("Erro ao procurar backups", e);
@@ -336,8 +341,7 @@ export default function AdminModule({
 
   const handleGoogleSignIn = async () => {
     try {
-      const mod = await import('../driveBackup');
-      const res = await mod.googleSignIn();
+      const res = await googleSignIn();
       if (res) {
         setGoogleUser(res.user);
         setGoogleToken(res.accessToken);
@@ -350,8 +354,7 @@ export default function AdminModule({
 
   const handleGoogleLogOut = async () => {
     try {
-      const mod = await import('../driveBackup');
-      await mod.logoutGDrive();
+      await logoutGDrive();
     } catch (error) {
       console.error("GDrive Logout error:", error);
     }
@@ -378,8 +381,7 @@ export default function AdminModule({
         appConfig,
         carouselSlides,
       };
-      const mod = await import('../driveBackup');
-      await mod.uploadBackup(googleToken, payload);
+      await uploadBackup(googleToken, payload);
       alert('Cópia de segurança criada e gravada com sucesso no seu Google Drive!');
       await fetchGoogleBackups(googleToken);
     } catch (err: any) {
@@ -398,8 +400,7 @@ export default function AdminModule({
     if (window.confirm(`Tem a certeza ABSOLUTA que deseja restaurar a cópia de segurança "${fileName}"? \n\nAtenção: Esta acção irá substituir e reescrever todos os dados do dispositivo actuel.`)) {
       setBackupActionLoading(`restore_${fileId}`);
       try {
-        const mod = await import('../driveBackup');
-        const backupData = await mod.downloadBackupContent(googleToken, fileId);
+        const backupData = await downloadBackupContent(googleToken, fileId);
         const ok = onRestoreBackup(backupData);
         if (ok) {
           alert('Dados do Kix-Fundo restaurados com sucesso absoluto!');
@@ -421,8 +422,7 @@ export default function AdminModule({
     if (window.confirm(`Tem a certeza que deseja eliminar PERMANENTEMENTE o backup "${fileName}" do seu Google Drive?`)) {
       setBackupActionLoading(`delete_${fileId}`);
       try {
-        const mod = await import('../driveBackup');
-        await mod.deleteBackupFile(googleToken, fileId);
+        await deleteBackupFile(googleToken, fileId);
         alert('Cópia eliminada com sucesso do Google Drive.');
         await fetchGoogleBackups(googleToken);
       } catch (err: any) {
@@ -450,7 +450,6 @@ export default function AdminModule({
 
     setBackupActionLoading('create_firestore');
     try {
-      const { saveBackupToFirestore } = await import('../firebaseSync');
       const payload = {
         members,
         logs,
@@ -505,7 +504,6 @@ export default function AdminModule({
     if (window.confirm(`Tem a certeza que deseja eliminar PERMANENTEMENTE o ponto de restauro "${backupName}" do Cloud Firestore?`)) {
       setBackupActionLoading(`delete_fs_${backupId}`);
       try {
-        const { deleteBackupFromFirestore } = await import('../firebaseSync');
         await deleteBackupFromFirestore(backupId);
         alert('Ponto de restauro eliminado com sucesso da base de dados cloud.');
         await fetchFirestoreBackups();
@@ -1018,7 +1016,7 @@ export default function AdminModule({
                         </div>
 
                         {/* Stats fields preview */}
-                        <div className="grid grid-cols-2 gap-3.5 text-xs text-slate-500 dark:text-slate-400">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs text-slate-500 dark:text-slate-400 break-all">
                           <div className="space-y-1">
                             <span className="text-[9.5px] font-bold uppercase tracking-wider block text-slate-400">E-mail:</span>
                             <span className="font-mono font-semibold dark:text-slate-200 text-slate-800">{target.email || 'Sem e-mail'}</span>
@@ -2296,7 +2294,7 @@ export default function AdminModule({
             </div>
 
             {/* Smart Analytics Cards inside Audit Log */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Card 1 */}
               <div className={`p-4 rounded-xl border ${
                 theme === 'dark' ? 'bg-slate-950/40 border-slate-800' : 'bg-slate-50 border-slate-150'

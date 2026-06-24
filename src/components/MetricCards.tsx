@@ -429,7 +429,7 @@ export default function MetricCards({
           </div>
 
           {/* Dynamic Cycle / Month Switcher Selector Row */}
-          <div className="grid grid-cols-6 gap-1.5 mb-4 bg-slate-100 dark:bg-slate-950/40 p-1 rounded-xl border border-slate-200/30 dark:border-slate-800/40">
+          <div className="flex overflow-x-auto md:grid md:grid-cols-6 gap-1.5 mb-4 bg-slate-100 dark:bg-slate-950/40 p-1 rounded-xl border border-slate-200/30 dark:border-slate-800/40 scrollbar-none shrink-0">
             {[1, 2, 3, 4, 5, 6].map((num) => {
               const isActive = num === selectedCycle;
               const isCurrent = num === currentMonth;
@@ -441,7 +441,7 @@ export default function MetricCards({
                     setSelectedCycle(num);
                     setStatusFilter('paid');
                   }}
-                  className={`py-2 px-1 rounded-lg text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-0.5 ${
+                  className={`py-2 px-1 rounded-lg text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-0.5 shrink-0 min-w-[72px] md:min-w-0 flex-1 ${
                     isActive
                       ? 'bg-[#0d5c3a] text-white shadow-xs font-black scale-102'
                       : 'hover:bg-slate-200 dark:hover:bg-slate-800/60 text-slate-655 dark:text-slate-400 font-bold bg-transparent'
@@ -588,7 +588,7 @@ export default function MetricCards({
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4 pt-1 text-left border-t border-slate-200/40 dark:border-slate-800/60">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1 text-left border-t border-slate-200/40 dark:border-slate-800/60">
               <div>
                 <span className="block font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-[8.5px]"> Valores Arrecadados</span>
                 <span className="font-mono font-black text-slate-900 dark:text-white text-xs block mt-0.5">
@@ -598,7 +598,7 @@ export default function MetricCards({
                   ({paidContributorsCount} de 12 cotas regularizadas)
                 </span>
               </div>
-              <div className="border-l border-slate-200/50 dark:border-slate-850 pl-4">
+              <div className="border-t sm:border-t-0 sm:border-l border-slate-200/50 dark:border-slate-850 pt-3 sm:pt-0 sm:pl-4">
                 <span className="block font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-[8.5px]">Valores Pendentes</span>
                 <span className="font-mono font-black text-[#ea580c] dark:text-amber-500 text-xs block mt-0.5">
                   {formatCurrency(totalValoresPendentesCycle)}

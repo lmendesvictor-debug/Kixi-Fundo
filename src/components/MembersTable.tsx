@@ -17,6 +17,7 @@ import {
   Eye
 } from 'lucide-react';
 import { Member, getMemberIdCode, getMemberDisplayCode } from '../types';
+import { saveReceiptToFirestore } from '../firebaseSync';
 
 interface MembersTableProps {
   currentMonth: number;
@@ -156,7 +157,7 @@ export default function MembersTable({
                 (item: any) => !(item.memberId === m.id && item.month === currentMonth)
               );
               
-              comprovativos.push({
+              const receiptItem = {
                 id: `manual_admin_${m.id}_${currentMonth}_${Date.now()}`,
                 memberId: m.id,
                 memberName: m.name,
@@ -167,9 +168,12 @@ export default function MembersTable({
                 uploadedAt: new Date().toISOString(),
                 fileDataUrl: fileBase64,
                 source: 'Upload Administrador'
-              });
+              };
+              comprovativos.push(receiptItem);
               
               localStorage.setItem('kix_comprovativos', JSON.stringify(comprovativos));
+
+              saveReceiptToFirestore(receiptItem).catch(e => console.error("Erro ao salvar comprovativo na Firestore:", e));
 
               return {
                 ...m,
