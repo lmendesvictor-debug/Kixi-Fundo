@@ -1163,6 +1163,8 @@ export default function AdminModule({
               setLogs={setLogs}
               currentUserEmail={currentUser?.email || ''}
               theme={theme}
+              appConfig={appConfig}
+              setAppConfig={setAppConfig}
             />
           </motion.div>
         )}

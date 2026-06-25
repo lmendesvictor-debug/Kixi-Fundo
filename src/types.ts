@@ -25,6 +25,17 @@ export interface Member {
     actionManageSlides?: boolean;
     actionManageBackups?: boolean;
     actionResetPasswords?: boolean;
+    modulePermissions?: {
+      inicio?: ModulePermissionLevel;
+      dashboard?: ModulePermissionLevel;
+      members?: ModulePermissionLevel;
+      cycles?: ModulePermissionLevel;
+      social?: ModulePermissionLevel;
+      contracts?: ModulePermissionLevel;
+      reports?: ModulePermissionLevel;
+      audit?: ModulePermissionLevel;
+      admin?: ModulePermissionLevel;
+    };
   };
   contributions: {
     [month: number]: {
@@ -145,6 +156,31 @@ export interface Loan {
   customLegalTerms?: string;
 }
 
+export type ModulePermissionLevel = 'none' | 'read' | 'write' | 'delete';
+
+export interface RolePermissions {
+  membro: {
+    members: ModulePermissionLevel;
+    cycles: ModulePermissionLevel;
+    social: ModulePermissionLevel;
+    contracts: ModulePermissionLevel;
+    audit: ModulePermissionLevel;
+    reports: ModulePermissionLevel;
+    admin: ModulePermissionLevel;
+    dashboard: ModulePermissionLevel;
+  };
+  admin: {
+    members: ModulePermissionLevel;
+    cycles: ModulePermissionLevel;
+    social: ModulePermissionLevel;
+    contracts: ModulePermissionLevel;
+    audit: ModulePermissionLevel;
+    reports: ModulePermissionLevel;
+    admin: ModulePermissionLevel;
+    dashboard: ModulePermissionLevel;
+  };
+}
+
 export interface AppConfig {
   bankName: string;
   bankIban: string;
@@ -170,4 +206,5 @@ export interface AppConfig {
   autoBackupSchedule?: 'off' | 'daily' | 'weekly';
   lastAutoBackupFirestore?: string;
   lastAutoBackupGDrive?: string;
+  rolePermissions?: RolePermissions;
 }

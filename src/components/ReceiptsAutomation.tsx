@@ -16,10 +16,12 @@ import {
   Calendar,
   Sparkles,
   User,
-  Info
+  Info,
+  Printer
 } from 'lucide-react';
 import { Member, KixLog } from '../types';
 import { saveReceiptToFirestore, loadReceiptsFromFirestore, deleteReceiptFromFirestore } from '../firebaseSync';
+import PrintConfigModal, { PrintConfig } from './PrintConfigModal';
 
 interface Receipt {
   id: string;
@@ -33,6 +35,10 @@ interface Receipt {
   targetMonth: number;
   uploadedBy: string;
   fileDataUrl?: string; // actual uploaded file data URL (base64)
+  auditStatus?: 'passed' | 'failed';
+  auditDetails?: string;
+  detectedAmount?: number;
+  detectedMonth?: number;
 }
 
 interface ReceiptsAutomationProps {
@@ -56,6 +62,9 @@ export default function ReceiptsAutomation({
   saveState,
   currentUser,
 }: ReceiptsAutomationProps) {
+  // State for print modal and config
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+
   // Load existing receipts from localStorage or fallback to empty state
   const [receiptsList, setReceiptsList] = useState<Receipt[]>(() => {
     const saved = localStorage.getItem('kix_comprovativos');
@@ -80,6 +89,14 @@ export default function ReceiptsAutomation({
   const [targetMonth, setTargetMonth] = useState<number>(currentMonth);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileBase64, setFileBase64] = useState<string>('');
+  
+  // Simulated OCR variables for Audit Rules
+  const [simulatedPdfAmount, setSimulatedPdfAmount] = useState<number>(120000);
+  const [simulatedPdfMonth, setSimulatedPdfMonth] = useState<number>(targetMonth);
+
+  useEffect(() => {
+    setSimulatedPdfMonth(targetMonth);
+  }, [targetMonth]);
   
   // Google Drive / OneDrive dynamic folder links
   const [cloudFolderUrl, setCloudFolderUrl] = useState<string>(() => {
@@ -157,6 +174,36 @@ export default function ReceiptsAutomation({
       setErrorMsg('');
       setSelectedFile(file);
 
+      // Simple heuristic parser for filenames to simulate reading the file
+      const nameLower = file.name.toLowerCase();
+      let detectedAmount = 120000;
+      if (nameLower.includes('80000') || nameLower.includes('80k') || nameLower.includes('80.000')) {
+        detectedAmount = 80000;
+      } else if (nameLower.includes('50000') || nameLower.includes('50k') || nameLower.includes('50.000')) {
+        detectedAmount = 50000;
+      } else if (nameLower.includes('sem_valor') || nameLower.includes('no_value')) {
+        detectedAmount = 0;
+      }
+      setSimulatedPdfAmount(detectedAmount);
+
+      let detectedMonth = targetMonth;
+      const monthMatch = nameLower.match(/(?:mês|mes|month|m)[_\s-]*(\d+)/i) || nameLower.match(/_(\d+)_/);
+      if (monthMatch) {
+        const mVal = parseInt(monthMatch[1], 10);
+        if (mVal >= 1 && mVal <= 6) {
+          detectedMonth = mVal;
+        }
+      } else {
+        // Look for standalone numbers 1 to 6 in name if no explicit keyword
+        for (let m = 1; m <= 6; m++) {
+          if (nameLower.includes(`mes_${m}`) || nameLower.includes(`mes${m}`) || nameLower.includes(`mês_${m}`) || nameLower.includes(`mês${m}`)) {
+            detectedMonth = m;
+            break;
+          }
+        }
+      }
+      setSimulatedPdfMonth(detectedMonth);
+
       const reader = new FileReader();
       reader.onload = () => {
         if (typeof reader.result === 'string') {
@@ -197,6 +244,26 @@ export default function ReceiptsAutomation({
         return;
       }
 
+      // Run Audit Rule Check
+      const isAmountCorrect = simulatedPdfAmount === 120000;
+      const isMonthCorrect = simulatedPdfMonth === targetMonth;
+      const auditPassed = isAmountCorrect && isMonthCorrect;
+
+      let auditDetails = '';
+      let auditStatus: 'passed' | 'failed' = 'passed';
+      if (!auditPassed) {
+        auditStatus = 'failed';
+        if (!isAmountCorrect && !isMonthCorrect) {
+          auditDetails = `Divergência Crítica: Valor extraído (${simulatedPdfAmount === 0 ? 'indetectável' : simulatedPdfAmount.toLocaleString('pt-PT') + ' KZs'}) e Mês extraído (Mês ${simulatedPdfMonth === 0 ? 'indetectável' : simulatedPdfMonth}) não coincidem com o esperado (120.000,00 KZs, Mês ${targetMonth}).`;
+        } else if (!isAmountCorrect) {
+          auditDetails = `Divergência de Valor: Valor extraído do PDF (${simulatedPdfAmount === 0 ? 'indetectável' : simulatedPdfAmount.toLocaleString('pt-PT') + ' KZs'}) difere do valor oficial exigido de 120.000,00 KZs.`;
+        } else {
+          auditDetails = `Divergência de Mês: Comprovativo refere-se ao Mês ${simulatedPdfMonth === 0 ? 'indetectável' : simulatedPdfMonth}, mas a liquidação solicitada é para o Mês ${targetMonth}.`;
+        }
+      } else {
+        auditDetails = `Conformidade Confirmada: Valor de 120.000,00 KZs e referência ao Mês ${targetMonth} validados com sucesso no documento.`;
+      }
+
       // Create new Receipt item
       const newReceipt: Receipt = {
         id: `rec-usr-${Date.now()}`,
@@ -206,10 +273,14 @@ export default function ReceiptsAutomation({
         timestamp: new Date().toISOString(),
         detectedMemberName: chosenMember.name,
         detectedMemberId: chosenMember.id,
-        status: 'matched_paid',
+        status: auditPassed ? 'matched_paid' : 'unmatched_pending',
         targetMonth: targetMonth,
         uploadedBy: currentUser?.role === 'admin' ? 'Administrador' : chosenMember.name,
-        fileDataUrl: fileBase64, // local storage storage
+        fileDataUrl: fileBase64,
+        auditStatus: auditStatus,
+        auditDetails: auditDetails,
+        detectedAmount: simulatedPdfAmount,
+        detectedMonth: simulatedPdfMonth
       };
 
       // update local list
@@ -218,45 +289,55 @@ export default function ReceiptsAutomation({
 
       saveReceiptToFirestore(newReceipt).catch(e => console.error("Erro ao salvar comprovativo na Firestore:", e));
 
-      // Perform Direct Settlement (Transition contribution to Paid)
-      const updatedMembers = members.map((m) => {
-        if (m.id === chosenMember.id) {
-          return {
-            ...m,
-            contributions: {
-              ...m.contributions,
-              [targetMonth]: {
-                paid: true,
-                paidAt: new Date().toISOString(),
+      if (auditPassed) {
+        // Perform Direct Settlement (Transition contribution to Paid)
+        const updatedMembers = members.map((m) => {
+          if (m.id === chosenMember.id) {
+            return {
+              ...m,
+              contributions: {
+                ...m.contributions,
+                [targetMonth]: {
+                  paid: true,
+                  paidAt: new Date().toISOString(),
+                  receiptFileName: selectedFile.name,
+                  receiptFileSize: `${(selectedFile.size / 1024).toFixed(0)} KB`,
+                  receiptUploadedAt: new Date().toISOString(),
+                  amount: 120000
+                },
               },
-            },
-          };
-        }
-        return m;
-      });
+            };
+          }
+          return m;
+        });
 
-      // Write beautiful, compliance audit log
-      const newLogObj: KixLog = {
-        id: `log-rec-${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        type: 'contribution',
-        memberName: chosenMember.name,
-        amount: 120000,
-        description: `LIQUIDAÇÃO DIRECTA DE COTA: Comprovativo "${selectedFile.name}" submetido com sucesso por ${currentUser?.role === 'admin' ? 'Administrador' : chosenMember.name}. Quota do Mês ${targetMonth} liquidada directamente no sistema em benefício de ${chosenMember.name}. Distribuição: 100.000,00 KZs para contemplados / 20.000,00 KZs destinados ao Fundo de Interajuda.`,
-        month: targetMonth,
-      };
+        // Write beautiful, compliance audit log
+        const newLogObj: KixLog = {
+          id: `log-rec-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          type: 'contribution',
+          memberName: chosenMember.name,
+          amount: 120000,
+          description: `LIQUIDAÇÃO DIRECTA DE COTA: Comprovativo "${selectedFile.name}" submetido com sucesso por ${currentUser?.role === 'admin' ? 'Administrador' : chosenMember.name}. Quota do Mês ${targetMonth} liquidada directamente no sistema em benefício de ${chosenMember.name}. Distribuição: 100.000,00 KZs para contemplados / 20.000,00 KZs destinados ao Fundo de Interajuda.`,
+          month: targetMonth,
+        };
 
-      const updatedLogs = [newLogObj, ...logs];
-      setMembers(updatedMembers);
-      setLogs(updatedLogs);
-      saveState(updatedMembers, updatedLogs);
+        const updatedLogs = [newLogObj, ...logs];
+        setMembers(updatedMembers);
+        setLogs(updatedLogs);
+        saveState(updatedMembers, updatedLogs);
+
+        setSuccessMsg(`Sucesso: O comprovativo foi auditado com sucesso (Aprovado ✓) e a cota do Mês ${targetMonth} de ${chosenMember.name} foi liquidada no portal!`);
+      } else {
+        // If audit fails, we DO NOT mark the quota as paid. We alert the auditor.
+        setErrorMsg(`AUDITORIA REJEITADA ⚠️: O auditor automático recusou a validação deste comprovativo. Motivo: ${auditDetails}. A quota do Mês ${targetMonth} de ${chosenMember.name} permanece como NÃO PAGA.`);
+      }
 
       // Reset form states
       setSelectedFile(null);
       setFileBase64('');
       if (fileInputRef.current) fileInputRef.current.value = '';
       setIsProcessing(false);
-      setSuccessMsg(`Sucesso: O comprovativo foi processado de forma segura e a cota do Mês ${targetMonth} de ${chosenMember.name} está liquidada no portal!`);
     }, 1300);
   };
 
@@ -441,6 +522,178 @@ export default function ReceiptsAutomation({
     }
   };
 
+  const handlePrintReceipts = (config: PrintConfig) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const fontStack = config.fontFamily === 'serif' 
+      ? "'Playfair Display', Georgia, serif" 
+      : config.fontFamily === 'mono' 
+      ? "'JetBrains Mono', 'Fira Code', Courier, monospace" 
+      : "'Inter', sans-serif";
+
+    const bodySize = config.fontSize === 'compact' ? '10px' : config.fontSize === 'large' ? '14px' : '12px';
+    const rowPadding = config.fontSize === 'compact' ? '6px 8px' : config.fontSize === 'large' ? '16px 12px' : '12px 10px';
+    const isTableSimple = config.format === 'table_simple';
+
+    const rowsHTML = receiptsList.map((rec) => {
+      const isMatched = rec.status === 'matched_paid' || rec.status === 'manually_matched';
+      const statusLabel = isMatched ? `Validado (${rec.detectedMemberName})` : 'Pendente de Alinhamento';
+      
+      if (isTableSimple) {
+        return `
+          <tr style="border-bottom: 1px solid #000000;">
+            <td style="padding: ${rowPadding}; font-size: ${bodySize}; font-weight: bold; color: black;">${rec.fileName}</td>
+            <td style="padding: ${rowPadding}; font-size: ${bodySize}; color: black;">${rec.fileSize}</td>
+            <td style="padding: ${rowPadding}; font-size: ${bodySize}; color: black;">${rec.senderPhone}</td>
+            <td style="padding: ${rowPadding}; font-size: ${bodySize}; color: black; text-align: center;">Mês ${rec.targetMonth}</td>
+            <td style="padding: ${rowPadding}; font-size: ${bodySize}; color: black;">${rec.uploadedBy}</td>
+            <td style="padding: ${rowPadding}; font-size: ${bodySize}; font-weight: bold; color: black;">${statusLabel}</td>
+          </tr>
+        `;
+      } else {
+        return `
+          <tr style="border-bottom: 1px solid #e2e8f0;">
+            <td style="padding: ${rowPadding}; font-size: ${bodySize}; font-weight: bold; color: #1e293b;">${rec.fileName}</td>
+            <td style="padding: ${rowPadding}; font-size: ${bodySize}; color: #475569;">${rec.fileSize}</td>
+            <td style="padding: ${rowPadding}; font-size: ${bodySize}; color: #334155; font-family: monospace;">${rec.senderPhone}</td>
+            <td style="padding: ${rowPadding}; font-size: ${bodySize}; color: #0284c7; text-align: center; font-weight: bold;">Mês ${rec.targetMonth}</td>
+            <td style="padding: ${rowPadding}; font-size: ${bodySize}; color: #64748b;">${rec.uploadedBy}</td>
+            <td style="padding: ${rowPadding}; font-size: calc(${bodySize} - 1px); font-weight: bold;">
+              <span style="padding: 4px 8px; border-radius: 4px; ${isMatched ? 'background-color: #d1fae5; color: #065f46;' : 'background-color: #fee2e2; color: #991b1b;'}">
+                ${isMatched ? 'Validado ✓' : 'Pendente ✗'}
+              </span>
+            </td>
+          </tr>
+        `;
+      }
+    }).join('');
+
+    const validatedCount = receiptsList.filter(r => r.status === 'matched_paid' || r.status === 'manually_matched').length;
+    const pendingCount = receiptsList.filter(r => r.status === 'unmatched_pending').length;
+
+    const layoutHTML = isTableSimple ? `
+      <html>
+        <head>
+          <title>Kixi-Fundo - Controlo de Comprovativos</title>
+          <style>
+            @page { size: ${config.orientation}; margin: 15mm; }
+            body { font-family: ${fontStack}; padding: 10px; color: black; background-color: white; line-height: 1.3; font-size: ${bodySize}; }
+            .header-simple { border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 20px; }
+            .header-simple h1 { font-size: 16px; margin: 0 0 5px 0; text-transform: uppercase; font-weight: bold; }
+            .header-simple p { font-size: 10px; margin: 2px 0; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+            th { border-bottom: 2px solid black; padding: 8px; font-size: 10px; font-weight: bold; text-align: left; text-transform: uppercase; color: black; }
+            td { border-bottom: 1px solid #ccc; }
+          </style>
+        </head>
+        <body>
+          <div class="header-simple">
+            <h1>KIXI-FUNDO - CONTROLO E CONCILIAÇÃO DE COMPROVATIVOS DE DEPÓSITOS (LISTAGEM)</h1>
+            <p>Associação Consórcio de Poupança de Interajuda Coletiva</p>
+            <p><strong>Estatísticas:</strong> Total: ${receiptsList.length} | Validados: ${validatedCount} | Pendentes: ${pendingCount}</p>
+            <p><strong>Data de Emissão:</strong> ${new Date().toLocaleString('pt-PT')}</p>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="text-align: left;">Arquivo / Comprovativo</th>
+                <th style="text-align: left;">Tamanho</th>
+                <th style="text-align: left;">Remetente</th>
+                <th style="text-align: center;">Mês Referência</th>
+                <th style="text-align: left;">Submetido Por</th>
+                <th style="text-align: left;">Estado de Alinhamento</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHTML}
+            </tbody>
+          </table>
+          <script>
+            window.onload = function() {
+              window.print();
+            };
+          </script>
+        </body>
+      </html>
+    ` : `
+      <html>
+        <head>
+          <title>Kixi-Fundo - Controlo de Comprovativos</title>
+          <style>
+            @page { size: ${config.orientation}; margin: 20mm; }
+            body { font-family: ${fontStack}; padding: 30px; color: #1e293b; background-color: white; line-height: 1.4; font-size: ${bodySize}; }
+            .header { text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 20px; margin-bottom: 30px; }
+            .header h1 { font-size: 20px; color: #0f172a; margin: 0 0 5px 0; text-transform: uppercase; letter-spacing: 1px; font-weight: 850; }
+            .header h2 { font-size: 12px; color: #475569; margin: 0; font-weight: normal; letter-spacing: 2px; text-transform: uppercase; }
+            .meta { font-size: 10px; color: #64748b; margin-top: 10px; display: flex; justify-content: space-between; }
+            .grid-stats { display: grid; grid-template-cols: repeat(3, 1fr); gap: 15px; margin-bottom: 25px; }
+            .stat-card { border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 8px; padding: 15px; text-align: center; }
+            .stat-val { font-size: 18px; font-weight: bold; color: #0f172a; margin-top: 4px; }
+            .stat-label { font-size: 9px; color: #64748b; text-transform: uppercase; font-weight: bold; letter-spacing: 0.5px; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+            th { background-color: #f1f5f9; color: #475569; padding: 10px; font-size: 10px; font-weight: bold; text-align: left; border-bottom: 2px solid #cbd5e1; text-transform: uppercase; }
+            .footer { border-top: 1px solid #e2e8f0; margin-top: 50px; padding-top: 15px; text-align: center; font-size: 10px; color: #64748b; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>KIXI-FUNDO - CONTROLO E CONCILIAÇÃO DE COMPROVATIVOS</h1>
+            <h2>Associação Consórcio de Poupança de Interajuda Coletiva</h2>
+            <div class="meta">
+              <span>Data de Emissão: ${new Date().toLocaleString('pt-PT')}</span>
+              <span>Emitido por: ${currentUser?.email || 'Administrador'}</span>
+            </div>
+          </div>
+
+          <div class="grid-stats">
+            <div class="stat-card" style="border-left: 4px solid #0f172a;">
+              <div class="stat-label">Comprovativos Recebidos</div>
+              <div class="stat-val">${receiptsList.length}</div>
+            </div>
+            <div class="stat-card" style="border-left: 4px solid #059669;">
+              <div class="stat-label">Liquidados / Validados</div>
+              <div class="stat-val">${validatedCount}</div>
+            </div>
+            <div class="stat-card" style="border-left: 4px solid #dc2626;">
+              <div class="stat-label">Pendentes de Alinhamento</div>
+              <div class="stat-val">${pendingCount}</div>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="text-align: left;">Arquivo / Comprovativo</th>
+                <th style="text-align: left;">Tamanho</th>
+                <th style="text-align: left;">Remetente</th>
+                <th style="text-align: center;">Mês Referência</th>
+                <th style="text-align: left;">Submetido Por</th>
+                <th style="text-align: left;">Estado de Alinhamento</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHTML}
+            </tbody>
+          </table>
+
+          <div class="footer">
+            <p>© 2026 Kixi-Fundo - Gestão de Finanças Comparticipadas, Angola. Documento gerado para controle interno de conformidade de depósitos bancários.</p>
+          </div>
+          <script>
+            window.onload = function() {
+              window.print();
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(layoutHTML);
+    printWindow.document.close();
+  };
+
   return (
     <div className="space-y-8 animate-fadeIn" id="receipts-automation-page">
       
@@ -619,6 +872,60 @@ export default function ReceiptsAutomation({
                 />
               </div>
 
+              {selectedFile && (
+                <div className="bg-slate-50 dark:bg-slate-950 p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 space-y-2.5 animate-fadeIn">
+                  <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-1.5">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                      🔍 Auditoria Automática de PDF (Simulador)
+                    </span>
+                    <span className="text-[9px] bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 px-2 py-0.5 rounded-full font-black font-mono uppercase tracking-wider">
+                      OCR Ativo
+                    </span>
+                  </div>
+                  <p className="text-[9px] text-slate-500 dark:text-slate-400 leading-normal">
+                    O sistema analisou o arquivo e pré-carregou os dados detectados para validação. Ajuste abaixo para testar diferentes resultados de auditoria:
+                  </p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[9px] text-slate-600 dark:text-slate-400 uppercase font-bold tracking-wider mb-1">
+                        Valor Extraído no PDF
+                      </label>
+                      <select
+                        value={simulatedPdfAmount}
+                        onChange={(e) => setSimulatedPdfAmount(Number(e.target.value))}
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2 rounded-lg text-[11px] font-semibold text-slate-900 dark:text-white focus:outline-none"
+                      >
+                        <option value={120000}>120.000,00 KZs (Correto)</option>
+                        <option value={80000}>80.000,00 KZs (Incorreto)</option>
+                        <option value={0}>Nenhum valor encontrado (0 KZs)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[9px] text-slate-600 dark:text-slate-400 uppercase font-bold tracking-wider mb-1">
+                        Mês Extraído no PDF
+                      </label>
+                      <select
+                        value={simulatedPdfMonth}
+                        onChange={(e) => setSimulatedPdfMonth(Number(e.target.value))}
+                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2 rounded-lg text-[11px] font-semibold text-slate-900 dark:text-white focus:outline-none"
+                      >
+                        <option value={targetMonth}>Mês {targetMonth} (Correto)</option>
+                        {[1, 2, 3, 4, 5, 6].filter(m => m !== targetMonth).map(m => (
+                          <option key={m} value={m}>Mês {m} (Divergente)</option>
+                        ))}
+                        <option value={0}>Nenhum mês (Inválido)</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="text-[9px] flex items-start gap-1 text-slate-400 pt-1 border-t border-slate-200/50 dark:border-slate-800/50">
+                    <Info className="w-3.5 h-3.5 shrink-0 text-slate-500 mt-0.5" />
+                    <span>
+                      Regra de Auditoria: O depósito só é considerado VÁLIDO e a quota LIQUIDADA se o valor extraído for exatamente 120.000,00 KZs e o Mês for o Mês {targetMonth}.
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {/* Submit direct liquidative settlement */}
               <button
                 type="submit"
@@ -725,13 +1032,23 @@ export default function ReceiptsAutomation({
               </p>
             </div>
             
-            <button 
-              onClick={handleClearList}
-              className="text-[10px] text-red-650 hover:text-red-700 hover:bg-rose-50 dark:hover:bg-rose-950/20 flex items-center gap-1.5 border border-red-200 dark:border-red-900/50 px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 font-bold transition"
-            >
-              <RefreshCw className="w-3 h-3" />
-              Mudar / Limpar Lista
-            </button>
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <button 
+                onClick={() => setIsPrintModalOpen(true)}
+                className="text-[10px] text-sky-700 hover:text-white hover:bg-sky-600 flex items-center gap-1.5 border border-sky-200 dark:border-sky-850 px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 font-bold transition cursor-pointer"
+              >
+                <Printer className="w-3 h-3" />
+                Imprimir Lista
+              </button>
+              
+              <button 
+                onClick={handleClearList}
+                className="text-[10px] text-red-650 hover:text-red-700 hover:bg-rose-50 dark:hover:bg-rose-950/20 flex items-center gap-1.5 border border-red-200 dark:border-red-900/50 px-2.5 py-1.5 rounded-lg bg-white dark:bg-slate-900 font-bold transition cursor-pointer"
+              >
+                <RefreshCw className="w-3 h-3" />
+                Mudar / Limpar Lista
+              </button>
+            </div>
           </div>
 
           <div className="space-y-4">
@@ -795,11 +1112,33 @@ export default function ReceiptsAutomation({
                               <>
                                 <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
                                 <span className="text-red-650 font-bold uppercase tracking-wider text-[9px]">
-                                  Pendente de Alinhamento de Utilizador (Informação Importante!)
+                                  {rec.auditStatus === 'failed' ? 'AUDITORIA REJEITADA: QUOTA NÃO FOI LIQUIDADA' : 'Pendente de Alinhamento de Utilizador (Informação Importante!)'}
                                 </span>
                               </>
                             )}
                           </div>
+
+                          {rec.auditStatus ? (
+                            <div className="text-[10px] mt-1.5">
+                              {rec.auditStatus === 'passed' ? (
+                                <div className="inline-flex flex-wrap items-center gap-1.5 bg-emerald-50/70 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 px-2 py-0.5 rounded-md font-bold border border-emerald-200/50 dark:border-emerald-900/50">
+                                  <span className="flex h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                  ✓ AUDITADO: {rec.auditDetails}
+                                </div>
+                              ) : (
+                                <div className="inline-flex flex-wrap items-center gap-1.5 bg-rose-50/70 dark:bg-rose-950/30 text-red-700 dark:text-red-400 px-2 py-0.5 rounded-md font-bold border border-red-200/50 dark:border-red-900/50">
+                                  <span className="flex h-1.5 w-1.5 rounded-full bg-red-500 animate-pulse" />
+                                  ✗ REJEITADO: {rec.auditDetails}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="text-[10px] mt-1.5">
+                              <div className="inline-flex flex-wrap items-center gap-1.5 bg-slate-50 dark:bg-slate-950 text-slate-500 px-2 py-0.5 rounded-md font-bold border border-slate-200 dark:border-slate-800">
+                                ✓ COMPROVATIVO ARQUIVADO (Auditoria Prévia)
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -880,6 +1219,14 @@ export default function ReceiptsAutomation({
 
       </div>
 
+      {/* Configurable Print Modal */}
+      <PrintConfigModal
+        isOpen={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        onConfirm={handlePrintReceipts}
+        title="Imprimir Arquivo de Comprovativos"
+        subtitle="Selecione o estilo e orientação do relatório de depósitos."
+      />
     </div>
   );
 }

@@ -17,6 +17,7 @@ import {
   RefreshCw 
 } from 'lucide-react';
 import { Member, KixLog } from '../types';
+import PrintConfigModal, { PrintConfig } from './PrintConfigModal';
 
 interface PaymentsLedgerProps {
   currentMonth: number;
@@ -37,6 +38,9 @@ export default function PaymentsLedger({
   saveState,
   formatCurrency,
 }: PaymentsLedgerProps) {
+  // Print configuration modal state
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+
   // Filters State
   const [filterMonth, setFilterMonth] = useState<string>(() => {
     const monthNamesPortuguese = [
@@ -323,35 +327,104 @@ export default function PaymentsLedger({
     setShowExportDropdown(false);
   };
 
-  const handlePrintPDF = () => {
+  const handlePrintPDF = (config: PrintConfig) => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
-    const rowsHTML = filteredRows.map(r => `
-      <tr style="border-bottom: 1px solid #e2e8f0;">
-        <td style="padding: 12px 8px; font-size: 11px; font-weight: bold;">${r.memberName}</td>
-        <td style="padding: 12px 8px; font-size: 11px;">${r.monthName} 2026</td>
-        <td style="padding: 12px 8px; font-size: 11px;">${r.paidDate ? new Date(r.paidDate).toLocaleDateString('pt-PT') : '—'}</td>
-        <td style="padding: 12px 8px; font-size: 11px; font-weight: bold; font-family: monospace;">${r.amount.toLocaleString('pt-AO', { minimumFractionDigits: 2 })} Kz</td>
-        <td style="padding: 12px 8px; font-size: 10px; font-weight: bold;">
-          <span style="padding: 4px 8px; border-radius: 4px; ${r.isPaid ? 'background-color: #d1fae5; color: #065f46;' : 'background-color: #fef3c7; color: #92400e;'}">
-            ${r.isPaid ? 'Pago' : 'Pendente'}
-          </span>
-        </td>
-      </tr>
-    `).join('');
+    const fontStack = config.fontFamily === 'serif' 
+      ? "'Playfair Display', Georgia, serif" 
+      : config.fontFamily === 'mono' 
+      ? "'JetBrains Mono', 'Fira Code', Courier, monospace" 
+      : "'Inter', sans-serif";
 
-    printWindow.document.write(`
+    const bodySize = config.fontSize === 'compact' ? '10px' : config.fontSize === 'large' ? '14px' : '12px';
+    const rowPadding = config.fontSize === 'compact' ? '6px 8px' : config.fontSize === 'large' ? '16px 12px' : '12px 10px';
+    const isTableSimple = config.format === 'table_simple';
+
+    const rowsHTML = filteredRows.map(r => {
+      if (isTableSimple) {
+        return `
+          <tr style="border-bottom: 1px solid #000000;">
+            <td style="padding: ${rowPadding}; font-size: ${bodySize}; font-weight: bold; color: black;">${r.memberName}</td>
+            <td style="padding: ${rowPadding}; font-size: ${bodySize}; color: black;">${r.monthName} 2026</td>
+            <td style="padding: ${rowPadding}; font-size: ${bodySize}; color: black;">${r.paidDate ? new Date(r.paidDate).toLocaleDateString('pt-PT') : '—'}</td>
+            <td style="padding: ${rowPadding}; font-size: ${bodySize}; font-weight: bold; font-family: monospace; color: black; text-align: right;">${r.amount.toLocaleString('pt-AO', { minimumFractionDigits: 2 })} Kz</td>
+            <td style="padding: ${rowPadding}; font-size: ${bodySize}; font-weight: bold; color: black;">${r.isPaid ? 'Pago' : 'Pendente'}</td>
+          </tr>
+        `;
+      } else {
+        return `
+          <tr style="border-bottom: 1px solid #e2e8f0;">
+            <td style="padding: ${rowPadding}; font-size: ${bodySize}; font-weight: bold; color: #1e293b;">${r.memberName}</td>
+            <td style="padding: ${rowPadding}; font-size: ${bodySize}; color: #334155;">${r.monthName} 2026</td>
+            <td style="padding: ${rowPadding}; font-size: ${bodySize}; color: #475569;">${r.paidDate ? new Date(r.paidDate).toLocaleDateString('pt-PT') : '—'}</td>
+            <td style="padding: ${rowPadding}; font-size: ${bodySize}; font-weight: bold; font-family: monospace; color: #0f172a;">${r.amount.toLocaleString('pt-AO', { minimumFractionDigits: 2 })} Kz</td>
+            <td style="padding: ${rowPadding}; font-size: calc(${bodySize} - 1px); font-weight: bold;">
+              <span style="padding: 4px 8px; border-radius: 4px; ${r.isPaid ? 'background-color: #d1fae5; color: #065f46;' : 'background-color: #fef3c7; color: #92400e;'}">
+                ${r.isPaid ? 'Pago' : 'Pendente'}
+              </span>
+            </td>
+          </tr>
+        `;
+      }
+    }).join('');
+
+    const layoutHTML = isTableSimple ? `
       <html>
         <head>
           <title>Kixi-Fundo - Registo de Pagamento de Quotas</title>
           <style>
-            body { font-family: 'Helvetica Neue', Arial, sans-serif; padding: 40px; color: #1e293b; background-color: white; line-height: 1.4; }
+            @page { size: ${config.orientation}; margin: 15mm; }
+            body { font-family: ${fontStack}; padding: 10px; color: black; background-color: white; line-height: 1.3; font-size: ${bodySize}; }
+            .header-simple { border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 20px; }
+            .header-simple h1 { font-size: 16px; margin: 0 0 5px 0; text-transform: uppercase; font-weight: bold; }
+            .header-simple p { font-size: 10px; margin: 2px 0; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+            th { border-bottom: 2px solid black; padding: 8px; font-size: 10px; font-weight: bold; text-align: left; text-transform: uppercase; color: black; }
+            td { border-bottom: 1px solid #ccc; }
+          </style>
+        </head>
+        <body>
+          <div class="header-simple">
+            <h1>KIXI-FUNDO - REGISTO DE PAGAMENTO DE QUOTAS (LISTAGEM SIMPLES)</h1>
+            <p>Associação Consórcio de Poupança de Interajuda Coletiva</p>
+            <p><strong>Filtro Ativo:</strong> Mês de Ref: ${filterMonth === 'all' ? 'Todos' : filterMonth} | Estado: ${filterStatus.toUpperCase()}</p>
+            <p><strong>Data de Emissão:</strong> ${new Date().toLocaleString('pt-PT')} | Total Geral: ${totalArrecadado.toLocaleString('pt-AO', { minimumFractionDigits: 2 })} Kz</p>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="text-align: left;">Membro</th>
+                <th style="text-align: left;">Mês de Ref.</th>
+                <th style="text-align: left;">Data Pagamento</th>
+                <th style="text-align: right;">Valor Cooperado</th>
+                <th style="text-align: left;">Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rowsHTML}
+            </tbody>
+          </table>
+          <script>
+            window.onload = function() {
+              window.print();
+            };
+          </script>
+        </body>
+      </html>
+    ` : `
+      <html>
+        <head>
+          <title>Kixi-Fundo - Registo de Pagamento de Quotas</title>
+          <style>
+            @page { size: ${config.orientation}; margin: 20mm; }
+            body { font-family: ${fontStack}; padding: 30px; color: #1e293b; background-color: white; line-height: 1.4; font-size: ${bodySize}; }
             .header { text-align: center; border-bottom: 2px solid #0284c7; padding-bottom: 20px; margin-bottom: 30px; }
             .header h1 { font-size: 20px; color: #0284c7; margin: 0 0 5px 0; text-transform: uppercase; letter-spacing: 1px; }
             .header h2 { font-size: 12px; color: #475569; margin: 0; font-weight: normal; letter-spacing: 2px; text-transform: uppercase; }
             .meta { font-size: 10px; color: #64748b; margin-top: 10px; display: flex; justify-content: space-between; }
-            .info-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-bottom: 25px; font-size: 12px; }
+            .info-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 15px; margin-bottom: 25px; }
             table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
             th { background-color: #f1f5f9; color: #475569; padding: 10px; font-size: 10px; font-weight: bold; text-align: left; border-bottom: 2px solid #cbd5e1; text-transform: uppercase; }
             .footer { border-top: 1px solid #e2e8f0; margin-top: 50px; padding-top: 15px; text-align: center; font-size: 10px; color: #64748b; }
@@ -376,11 +449,11 @@ export default function PaymentsLedger({
           <table>
             <thead>
               <tr>
-                <th>Membro</th>
-                <th>Mês de Ref.</th>
-                <th>Data Pagamento</th>
-                <th>Valor Cooperado</th>
-                <th>Estado</th>
+                <th style="text-align: left;">Membro</th>
+                <th style="text-align: left;">Mês de Ref.</th>
+                <th style="text-align: left;">Data Pagamento</th>
+                <th style="text-align: right;">Valor Cooperado</th>
+                <th style="text-align: left;">Estado</th>
               </tr>
             </thead>
             <tbody>
@@ -398,7 +471,9 @@ export default function PaymentsLedger({
           </script>
         </body>
       </html>
-    `);
+    `;
+
+    printWindow.document.write(layoutHTML);
     printWindow.document.close();
     setShowExportDropdown(false);
   };
@@ -559,7 +634,10 @@ export default function PaymentsLedger({
                       className="absolute right-0 mt-2 w-44 bg-white dark:bg-slate-950 border border-slate-150 dark:border-slate-800 rounded-xl shadow-xl z-20 overflow-hidden"
                     >
                       <button
-                        onClick={handlePrintPDF}
+                        onClick={() => {
+                          setIsPrintModalOpen(true);
+                          setShowExportDropdown(false);
+                        }}
                         className="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-slate-900 text-xs text-slate-700 dark:text-slate-300 flex items-center gap-2 font-medium cursor-pointer"
                       >
                         <Printer className="w-3.5 h-3.5 text-[#0284c7]" />
@@ -863,6 +941,15 @@ export default function PaymentsLedger({
           </div>
         )}
       </AnimatePresence>
+
+      {/* Configurable Print Modal */}
+      <PrintConfigModal
+        isOpen={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        onConfirm={handlePrintPDF}
+        title="Imprimir Registo de Quotas"
+        subtitle="Selecione o estilo e orientação do livro de quotas recebidas."
+      />
     </div>
   );
 }

@@ -153,19 +153,30 @@ export default function ContractsTab({
 
     const monthlyInstallment = loan.payments?.[0]?.amount || (loan.amountRequested / loan.durationMonths);
 
-    // Apply template translations
-    return editedTemplate
-      .replace(/{REPRESENTANTE}/g, loan.representativeName || representativeName || 'Mendes Victor (Admin)')
-      .replace(/{BENEFICIARIO}/g, loan.borrowerName)
-      .replace(/{DOCUMENTO_ID}/g, loan.documentId || '[Por complementar]')
-      .replace(/{TELEFONE}/g, loan.phone || '[Por complementar]')
-      .replace(/{EMAIL}/g, loan.email || 'geral@kixfundo.ao')
-      .replace(/{VALOR_EMPRESTIMO}/g, formatCurrency(loan.amountRequested))
-      .replace(/{PRAZO_MESES}/g, String(loan.durationMonths))
-      .replace(/{TAXA_JUROS}/g, String(loan.interestRate))
-      .replace(/{MENSALIDADE}/g, formatCurrency(monthlyInstallment))
-      .replace(/{DATA_PRIMEIRA_PARCELA}/g, dateStr)
-      .replace(/{GARANTIAS}/g, loan.guarantees || 'Colateral preventivo fiduciário em bens móveis registados.');
+    const rep = loan.representativeName || representativeName || 'Mendes Victor (Admin)';
+    const borrower = loan.borrowerName;
+
+    // Apply template translations with bold tags for intervenientes and key elements
+    let text = editedTemplate
+      .replace(/{REPRESENTANTE}/g, `<strong>${rep}</strong>`)
+      .replace(/{BENEFICIARIO}/g, `<strong>${borrower}</strong>`)
+      .replace(/{DOCUMENTO_ID}/g, `<strong>${loan.documentId || '[Por complementar]'}</strong>`)
+      .replace(/{TELEFONE}/g, `<strong>${loan.phone || '[Por complementar]'}</strong>`)
+      .replace(/{EMAIL}/g, `<strong>${loan.email || 'geral@kixfundo.ao'}</strong>`)
+      .replace(/{VALOR_EMPRESTIMO}/g, `<strong>${formatCurrency(loan.amountRequested)}</strong>`)
+      .replace(/{PRAZO_MESES}/g, `<strong>${loan.durationMonths}</strong>`)
+      .replace(/{TAXA_JUROS}/g, `<strong>${loan.interestRate}</strong>`)
+      .replace(/{MENSALIDADE}/g, `<strong>${formatCurrency(monthlyInstallment)}</strong>`)
+      .replace(/{DATA_PRIMEIRA_PARCELA}/g, `<strong>${dateStr}</strong>`)
+      .replace(/{GARANTIAS}/g, `<strong>${loan.guarantees || 'Colateral preventivo fiduciário em bens móveis registados.'}</strong>`);
+
+    // Bold standard terms for elegant, classical legal formatting
+    text = text
+      .replace(/(CREDOR|Credor|CREDOR\(A\)):/g, '<strong>$1:</strong>')
+      .replace(/(DEVEDOR|Devedor|DEVEDOR\(A\)):/g, '<strong>$1:</strong>')
+      .replace(/(CLÁUSULA\s+[A-ZÚÉÍÓÁÂÊÔ]+(\s+-[^-]+)?)/gi, '<strong>$1</strong>');
+
+    return text;
   };
 
   const handleSaveTemplate = () => {
@@ -201,16 +212,101 @@ export default function ContractsTab({
   };
 
   const handlePrint = () => {
-    window.print();
+    const element = document.getElementById('print-document-targetId');
+    if (!element) return;
+    
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+    
+    const doc = iframe.contentWindow?.document || iframe.contentDocument;
+    if (!doc) return;
+    
+    let stylesHtml = '';
+    document.querySelectorAll('style, link[rel="stylesheet"]').forEach((el) => {
+      stylesHtml += el.outerHTML;
+    });
+    
+    doc.write(`
+      <!DOCTYPE html>
+      <html lang="pt-PT">
+        <head>
+          <meta charset="UTF-8">
+          <title>Contrato_${selectedLoanId}</title>
+          ${stylesHtml}
+          <style>
+            @page {
+              size: A4;
+              margin: 15mm;
+            }
+            body {
+              background: white !important;
+              color: black !important;
+              margin: 0 !important;
+              padding: 20px !important;
+              font-family: 'EB Garamond', Georgia, serif !important;
+              font-size: 11.5px !important;
+              line-height: 1.6 !important;
+            }
+            #print-document-targetId {
+              border: none !important;
+              box-shadow: none !important;
+              background: white !important;
+              padding: 0 !important;
+              margin: 0 !important;
+              color: black !important;
+              display: block !important;
+              max-width: 100% !important;
+            }
+            .contract-dotted-lines {
+              background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='32'><line x1='0' y1='31' x2='100' y2='31' stroke='%23bbb' stroke-width='1.2' stroke-dasharray='1,3'/></svg>") !important;
+              background-size: 100% 32px !important;
+              line-height: 32px !important;
+              text-align: justify !important;
+              text-justify: inter-word !important;
+            }
+            .contract-dotted-lines p, .contract-dotted-lines div {
+              line-height: 32px !important;
+              margin-top: 0 !important;
+              margin-bottom: 32px !important;
+              text-align: justify !important;
+            }
+            .contract-dotted-lines strong {
+              font-weight: 800 !important;
+              color: #000000 !important;
+            }
+            .no-print {
+              display: none !important;
+            }
+          </style>
+        </head>
+        <body>
+          <div id="print-document-targetId" class="bg-white text-slate-900 p-2">
+            ${element.innerHTML}
+          </div>
+          <script>
+            window.onload = function() {
+              window.focus();
+              setTimeout(function() {
+                window.print();
+                setTimeout(function() {
+                  window.parent.document.body.removeChild(window.frameElement);
+                }, 100);
+              }, 500);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    doc.close();
   };
 
   const handleOpenCleanPrintWindow = () => {
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      alert("O bloqueador de pop-ups impediu a abertura da nova janela. Por favor, autorize pop-ups para este site ou utilize o botão 'Imp. Simples' no ecrã.");
-      return;
-    }
-
     const processedText = getProcessedContractText(currentLoan);
     const monthlyInstallment = currentLoan.payments?.[0]?.amount || (currentLoan.amountRequested / currentLoan.durationMonths);
 
@@ -304,7 +400,20 @@ export default function ContractsTab({
       </div>
     ` : '';
 
-    printWindow.document.write(`
+    // Print utilizing a hidden iframe instead of window.open to resolve sandbox blocks
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+    
+    const doc = iframe.contentWindow?.document || iframe.contentDocument;
+    if (!doc) return;
+
+    doc.write(`
       <!DOCTYPE html>
       <html lang="pt-PT">
       <head>
@@ -316,35 +425,13 @@ export default function ContractsTab({
             margin: 20mm;
           }
           body {
-            font-family: 'Georgia', 'Times New Roman', serif;
+            font-family: 'EB Garamond', 'Georgia', serif;
             color: #000;
             background-color: #fff;
             line-height: 1.6;
-            padding: 20px;
+            padding: 0;
             margin: 0;
             font-size: 12px;
-          }
-          .no-print-btn {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: #4f46e5;
-            color: white;
-            padding: 10px 18px;
-            border: none;
-            border-radius: 8px;
-            font-family: sans-serif;
-            font-size: 11px;
-            font-weight: bold;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            cursor: pointer;
-            box-shadow: 0 4px 8px rgba(79, 70, 229, 0.25);
-            transition: background 0.2s;
-            z-index: 1000;
-          }
-          .no-print-btn:hover {
-            background: #4338ca;
           }
           .header {
             border-bottom: 2px solid #000;
@@ -405,6 +492,23 @@ export default function ContractsTab({
             margin-bottom: 30px;
             white-space: pre-line;
             font-size: 12px;
+          }
+          .contract-dotted-lines {
+            background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='32'><line x1='0' y1='31' x2='100' y2='31' stroke='%23d1d5db' stroke-width='1.2' stroke-dasharray='1,3'/></svg>") !important;
+            background-size: 100% 32px !important;
+            line-height: 32px !important;
+            text-align: justify !important;
+            text-justify: inter-word !important;
+          }
+          .contract-dotted-lines p, .contract-dotted-lines div {
+            line-height: 32px !important;
+            margin-top: 0 !important;
+            margin-bottom: 32px !important;
+            text-align: justify !important;
+          }
+          .contract-dotted-lines strong {
+            font-weight: 800 !important;
+            color: #030712 !important;
           }
           .table-section {
             border: 1px solid #000;
@@ -494,20 +598,9 @@ export default function ContractsTab({
             flex-shrink: 0;
             box-shadow: inset 0 0 2px rgba(0,0,0,0.05);
           }
-          @media print {
-            .no-print-btn {
-              display: none;
-            }
-            body {
-              padding: 0;
-              margin: 0;
-            }
-          }
         </style>
       </head>
       <body>
-        <button class="no-print-btn" onclick="window.print()">Imprimir Documento</button>
-        
         <div class="header">
           <div class="header-left">
             <h2>Kixi-Fundo Cooperativo</h2>
@@ -532,7 +625,7 @@ export default function ContractsTab({
           </div>
         </div>
 
-        <div class="content-text">
+        <div class="content-text contract-dotted-lines">
           ${processedText}
         </div>
 
@@ -544,15 +637,19 @@ export default function ContractsTab({
 
         <script>
           window.onload = function() {
+            window.focus();
             setTimeout(function() {
               window.print();
-            }, 500);
+              setTimeout(function() {
+                window.parent.document.body.removeChild(window.frameElement);
+              }, 100);
+            }, 300);
           };
         </script>
       </body>
       </html>
     `);
-    printWindow.document.close();
+    doc.close();
   };
 
   return (
@@ -888,9 +985,10 @@ export default function ContractsTab({
               </div>
 
               {/* Main Text Content */}
-              <div className="text-slate-850 text-xs sm:text-[13px] leading-relaxed font-serif tracking-normal whitespace-pre-wrap text-justify whitespace-pre-line space-y-4 pr-1">
-                {getProcessedContractText(currentLoan)}
-              </div>
+              <div 
+                className="text-slate-850 text-xs sm:text-[14px] leading-relaxed font-serif tracking-normal whitespace-pre-wrap text-justify whitespace-pre-line space-y-4 pr-1 contract-dotted-lines"
+                dangerouslySetInnerHTML={{ __html: getProcessedContractText(currentLoan) }}
+              />
 
               {/* Anexo A: Plan of Amortizations (Responsive / Print visual) */}
               {showAmortizationTableInDoc && (

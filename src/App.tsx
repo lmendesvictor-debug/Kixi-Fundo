@@ -3121,6 +3121,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                   logs={logs}
                   payoutsCompleted={payoutsCompleted}
                   formatCurrency={formatCurrency}
+                  loans={loans}
                 />
               </motion.div>
             )}

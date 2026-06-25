@@ -70,6 +70,8 @@ interface CreditManagementProps {
   setAppConfig?: React.Dispatch<React.SetStateAction<any>>;
   saveState?: (newMembers: Member[], newLogs: any[], newPayouts?: any, newMonth?: number, newLoans?: Loan[]) => any;
   logs?: any[];
+  canWrite?: boolean;
+  isAdminOverride?: boolean;
 }
 
 export default function CreditManagement({
@@ -83,8 +85,11 @@ export default function CreditManagement({
   setAppConfig = () => {},
   saveState = () => {},
   logs = [],
+  canWrite,
+  isAdminOverride,
 }: CreditManagementProps) {
-  const isAdmin = currentUser?.role === 'admin';
+  const isWriteAllowed = canWrite !== undefined ? canWrite : (currentUser?.role === 'admin');
+  const isAdmin = isAdminOverride !== undefined ? isAdminOverride : (currentUser?.role === 'admin');
   
   // Tab states: 'dashboard' | 'simulate' | 'portfolio' | 'debtors' | 'contracts'
   const [activeSubTab, setActiveSubTab] = useState<'dashboard' | 'simulate' | 'portfolio' | 'debtors' | 'contracts'>(() => {
@@ -188,6 +193,100 @@ export default function CreditManagement({
   const [editingLoadedTerms, setEditingLoadedTerms] = useState<boolean>(false);
   const [loadedContractTerms, setLoadedContractTerms] = useState<string>('');
 
+  const handlePrintContract = () => {
+    const element = document.getElementById('printable-contract-frame');
+    if (!element) return;
+    
+    const iframe = document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.right = '0';
+    iframe.style.bottom = '0';
+    iframe.style.width = '0';
+    iframe.style.height = '0';
+    iframe.style.border = '0';
+    document.body.appendChild(iframe);
+    
+    const doc = iframe.contentWindow?.document || iframe.contentDocument;
+    if (!doc) return;
+    
+    let stylesHtml = '';
+    document.querySelectorAll('style, link[rel="stylesheet"]').forEach((el) => {
+      stylesHtml += el.outerHTML;
+    });
+    
+    doc.write(`
+      <!DOCTYPE html>
+      <html lang="pt-PT">
+        <head>
+          <meta charset="UTF-8">
+          <title>Contrato_${printModalLoanId}</title>
+          ${stylesHtml}
+          <style>
+            @page {
+              size: A4;
+              margin: 15mm;
+            }
+            body {
+              background: white !important;
+              color: black !important;
+              margin: 0 !important;
+              padding: 20px !important;
+              font-family: ${printFontFamily === 'serif' ? "'EB Garamond', 'Georgia', serif" : printFontFamily === 'mono' ? "monospace" : "sans-serif"} !important;
+              font-size: ${printFontSize === 'compact' ? '11px' : printFontSize === 'elegant' ? '13px' : '12px'} !important;
+              line-height: 1.6 !important;
+            }
+            .printable-document-frame {
+              width: 100% !important;
+              max-width: 100% !important;
+              box-shadow: none !important;
+              border: none !important;
+              padding: 0 !important;
+              background: white !important;
+              color: black !important;
+            }
+            .contract-dotted-lines {
+              background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='32'><line x1='0' y1='31' x2='100' y2='31' stroke='%23d1d5db' stroke-width='1.2' stroke-dasharray='1,3'/></svg>") !important;
+              background-size: 100% 32px !important;
+              line-height: 32px !important;
+              text-align: justify !important;
+              text-justify: inter-word !important;
+            }
+            .contract-dotted-lines p, .contract-dotted-lines div {
+              line-height: 32px !important;
+              margin-top: 0 !important;
+              margin-bottom: 32px !important;
+              text-align: justify !important;
+            }
+            .contract-dotted-lines strong {
+              font-weight: 800 !important;
+              color: #030712 !important;
+            }
+            .no-print {
+              display: none !important;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="printable-document-frame">
+            ${element.innerHTML}
+          </div>
+          <script>
+            window.onload = function() {
+              window.focus();
+              setTimeout(function() {
+                window.print();
+                setTimeout(function() {
+                  window.parent.document.body.removeChild(window.frameElement);
+                }, 100);
+              }, 500);
+            };
+          </script>
+        </body>
+      </html>
+    `);
+    doc.close();
+  };
+
   // Auto adjusting default rates when type changes
   const handleTypeChange = (type: 'socio' | 'singular') => {
     setBorrowerType(type);
@@ -236,18 +335,26 @@ export default function CreditManagement({
     firstDueDate.setMonth(today.getMonth() + 1);
     const dateStr = firstDueDate.toLocaleDateString('pt-AO');
 
-    return template
-      .replace(/{REPRESENTANTE}/g, rep || 'Mendes Victor (Admin)')
-      .replace(/{BENEFICIARIO}/g, beneficiario)
-      .replace(/{DOCUMENTO_ID}/g, documento)
-      .replace(/{TELEFONE}/g, telefone)
-      .replace(/{EMAIL}/g, emailStr || 'geral@kixfundo.ao')
-      .replace(/{VALOR_EMPRESTIMO}/g, formatCurrency(valor))
-      .replace(/{PRAZO_MESES}/g, String(prazo))
-      .replace(/{TAXA_JUROS}/g, String(taxa))
-      .replace(/{MENSALIDADE}/g, formatCurrency(mensalidade))
-      .replace(/{DATA_PRIMEIRA_PARCELA}/g, dateStr)
-      .replace(/{GARANTIAS}/g, garantiasText || '[Nenhuma garantia especificada]');
+    let text = template
+      .replace(/{REPRESENTANTE}/g, `<strong>${rep || 'Mendes Victor (Admin)'}</strong>`)
+      .replace(/{BENEFICIARIO}/g, `<strong>${beneficiario}</strong>`)
+      .replace(/{DOCUMENTO_ID}/g, `<strong>${documento}</strong>`)
+      .replace(/{TELEFONE}/g, `<strong>${telefone}</strong>`)
+      .replace(/{EMAIL}/g, `<strong>${emailStr || 'geral@kixfundo.ao'}</strong>`)
+      .replace(/{VALOR_EMPRESTIMO}/g, `<strong>${formatCurrency(valor)}</strong>`)
+      .replace(/{PRAZO_MESES}/g, `<strong>${prazo}</strong>`)
+      .replace(/{TAXA_JUROS}/g, `<strong>${taxa}</strong>`)
+      .replace(/{MENSALIDADE}/g, `<strong>${formatCurrency(mensalidade)}</strong>`)
+      .replace(/{DATA_PRIMEIRA_PARCELA}/g, `<strong>${dateStr}</strong>`)
+      .replace(/{GARANTIAS}/g, `<strong>${garantiasText || '[Nenhuma garantia especificada]'}</strong>`);
+
+    // Bold standard terms for elegant, classical legal formatting
+    text = text
+      .replace(/(CREDOR|Credor|CREDOR\(A\)):/g, '<strong>$1:</strong>')
+      .replace(/(DEVEDOR|Devedor|DEVEDOR\(A\)):/g, '<strong>$1:</strong>')
+      .replace(/(CLÁUSULA\s+[A-ZÚÉÍÓÁÂÊÔ]+(\s+-[^-]+)?)/gi, '<strong>$1</strong>');
+
+    return text;
   };
 
   // Dashboard Stats Calculations
@@ -1399,27 +1506,33 @@ export default function CreditManagement({
                 Declaro consentimento pleno das cláusulas, validade do BI civil e veracidade jurídica dos bens de penhor descritos.
               </label>
 
-              <button
-                type="submit"
-                disabled={!readTerms || isSaving}
-                className={`w-full py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md ${
-                  readTerms && !isSaving
-                    ? 'bg-sky-600 hover:bg-sky-700 text-white font-black scale-[1.01] hover:shadow-lg hover:shadow-sky-500/10'
-                    : 'bg-slate-100 dark:bg-slate-850 text-slate-400 dark:text-slate-550 cursor-not-allowed border border-slate-200 dark:border-slate-800'
-                }`}
-              >
-                {isSaving ? (
-                  <>
-                    <div className="w-4 h-4 rounded-full border-2 border-slate-300 border-t-transparent animate-spin" />
-                    <span>A Gravar Contrato na Nuvem...</span>
-                  </>
-                ) : (
-                  <>
-                    <ShieldCheck className="w-4 h-4" />
-                    <span>Assinar & Desembolsar Crédito Ativo</span>
-                  </>
-                )}
-              </button>
+              {!isWriteAllowed ? (
+                <div className="bg-amber-500/10 border border-amber-500/25 p-4 rounded-xl text-amber-600 dark:text-amber-400 text-xs font-semibold text-center leading-relaxed">
+                  ⚠️ <strong>Apenas Leitura:</strong> Não possui permissões de escrita para conceder ou emitir novos contratos de crédito. Entre em contacto com o administrador.
+                </div>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={!readTerms || isSaving}
+                  className={`w-full py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md ${
+                    readTerms && !isSaving
+                      ? 'bg-sky-600 hover:bg-sky-700 text-white font-black scale-[1.01] hover:shadow-lg hover:shadow-sky-500/10'
+                      : 'bg-slate-100 dark:bg-slate-850 text-slate-400 dark:text-slate-550 cursor-not-allowed border border-slate-200 dark:border-slate-800'
+                  }`}
+                >
+                  {isSaving ? (
+                    <>
+                      <div className="w-4 h-4 rounded-full border-2 border-slate-300 border-t-transparent animate-spin" />
+                      <span>A Gravar Contrato na Nuvem...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ShieldCheck className="w-4 h-4" />
+                      <span>Assinar & Desembolsar Crédito Ativo</span>
+                    </>
+                  )}
+                </button>
+              )}
             </div>
 
           </div>
@@ -1609,7 +1722,7 @@ export default function CreditManagement({
                             <span className="text-[9px] font-black text-emerald-600 bg-emerald-100/50 dark:bg-[#052e25] px-2 py-0.5 rounded-full border border-emerald-250/50">
                               ✓ Pago {p.paidAt ? `(${p.paidAt})` : ''}
                             </span>
-                          ) : isAdmin ? (
+                          ) : (isAdmin && isWriteAllowed) ? (
                             <div className="flex items-center gap-1.5 flex-wrap justify-end">
                               <button
                                 type="button"
@@ -2008,7 +2121,7 @@ export default function CreditManagement({
               <div className="pt-2">
                 <button
                   type="button"
-                  onClick={() => window.print()}
+                  onClick={handlePrintContract}
                   className="w-full py-2.5 bg-sky-600 hover:bg-sky-700 text-white hover:shadow-lg hover:shadow-sky-500/10 text-xs font-black rounded-lg flex items-center justify-center gap-2 cursor-pointer transition-all hover:scale-[1.01]"
                 >
                   <Printer className="w-4 h-4" />
@@ -2071,21 +2184,24 @@ export default function CreditManagement({
                     />
                   </div>
                 ) : (
-                  <div className="whitespace-pre-wrap leading-relaxed text-slate-800 select-text pb-6 px-1">
-                    {loadedContractTerms || (loans.find(l => l.id === printModalLoanId) ? getProcessedLegalTermsReusable(
-                      getActiveContractTemplate(appConfig),
-                      loans.find(l => l.id === printModalLoanId)?.representativeName || '',
-                      loans.find(l => l.id === printModalLoanId)?.borrowerName || '',
-                      loans.find(l => l.id === printModalLoanId)?.documentId || '',
-                      loans.find(l => l.id === printModalLoanId)?.phone || '',
-                      loans.find(l => l.id === printModalLoanId)?.email || '',
-                      loans.find(l => l.id === printModalLoanId)?.amountRequested || 0,
-                      loans.find(l => l.id === printModalLoanId)?.durationMonths || 1,
-                      loans.find(l => l.id === printModalLoanId)?.interestRate || 0,
-                      loans.find(l => l.id === printModalLoanId)?.payments[0]?.amount || 0,
-                      loans.find(l => l.id === printModalLoanId)?.guarantees || ''
-                    ) : '')}
-                  </div>
+                  <div 
+                    className="whitespace-pre-wrap leading-relaxed text-slate-800 select-text pb-6 px-1 contract-dotted-lines"
+                    dangerouslySetInnerHTML={{
+                      __html: loadedContractTerms || (loans.find(l => l.id === printModalLoanId) ? getProcessedLegalTermsReusable(
+                        getActiveContractTemplate(appConfig),
+                        loans.find(l => l.id === printModalLoanId)?.representativeName || '',
+                        loans.find(l => l.id === printModalLoanId)?.borrowerName || '',
+                        loans.find(l => l.id === printModalLoanId)?.documentId || '',
+                        loans.find(l => l.id === printModalLoanId)?.phone || '',
+                        loans.find(l => l.id === printModalLoanId)?.email || '',
+                        loans.find(l => l.id === printModalLoanId)?.amountRequested || 0,
+                        loans.find(l => l.id === printModalLoanId)?.durationMonths || 1,
+                        loans.find(l => l.id === printModalLoanId)?.interestRate || 0,
+                        loans.find(l => l.id === printModalLoanId)?.payments[0]?.amount || 0,
+                        loans.find(l => l.id === printModalLoanId)?.guarantees || ''
+                      ) : '')
+                    }}
+                  />
                 )}
 
                 {/* Optional Amortization Table Block inside sheet */}

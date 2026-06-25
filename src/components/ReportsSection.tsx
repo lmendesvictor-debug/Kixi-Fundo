@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { jsPDF } from 'jspdf';
+import PrintConfigModal, { PrintConfig } from './PrintConfigModal';
 import { 
   FileText, 
   Download, 
@@ -33,7 +34,7 @@ import {
   ResponsiveContainer,
   Cell
 } from 'recharts';
-import { Member, KixLog } from '../types';
+import { Member, KixLog, Loan } from '../types';
 
 interface ReportsSectionProps {
   currentMonth: number;
@@ -41,6 +42,7 @@ interface ReportsSectionProps {
   logs: KixLog[];
   payoutsCompleted: { [month: number]: boolean };
   formatCurrency: (val: number) => string;
+  loans?: Loan[];
 }
 
 export default function ReportsSection({
@@ -49,8 +51,10 @@ export default function ReportsSection({
   logs,
   payoutsCompleted,
   formatCurrency,
+  loans = [],
 }: ReportsSectionProps) {
-  const [activeReportTab, setActiveReportTab] = useState<'payments' | 'banking' | 'utilization' | 'notifications'>('payments');
+  const [activeReportTab, setActiveReportTab] = useState<'payments' | 'banking' | 'utilization' | 'loans' | 'notifications'>('payments');
+  const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   
   // States for filtering transaction logs inside the "utilization" tab
   const [selectedLogMemberId, setSelectedLogMemberId] = useState<string>('all');
@@ -409,6 +413,48 @@ export default function ReportsSection({
     document.body.removeChild(link);
   };
 
+  const handleExportLoansExcel = () => {
+    let csvContent = '\uFEFF'; // Byte Order Mark for Excel UTF-8 representation
+    csvContent += 'ID Contrato;Devedor;Tipo;Documento ID;Telefone;Email;Valor Solicitado;Taxa de Juro;Duração (Meses);Garantias;Status;Data do Contrato;Total Amortizado;Principal Pago;Juros Pagos;Saldo Devedor\r\n';
+    
+    const loansList = loans || [];
+    loansList.forEach((l) => {
+      const totalPaid = l.payments.filter(p => p.paid).reduce((sum, p) => sum + p.amount, 0);
+      const principalPaid = l.payments.filter(p => p.paid).reduce((sum, p) => sum + p.principalPaid, 0);
+      const interestPaid = l.payments.filter(p => p.paid).reduce((sum, p) => sum + p.interestPaid, 0);
+      const remainingBalance = l.amountRequested - principalPaid;
+      
+      const row = [
+        l.id,
+        l.borrowerName,
+        l.borrowerType === 'socio' ? 'Sócio' : 'Singular',
+        l.documentId,
+        l.phone,
+        l.email,
+        l.amountRequested,
+        `${l.interestRate}%`,
+        l.durationMonths,
+        l.guarantees.replace(/"/g, '""'),
+        l.status.toUpperCase(),
+        l.contractDate,
+        totalPaid,
+        principalPaid,
+        interestPaid,
+        remainingBalance
+      ].join(';');
+      csvContent += row + '\r\n';
+    });
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', 'KixiFundo_Relatorio_Creditos_Microcreditos.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleExportBankExcel = () => {
     let csvContent = '\uFEFF';
     csvContent += 'Ciclo Mensal;Cooperadores Pagantes;Capital Arrecadado Bruto (KZs);Retenção Fundo Social (20k p/membro);Benefícios de Rotação Pagos (KZs);Apoios Sociais Concedidos;Saldo Líquido Mensal\r\n';
@@ -465,11 +511,292 @@ export default function ReportsSection({
     document.body.removeChild(link);
   };
 
-  const handlePrintPDF = () => {
+  const handlePrintPDF = (config: PrintConfig) => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
-    // Filter and format the logs of disbursements and aids
+    const fontStack = config.fontFamily === 'serif' 
+      ? "'Playfair Display', Georgia, serif" 
+      : config.fontFamily === 'mono' 
+      ? "'JetBrains Mono', 'Fira Code', Courier, monospace" 
+      : "'Inter', sans-serif";
+
+    const bodySize = config.fontSize === 'compact' ? '10px' : config.fontSize === 'large' ? '14px' : '12px';
+    const isTableSimple = config.format === 'table_simple';
+    const orientation = config.orientation;
+
+    if (activeReportTab === 'loans') {
+      const loansList = loans || [];
+      const totalPrincipalDisbursed = loansList.reduce((acc, l) => acc + l.amountRequested, 0);
+      const totalInterestCollected = loansList.reduce((acc, l) => acc + l.payments.filter(p => p.paid).reduce((sum, p) => sum + p.interestPaid, 0), 0);
+      const totalPrincipalCollected = loansList.reduce((acc, l) => acc + l.payments.filter(p => p.paid).reduce((sum, p) => sum + p.principalPaid, 0), 0);
+      const activeOutstanding = totalPrincipalDisbursed - totalPrincipalCollected;
+
+      const loansListHTML = loansList.map(l => {
+        const principalPaid = l.payments.filter(p => p.paid).reduce((sum, p) => sum + p.principalPaid, 0);
+        const interestPaid = l.payments.filter(p => p.paid).reduce((sum, p) => sum + p.interestPaid, 0);
+        const remaining = l.amountRequested - principalPaid;
+        const statusLabel = l.status === 'completed' ? 'PAGO ✓' : l.status === 'overdue' ? 'ATRASADO ✗' : 'ACTIVO';
+        const statusColor = l.status === 'completed' ? '#065f46' : l.status === 'overdue' ? '#991b1b' : '#0369a1';
+        const statusBg = l.status === 'completed' ? '#d1fae5' : l.status === 'overdue' ? '#fee2e2' : '#e0f2fe';
+        const statusBorder = l.status === 'completed' ? '#a7f3d0' : l.status === 'overdue' ? '#fecaca' : '#bae6fd';
+
+        return `
+          <tr style="border-bottom: 1px solid #f1f5f9;">
+            <td style="padding: 8px 10px; font-size: 9.5px; font-weight: bold; color: #0f172a;">${l.id}</td>
+            <td style="padding: 8px 10px; font-size: 9.5px; font-weight: bold; color: #0f172a;">${l.borrowerName}</td>
+            <td style="padding: 8px 10px; font-size: 9.5px; color: #475569;">${l.borrowerType === 'socio' ? 'Sócio' : 'Singular'}</td>
+            <td style="padding: 8px 10px; font-size: 9.5px; font-family: monospace; font-weight: bold; text-align: right;">${formatCurrency(l.amountRequested)}</td>
+            <td style="padding: 8px 10px; font-size: 9.5px; text-align: center;">${l.interestRate}%</td>
+            <td style="padding: 8px 10px; font-size: 9.5px; font-family: monospace; text-align: right; color: #059669;">${formatCurrency(principalPaid)}</td>
+            <td style="padding: 8px 10px; font-size: 9.5px; font-family: monospace; text-align: right; color: #0ea5e9;">${formatCurrency(interestPaid)}</td>
+            <td style="padding: 8px 10px; font-size: 9.5px; font-family: monospace; text-align: right; font-weight: bold; color: #b45309;">${formatCurrency(remaining)}</td>
+            <td style="padding: 8px 10px; font-size: 9.5px; text-align: center;">
+              <span style="display: inline-flex; align-items: center; justify-content: center; font-size: 8px; font-weight: bold; background-color: ${statusBg}; color: ${statusColor}; border-radius: 9999px; padding: 2px 7px; border: 1px solid ${statusBorder}; text-transform: uppercase;">
+                ${statusLabel}
+              </span>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Kixi-Fundo - Relatório de Carteira de Créditos</title>
+            <style>
+              @page { size: ${orientation}; margin: 15mm; }
+              body { 
+                font-family: ${fontStack}; 
+                font-size: ${bodySize};
+                padding: 30px; 
+                color: #1e293b; 
+                background-color: white; 
+                line-height: 1.35; 
+                -webkit-print-color-adjust: exact; 
+                print-color-adjust: exact; 
+              }
+              ${isTableSimple ? `
+                .header h1 { color: black !important; border-bottom: 2px solid black !important; }
+                .header h2, .header p, .meta-bar { color: black !important; }
+                .grid-metrics { display: none !important; }
+                .stamp-box, .chart-placeholder, .bg-sky-500, .bg-indigo-500, .stamp-container { display: none !important; }
+                table { border: 1px solid black !important; }
+                th { background-color: white !important; color: black !important; border-bottom: 2px solid black !important; }
+                td { border-bottom: 1px solid black !important; color: black !important; }
+                span { background-color: transparent !important; color: black !important; border: none !important; padding: 0 !important; }
+                .footer { color: black !important; border-top: 1px solid black !important; }
+              ` : ''}
+              .header { 
+                text-align: center; 
+                border-bottom: 2px solid #e2e8f0; 
+                padding-bottom: 12px; 
+                margin-bottom: 20px; 
+              }
+              .header h1 { 
+                font-size: 21px; 
+                color: #0c4a6e; 
+                margin: 0 0 4px 0; 
+                text-transform: uppercase; 
+                font-weight: 800; 
+                letter-spacing: 0.5px; 
+              }
+              .header h2 { 
+                font-size: 11px; 
+                color: #475569; 
+                margin: 0 0 6px 0; 
+                font-weight: 700; 
+                letter-spacing: 1.5px; 
+                text-transform: uppercase; 
+              }
+              .header p { 
+                font-size: 10px; 
+                color: #64748b; 
+                margin: 2px 0; 
+              }
+              .grid-metrics { 
+                display: grid; 
+                grid-template-cols: repeat(4, 1fr); 
+                gap: 12px; 
+                margin-bottom: 20px; 
+              }
+              .card-metric { 
+                border: 1px solid #f1f5f9; 
+                background-color: #f8fafc; 
+                padding: 12px; 
+                border-radius: 8px; 
+                box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+                position: relative; 
+              }
+              .card-metric-title { 
+                font-size: 8px; 
+                font-weight: bold; 
+                color: #64748b; 
+                text-transform: uppercase; 
+                letter-spacing: 0.5px; 
+                margin-bottom: 5px; 
+              }
+              .card-metric-value { 
+                font-size: 13.5px; 
+                font-weight: bold; 
+                color: #0f172a; 
+                font-family: monospace; 
+              }
+              table { 
+                width: 100%; 
+                border-collapse: collapse; 
+                margin-bottom: 20px; 
+              }
+              th { 
+                background-color: #f1f5f9; 
+                color: #475569; 
+                padding: 6px 10px; 
+                font-size: 9px; 
+                font-weight: bold; 
+                text-align: left; 
+                border-bottom: 1px solid #cbd5e1; 
+                text-transform: uppercase; 
+              }
+              td { 
+                padding: 6px 10px; 
+                font-size: 9.5px; 
+                border-bottom: 1px solid #f1f5f9; 
+              }
+              h3 { 
+                font-size: 11px; 
+                font-weight: bold; 
+                border-left: 4px solid #0c4a6e; 
+                padding-left: 8px; 
+                margin: 20px 0 10px 0; 
+                color: #0c4a6e; 
+                text-transform: uppercase; 
+                letter-spacing: 0.3px; 
+              }
+              .stamp-area { 
+                display: grid; 
+                grid-template-cols: repeat(3, 1fr); 
+                gap: 15px; 
+                margin-top: 25px; 
+                font-size: 9px; 
+              }
+              .stamp-box { 
+                text-align: center; 
+                border: 1px solid #e2e8f0; 
+                background-color: #f8fafc; 
+                border-radius: 6px; 
+                padding: 8px; 
+                color: #475569; 
+              }
+              .stamp-box strong { 
+                color: #0f172a; 
+                display: block; 
+                margin-bottom: 3px; 
+              }
+              .footer { 
+                border-top: 1px solid #f1f5f9; 
+                margin-top: 20px; 
+                padding-top: 8px; 
+                text-align: center; 
+                font-size: 8.5px; 
+                color: #94a3b8; 
+              }
+              @media print {
+                body { padding: 10px; font-size: 9px; }
+                input, button { display: none !important; }
+              }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h1>KIXI-FUNDO - CARTEIRA DE CRÉDITOS E RENTABILIZAÇÃO</h1>
+              <h2>Associação Consórcio de Poupança de Interajuda Coletiva</h2>
+              <p>Relatório Consolidado de Solvabilidade, Juros Arrecadados e Amortizações</p>
+              <p style="font-size: 9px; margin-top: 3px; font-weight: bold; color: #475569;">
+                Data de Emissão: ${new Date().toLocaleString('pt-PT')} | Auditor do Fundo: lmendesvictor@gmail.com
+              </p>
+            </div>
+
+            <div class="grid-metrics">
+              <div class="card-metric" style="border-left: 3px solid #0ea5e9;">
+                <div class="card-metric-title">Total Desembolsado</div>
+                <div class="card-metric-value">${formatCurrency(totalPrincipalDisbursed)}</div>
+                <div style="font-size: 8px; color: #64748b; margin-top: 2px;">Volume de Crédito Emitido</div>
+              </div>
+              <div class="card-metric" style="border-left: 3px solid #6366f1;">
+                <div class="card-metric-title">Principal em Aberto</div>
+                <div class="card-metric-value">${formatCurrency(activeOutstanding)}</div>
+                <div style="font-size: 8px; color: #64748b; margin-top: 2px;">Créditos em Amortização</div>
+              </div>
+              <div class="card-metric" style="border-left: 3px solid #059669;">
+                <div class="card-metric-title">Principal Recuperado</div>
+                <div class="card-metric-value">${formatCurrency(totalPrincipalCollected)}</div>
+                <div style="font-size: 8px; color: #10b981; font-weight: bold; margin-top: 2px;">Capital Reintegrado no Fundo</div>
+              </div>
+              <div class="card-metric" style="border-left: 3px solid #e11d48;">
+                <div class="card-metric-title">Juros Realizados (Ganhos)</div>
+                <div class="card-metric-value">${formatCurrency(totalInterestCollected)}</div>
+                <div style="font-size: 8px; color: #059669; font-weight: bold; margin-top: 2px;">Rentabilidade Adicional</div>
+              </div>
+            </div>
+
+            <h3>1. Carteira Geral de Créditos Concedidos</h3>
+            <table>
+              <thead>
+                <tr>
+                  <th style="font-size: 9px;">Contrato</th>
+                  <th style="font-size: 9px;">Devedor</th>
+                  <th style="font-size: 9px;">Tipo</th>
+                  <th style="font-size: 9px; text-align: right;">Valor Solicitado</th>
+                  <th style="font-size: 9px; text-align: center;">Taxa</th>
+                  <th style="font-size: 9px; text-align: right;">Principal Pago</th>
+                  <th style="font-size: 9px; text-align: right;">Juros Pagos</th>
+                  <th style="font-size: 9px; text-align: right;">Saldo Devedor</th>
+                  <th style="font-size: 9px; text-align: center;">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${loansListHTML}
+              </tbody>
+            </table>
+
+            <div class="stamp-area">
+              <div class="stamp-box">
+                <strong>Direção do Fundo Cooperativo Kixi-Funde</strong>
+                <span style="font-size: 8px; color: #64748b; display: block; border-top: 1px dashed #e2e8f0; margin-top: 5px; padding-top: 4px;">
+                  Associação de Direito Angolano
+                </span>
+              </div>
+              <div class="stamp-box">
+                <strong>Mendes Pambo</strong>
+                <span style="font-size: 8px; color: #64748b; display: block; border-top: 1px dashed #e2e8f0; margin-top: 5px; padding-top: 4px;">
+                  Administrador Principal do Fundo
+                </span>
+              </div>
+              <div class="stamp-box" style="border: 2px double #0ea5e9; background-color: #f0f9ff;">
+                <strong style="color: #0369a1;">Auditoria de Créditos</strong>
+                <span style="font-size: 8px; color: #0369a1; font-weight: bold; display: block; border-top: 1px dashed #bae6fd; margin-top: 5px; padding-top: 4px;">
+                  Património e Caixa Conciliados ✓
+                </span>
+              </div>
+            </div>
+
+            <div class="footer">
+              <p>© 2026 Kixi-Fundo - Gestão de Finanças Comparticipadas, Angola. Relatório de crédito gerado de forma segura e auditável.</p>
+            </div>
+            <script>
+              window.onload = function() {
+                setTimeout(function() {
+                  window.print();
+                }, 300);
+              };
+            </script>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      return;
+    }
+
     const relevantLogsHTML = logs
       .filter(l => l.type === 'payout' || l.type === 'social_aid')
       .map(l => {
@@ -535,8 +862,10 @@ export default function ReportsSection({
         <head>
           <title>Kixi-Fundo - Relatório de Auditoria Financeira</title>
           <style>
+            @page { size: ${orientation}; margin: 15mm; }
             body { 
-              font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; 
+              font-family: ${fontStack}; 
+              font-size: ${bodySize};
               padding: 30px; 
               color: #1e293b; 
               background-color: white; 
@@ -544,6 +873,17 @@ export default function ReportsSection({
               -webkit-print-color-adjust: exact; 
               print-color-adjust: exact; 
             }
+            ${isTableSimple ? `
+              .header h1 { color: black !important; border-bottom: 2px solid black !important; }
+              .header h2, .header p, .meta-bar { color: black !important; }
+              .grid-metrics { display: none !important; }
+              .stamp-box, .chart-placeholder, .bg-sky-500, .bg-indigo-500, .stamp-container, .stamp-box { display: none !important; }
+              table { border: 1px solid black !important; }
+              th { background-color: white !important; color: black !important; border-bottom: 2px solid black !important; }
+              td { border-bottom: 1px solid black !important; color: black !important; }
+              span { background-color: transparent !important; color: black !important; border: none !important; padding: 0 !important; }
+              .footer { color: black !important; border-top: 1px solid black !important; }
+            ` : ''}
             .header { 
               text-align: center; 
               border-bottom: 2px solid #e2e8f0; 
@@ -1344,7 +1684,7 @@ export default function ReportsSection({
               Exportar Relatório PDF
             </button>
             <button 
-              onClick={handlePrintPDF}
+              onClick={() => setIsPrintModalOpen(true)}
               className="flex items-center justify-center gap-1.5 text-xs font-bold px-4 py-2.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl shadow-sm transition-all cursor-pointer"
             >
               <Printer className="w-4 h-4" />
@@ -1355,6 +1695,7 @@ export default function ReportsSection({
                 if (activeReportTab === 'payments') handleExportPaymentsExcel();
                 else if (activeReportTab === 'banking') handleExportBankExcel();
                 else if (activeReportTab === 'utilization') handleExportUtilizationExcel();
+                else if (activeReportTab === 'loans') handleExportLoansExcel();
                 else handleExportPaymentsExcel();
               }}
               className="flex items-center justify-center gap-1.5 text-xs font-bold px-4 py-2.5 bg-slate-800 hover:bg-slate-705 border border-slate-700 text-white rounded-xl shadow-sm transition-all cursor-pointer"
@@ -1400,6 +1741,17 @@ export default function ReportsSection({
         >
           <TrendingUp className="w-4 h-4" />
           Verbas Utilizadas (Auxílios)
+        </button>
+        <button
+          onClick={() => setActiveReportTab('loans')}
+          className={`px-4 py-2 text-xs font-bold rounded-lg transition-all flex items-center gap-2 ${
+            activeReportTab === 'loans'
+              ? 'bg-sky-50 text-sky-700 border-b-2 border-sky-600 font-extrabold shadow-sm'
+              : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100/50'
+          }`}
+        >
+          <Coins className="w-4 h-4" />
+          Créditos e Rentabilidade
         </button>
         <button
           onClick={() => setActiveReportTab('notifications')}
@@ -2180,6 +2532,129 @@ export default function ReportsSection({
           );
         })()}
 
+        {/* TAB 4: LOANS & MICROCREDITS PORTFOLIO */}
+        {activeReportTab === 'loans' && (() => {
+          const loansList = loans || [];
+          const totalPrincipalDisbursed = loansList.reduce((acc, l) => acc + l.amountRequested, 0);
+          const totalInterestCollected = loansList.reduce((acc, l) => acc + l.payments.filter(p => p.paid).reduce((sum, p) => sum + p.interestPaid, 0), 0);
+          const totalPrincipalCollected = loansList.reduce((acc, l) => acc + l.payments.filter(p => p.paid).reduce((sum, p) => sum + p.principalPaid, 0), 0);
+          const activeOutstanding = totalPrincipalDisbursed - totalPrincipalCollected;
+
+          return (
+            <motion.div
+              key="loans_portfolio"
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="space-y-6"
+            >
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider text-left">Carteira de Microcréditos e Rentabilidade</h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 text-left">Visão consolidada e auditável de todos os empréstimos concedidos, amortizações efetuadas e juros rentabilizados.</p>
+                </div>
+                <button 
+                  onClick={handleExportLoansExcel}
+                  className="flex items-center justify-center gap-1.5 text-xs font-bold px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 shadow-sm cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  Descarregar Excel (.xlsx)
+                </button>
+              </div>
+
+              {/* KPI cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-white dark:bg-[#151c2c] border border-slate-100 dark:border-slate-800 p-5 rounded-xl text-left">
+                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Volume Desembolsado</span>
+                  <p className="text-lg font-black font-mono text-slate-900 dark:text-white mt-1">{formatCurrency(totalPrincipalDisbursed)}</p>
+                  <p className="text-[9px] text-slate-450 dark:text-slate-500 font-medium mt-0.5">{loansList.length} créditos concedidos no total</p>
+                </div>
+                <div className="bg-white dark:bg-[#151c2c] border border-slate-100 dark:border-slate-800 p-5 rounded-xl text-left">
+                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Principal Ativo (Em Aberto)</span>
+                  <p className="text-lg font-black font-mono text-amber-650 mt-1">{formatCurrency(activeOutstanding)}</p>
+                  <p className="text-[9px] text-slate-450 dark:text-slate-500 font-medium mt-0.5">Carteira sob amortização</p>
+                </div>
+                <div className="bg-white dark:bg-[#151c2c] border border-slate-100 dark:border-slate-800 p-5 rounded-xl text-left">
+                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Principal Reintegrado</span>
+                  <p className="text-lg font-black font-mono text-emerald-600 mt-1">{formatCurrency(totalPrincipalCollected)}</p>
+                  <p className="text-[9px] text-slate-450 dark:text-slate-500 font-medium mt-0.5">Retornado de amortizações</p>
+                </div>
+                <div className="bg-white dark:bg-[#151c2c] border border-slate-100 dark:border-slate-800 p-5 rounded-xl text-left">
+                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Rentabilidade Arrecadada</span>
+                  <p className="text-lg font-black font-mono text-sky-600 mt-1">{formatCurrency(totalInterestCollected)}</p>
+                  <p className="text-[9px] text-slate-450 dark:text-slate-500 font-medium mt-0.5">Juros ganhos pelo fundo</p>
+                </div>
+              </div>
+
+              {/* Table of loans */}
+              <div className="border border-slate-100 dark:border-slate-900 rounded-xl bg-white dark:bg-[#151c2c] overflow-hidden shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr>
+                        <th className="bg-slate-50 dark:bg-[#0e1320] p-3.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Contrato</th>
+                        <th className="bg-slate-50 dark:bg-[#0e1320] p-3.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Devedor</th>
+                        <th className="bg-slate-50 dark:bg-[#0e1320] p-3.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Tipo</th>
+                        <th className="bg-slate-50 dark:bg-[#0e1320] p-3.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Valor Concedido</th>
+                        <th className="bg-slate-50 dark:bg-[#0e1320] p-3.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center">Taxa</th>
+                        <th className="bg-slate-50 dark:bg-[#0e1320] p-3.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Principal Pago</th>
+                        <th className="bg-slate-50 dark:bg-[#0e1320] p-3.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Juros Pagos</th>
+                        <th className="bg-slate-50 dark:bg-[#0e1320] p-3.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Saldo Devedor</th>
+                        <th className="bg-slate-50 dark:bg-[#0e1320] p-3.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {loansList.length === 0 ? (
+                        <tr>
+                          <td colSpan={9} className="p-8 text-center text-xs text-slate-400">Nenhum crédito emitido no sistema.</td>
+                        </tr>
+                      ) : (
+                        loansList.map((l) => {
+                          const principalPaid = l.payments.filter(p => p.paid).reduce((sum, p) => sum + p.principalPaid, 0);
+                          const interestPaid = l.payments.filter(p => p.paid).reduce((sum, p) => sum + p.interestPaid, 0);
+                          const remaining = l.amountRequested - principalPaid;
+
+                          return (
+                            <tr key={l.id} className="hover:bg-slate-50/40 dark:hover:bg-slate-950/10 transition-colors">
+                              <td className="p-3 text-xs font-bold font-mono text-slate-900 dark:text-white">{l.id}</td>
+                              <td className="p-3 text-xs font-semibold text-slate-800 dark:text-slate-200">{l.borrowerName}</td>
+                              <td className="p-3 text-xs text-slate-600 dark:text-slate-400">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                                  l.borrowerType === 'socio' 
+                                    ? 'bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-450' 
+                                    : 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600 dark:text-indigo-450'
+                                }`}>
+                                  {l.borrowerType === 'socio' ? 'Sócio' : 'Singular'}
+                                </span>
+                              </td>
+                              <td className="p-3 text-xs font-mono font-bold text-right text-slate-900 dark:text-white">{formatCurrency(l.amountRequested)}</td>
+                              <td className="p-3 text-xs font-semibold text-center text-slate-700 dark:text-slate-300">{l.interestRate}%</td>
+                              <td className="p-3 text-xs font-mono text-right text-emerald-600">{formatCurrency(principalPaid)}</td>
+                              <td className="p-3 text-xs font-mono text-right text-sky-600">{formatCurrency(interestPaid)}</td>
+                              <td className="p-3 text-xs font-mono font-bold text-right text-amber-700 dark:text-amber-550">{formatCurrency(remaining)}</td>
+                              <td className="p-3 text-xs text-center">
+                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
+                                  l.status === 'completed'
+                                    ? 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-450'
+                                    : l.status === 'overdue'
+                                      ? 'bg-rose-50 dark:bg-rose-950/20 text-rose-700 dark:text-rose-450'
+                                      : 'bg-blue-50 dark:bg-blue-950/20 text-blue-700 dark:text-blue-450'
+                                }`}>
+                                  {l.status === 'completed' ? 'PAGO ✓' : l.status === 'overdue' ? 'ATRASADO ✗' : 'ACTIVO'}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </motion.div>
+          );
+        })()}
+
         {/* TAB 4: MOCK NOTIFICATIONS SENDER INTERACTION COMPONENTE */}
         {activeReportTab === 'notifications' && (
           <motion.div
@@ -2398,6 +2873,14 @@ export default function ReportsSection({
 
       </AnimatePresence>
 
+      {/* Configurable Print Modal */}
+      <PrintConfigModal
+        isOpen={isPrintModalOpen}
+        onClose={() => setIsPrintModalOpen(false)}
+        onConfirm={handlePrintPDF}
+        title="Imprimir Relatório de Auditoria"
+        subtitle="Selecione o estilo e orientação do relatório consolidado."
+      />
     </div>
   );
 

@@ -32,6 +32,8 @@ interface MembersTableProps {
   currentUser?: any;
   onSimulateMember?: (memberId: number) => void;
   onRegisterSecurityAttempt?: (userId: string) => void;
+  canWrite?: boolean;
+  isAdminOverride?: boolean;
 }
 
 const AVATAR_COLORS = [
@@ -62,14 +64,19 @@ export default function MembersTable({
   currentUser,
   onSimulateMember,
   onRegisterSecurityAttempt,
+  canWrite,
+  isAdminOverride,
 }: MembersTableProps) {
-  const [isAdminMode, setIsAdminMode] = useState<boolean>(currentUser?.role === 'admin');
+  const isWriteAllowed = canWrite !== undefined ? canWrite : (currentUser?.role === 'admin');
+  const isAdminModeAllowed = currentUser?.role === 'admin' && isWriteAllowed;
+
+  const [isAdminMode, setIsAdminMode] = useState<boolean>(isAdminModeAllowed);
   const [showFormModal, setShowFormModal] = useState<boolean>(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
 
   React.useEffect(() => {
-    setIsAdminMode(currentUser?.role === 'admin');
-  }, [currentUser]);
+    setIsAdminMode(currentUser?.role === 'admin' && (canWrite !== undefined ? canWrite : true));
+  }, [currentUser, canWrite]);
 
   // Search & Filters State
   const [searchTerm, setSearchTerm] = useState('');
@@ -601,7 +608,7 @@ export default function MembersTable({
         </div>
 
         {/* Action button panel - Only show admin options if logged-in user is actually admin */}
-        {currentUser?.role === 'admin' && (
+        {isAdminModeAllowed && (
           <div className="flex flex-wrap items-center gap-2.5">
             <button
               onClick={() => setIsAdminMode(!isAdminMode)}
@@ -951,7 +958,7 @@ export default function MembersTable({
                         )}
 
                         {/* Always available Quick Payment status flip for admin */}
-                        {currentUser?.role === 'admin' && (
+                        {isAdminModeAllowed && (
                           <button
                             type="button"
                             onClick={() => onToggleContribution(m.id)}
@@ -966,7 +973,7 @@ export default function MembersTable({
                         )}
 
                         {/* Core edit action */}
-                        {currentUser?.role === 'admin' && (
+                        {isAdminModeAllowed && (
                           <button
                             type="button"
                             onClick={() => handleOpenEditForm(m)}
@@ -978,7 +985,7 @@ export default function MembersTable({
                         )}
 
                         {/* Core delete action */}
-                        {currentUser?.role === 'admin' && (
+                        {isAdminModeAllowed && (
                           <button
                             type="button"
                             onClick={() => handleDeleteMember(m.id, m.name)}
