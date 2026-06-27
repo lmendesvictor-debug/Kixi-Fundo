@@ -33,6 +33,7 @@ import {
   Calendar,
   Check,
   Menu,
+  BellRing,
 } from 'lucide-react';
 
 import { Member, KixLog, CarouselSlide, getMemberIdCode, Loan, AppConfig } from './types';
@@ -65,7 +66,7 @@ import {
   OperationType,
   saveBackupToFirestore
 } from './firebaseSync';
-import { doc, onSnapshot, disableNetwork, enableNetwork } from 'firebase/firestore';
+import { doc, onSnapshot, disableNetwork, enableNetwork, collection } from 'firebase/firestore';
 import { db } from './driveBackup';
 
 interface AppUser {
@@ -120,7 +121,68 @@ const DEFAULT_CAROUSEL_SLIDES: CarouselSlide[] = [
   }
 ];
 
+interface VisualNotification {
+  id: string;
+  title: string;
+  message: string;
+  timestamp: string;
+  type: 'info' | 'success' | 'warning';
+  actionLabel?: string;
+  onClickAction?: () => void;
+}
+
 export default function App() {
+  const [activeNotifications, setActiveNotifications] = useState<VisualNotification[]>([]);
+  const sessionStartTimeRef = useRef<number>(Date.now());
+
+  const playChime = () => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const playNote = (freq: number, start: number, duration: number) => {
+        const osc = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, start);
+        gainNode.gain.setValueAtTime(0, start);
+        gainNode.gain.linearRampToValueAtTime(0.15, start + 0.05);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+        osc.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        osc.start(start);
+        osc.stop(start + duration);
+      };
+      const now = audioCtx.currentTime;
+      playNote(523.25, now, 0.4); // C5
+      playNote(659.25, now + 0.1, 0.4); // E5
+      playNote(783.99, now + 0.2, 0.5); // G5
+    } catch (e) {
+      console.warn("Audio chime block or unsupported:", e);
+    }
+  };
+
+  const addNotification = (notif: Omit<VisualNotification, 'id'>) => {
+    const id = `notif-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    const fullNotif = { ...notif, id };
+    
+    setActiveNotifications(prev => [fullNotif, ...prev]);
+    playChime();
+
+    // Auto remove after 10 seconds
+    setTimeout(() => {
+      setActiveNotifications(prev => prev.filter(n => n.id !== id));
+    }, 10000);
+  };
+
+  const triggerPushNotification = (title: string, options?: NotificationOptions) => {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      try {
+        new Notification(title, options);
+      } catch (e) {
+        console.warn("Could not fire desktop notification:", e);
+      }
+    }
+  };
+
   const [currentUser, setCurrentUser] = useState<AppUser | null>(() => {
     const saved = localStorage.getItem('kix_current_user');
     if (saved) {
@@ -371,6 +433,73 @@ export default function App() {
       window.removeEventListener('error', handleError);
     };
   }, []);
+
+  // Request desktop notification permissions for Admin
+  useEffect(() => {
+    if (currentUser?.role === 'admin' && 'Notification' in window) {
+      if (Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+    }
+  }, [currentUser]);
+
+  // Real-time Firestore snapshot listener for Admin Notifications
+  useEffect(() => {
+    if (!currentUser || currentUser.role !== 'admin' || isFirestoreQuotaExceeded) return;
+
+    // Track already notified receipt IDs to avoid duplicates
+    const notifiedIds = new Set<string>();
+
+    const colRef = collection(db, 'kix_comprovativos');
+    const unsubscribe = onSnapshot(colRef, (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'added' || change.type === 'modified') {
+          const data = change.doc.data();
+          
+          // Trigger if pending validation
+          if (data.status === 'pending_admin_validation') {
+            const receiptId = change.doc.id;
+            const docTime = data.timestamp ? new Date(data.timestamp).getTime() : Date.now();
+
+            // Notify if it's within the session or recently uploaded
+            if (docTime > sessionStartTimeRef.current - 120000 && !notifiedIds.has(receiptId)) {
+              notifiedIds.add(receiptId);
+              
+              // Add elegant toast
+              addNotification({
+                title: "📥 Comprovativo Recebido",
+                message: `O cooperante ${data.detectedMemberName} submeteu um comprovativo de 120.000,00 KZs (Mês ${data.targetMonth}) para validação bancária física.`,
+                timestamp: new Date().toISOString(),
+                type: 'info',
+                actionLabel: 'Ver e Validar',
+                onClickAction: () => {
+                  setActiveTab('admin-module');
+                  setTimeout(() => {
+                    const el = document.getElementById('admin-actions-anchor') || document.querySelector('.admin-action-center');
+                    if (el) {
+                      el.scrollIntoView({ behavior: 'smooth' });
+                    }
+                  }, 350);
+                }
+              });
+
+              // Push native notification
+              triggerPushNotification("Kixi-Fundo: Novo Comprovativo", {
+                body: `Cooperante: ${data.detectedMemberName}\nMês: ${data.targetMonth}\nRequer validação no extrato físico.`,
+                icon: '/icon.png'
+              });
+            }
+          }
+        }
+      });
+    }, (err) => {
+      console.error("Real-time notifications listener error:", err);
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [currentUser, isFirestoreQuotaExceeded]);
 
   const [firestorePendingOps, setFirestorePendingOps] = useState<{ id: string; timestamp: string; description: string }[]>(() => {
     const saved = localStorage.getItem('kix_firestore_pending_ops_queue');
@@ -3221,6 +3350,55 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
             </button>
           )}
         </div>
+      </div>
+
+      {/* Floating Real-time Notifications Stack for Admin alerts */}
+      <div className="fixed top-4 right-4 z-[9999] pointer-events-none space-y-3 w-full max-w-sm px-4 sm:px-0">
+        <AnimatePresence>
+          {activeNotifications.map((notif) => (
+            <motion.div
+              key={notif.id}
+              initial={{ opacity: 0, x: 50, scale: 0.9 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 50, scale: 0.9 }}
+              transition={{ type: "spring", stiffness: 350, damping: 25 }}
+              className="pointer-events-auto bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl rounded-xl p-4 flex gap-3 relative overflow-hidden group hover:border-amber-500/40 transition-all"
+            >
+              <div className="absolute top-0 left-0 w-1 h-full bg-amber-500" />
+              <div className="flex-1 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-500 flex items-center gap-1.5">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+                    </span>
+                    {notif.title}
+                  </span>
+                  <button
+                    onClick={() => setActiveNotifications(prev => prev.filter(n => n.id !== notif.id))}
+                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer p-0.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-300 font-medium leading-normal">
+                  {notif.message}
+                </p>
+                {notif.actionLabel && notif.onClickAction && (
+                  <button
+                    onClick={() => {
+                      notif.onClickAction?.();
+                      setActiveNotifications(prev => prev.filter(n => n.id !== notif.id));
+                    }}
+                    className="mt-1 bg-slate-900 dark:bg-slate-800 hover:bg-black text-white font-extrabold text-[10px] py-1 px-2.5 rounded uppercase tracking-wider cursor-pointer transition-all flex items-center gap-1 w-fit"
+                  >
+                    {notif.actionLabel}
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
 
       <RegulationsModal isOpen={showRegulations} onClose={() => setShowRegulations(false)} />

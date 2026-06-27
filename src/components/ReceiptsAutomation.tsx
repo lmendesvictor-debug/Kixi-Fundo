@@ -17,7 +17,10 @@ import {
   Sparkles,
   User,
   Info,
-  Printer
+  Printer,
+  BellRing,
+  CheckSquare,
+  XCircle
 } from 'lucide-react';
 import { Member, KixLog } from '../types';
 import { saveReceiptToFirestore, loadReceiptsFromFirestore, deleteReceiptFromFirestore } from '../firebaseSync';
@@ -31,7 +34,7 @@ interface Receipt {
   timestamp: string;
   detectedMemberName: string;
   detectedMemberId: number | null;
-  status: 'matched_paid' | 'unmatched_pending' | 'manually_matched';
+  status: 'matched_paid' | 'unmatched_pending' | 'manually_matched' | 'pending_admin_validation';
   targetMonth: number;
   uploadedBy: string;
   fileDataUrl?: string; // actual uploaded file data URL (base64)
@@ -93,6 +96,11 @@ export default function ReceiptsAutomation({
   // Simulated OCR variables for Audit Rules
   const [simulatedPdfAmount, setSimulatedPdfAmount] = useState<number>(120000);
   const [simulatedPdfMonth, setSimulatedPdfMonth] = useState<number>(targetMonth);
+
+  // States for interactive Association Prompt (Membro A vs Membro B)
+  const [showAssociationPrompt, setShowAssociationPrompt] = useState<boolean>(false);
+  const [candidateMemberA, setCandidateMemberA] = useState<Member | null>(null);
+  const [candidateMemberB, setCandidateMemberB] = useState<Member | null>(null);
 
   useEffect(() => {
     setSimulatedPdfMonth(targetMonth);
@@ -203,6 +211,32 @@ export default function ReceiptsAutomation({
         }
       }
       setSimulatedPdfMonth(detectedMonth);
+
+      // Determine Candidate A
+      let memberA: Member | null = null;
+      if (currentUser?.role === 'membro') {
+        memberA = members.find((m) => m.email.toLowerCase() === currentUser?.email?.toLowerCase()) || null;
+      } else {
+        memberA = members.find((m) => m.id === targetMemberId) || null;
+      }
+      if (!memberA && members.length > 0) {
+        memberA = members[0];
+      }
+
+      // Determine Candidate B (an alternative member who hasn't paid targetMonth yet)
+      let memberB: Member | null = null;
+      const unpaidMembersForMonth = members.filter(
+        (m) => m.id !== (memberA?.id || -1) && !m.contributions[detectedMonth]?.paid
+      );
+      if (unpaidMembersForMonth.length > 0) {
+        memberB = unpaidMembersForMonth[0];
+      } else {
+        memberB = members.find((m) => m.id !== (memberA?.id || -1)) || null;
+      }
+
+      setCandidateMemberA(memberA);
+      setCandidateMemberB(memberB);
+      setShowAssociationPrompt(true);
 
       const reader = new FileReader();
       reader.onload = () => {
@@ -339,6 +373,233 @@ export default function ReceiptsAutomation({
       if (fileInputRef.current) fileInputRef.current.value = '';
       setIsProcessing(false);
     }, 1300);
+  };
+
+  // Confirm payment closure and associate the voucher automatically (As requested)
+  const confirmAndClosePayment = (selectedMember: Member) => {
+    if (!selectedFile) return;
+    setIsProcessing(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+
+    setTimeout(() => {
+      // Run Audit Rule Check
+      const isAmountCorrect = simulatedPdfAmount === 120000;
+      const isMonthCorrect = simulatedPdfMonth === targetMonth;
+      const auditPassed = isAmountCorrect && isMonthCorrect;
+
+      let auditDetails = '';
+      let auditStatus: 'passed' | 'failed' = 'passed';
+      if (!auditPassed) {
+        auditStatus = 'failed';
+        if (!isAmountCorrect && !isMonthCorrect) {
+          auditDetails = `Divergência Crítica: Valor extraído (${simulatedPdfAmount === 0 ? 'indetectável' : simulatedPdfAmount.toLocaleString('pt-PT') + ' KZs'}) e Mês extraído (Mês ${simulatedPdfMonth === 0 ? 'indetectável' : simulatedPdfMonth}) não coincidem com o esperado (120.000,00 KZs, Mês ${targetMonth}).`;
+        } else if (!isAmountCorrect) {
+          auditDetails = `Divergência de Valor: Valor extraído do PDF (${simulatedPdfAmount === 0 ? 'indetectável' : simulatedPdfAmount.toLocaleString('pt-PT') + ' KZs'}) difere do valor oficial exigido de 120.000,00 KZs.`;
+        } else {
+          auditDetails = `Divergência de Mês: Comprovativo refere-se ao Mês ${simulatedPdfMonth === 0 ? 'indetectável' : simulatedPdfMonth}, mas a liquidação solicitada é para o Mês ${targetMonth}.`;
+        }
+      } else {
+        auditDetails = `Conformidade Confirmada: Valor de 120.000,00 KZs e referência ao Mês ${targetMonth} validados com sucesso no documento.`;
+      }
+
+      // Create new Receipt item with state 'pending_admin_validation'
+      const newReceipt: Receipt = {
+        id: `rec-usr-${Date.now()}`,
+        senderPhone: selectedMember.phone,
+        fileName: selectedFile.name,
+        fileSize: `${(selectedFile.size / 1024).toFixed(0)} KB`,
+        timestamp: new Date().toISOString(),
+        detectedMemberName: selectedMember.name,
+        detectedMemberId: selectedMember.id,
+        status: auditPassed ? 'pending_admin_validation' : 'unmatched_pending',
+        targetMonth: targetMonth,
+        uploadedBy: currentUser?.role === 'admin' ? 'Administrador' : selectedMember.name,
+        fileDataUrl: fileBase64,
+        auditStatus: auditStatus,
+        auditDetails: auditDetails,
+        detectedAmount: simulatedPdfAmount,
+        detectedMonth: simulatedPdfMonth
+      };
+
+      // update local list
+      const updatedReceipts = [newReceipt, ...receiptsList];
+      setReceiptsList(updatedReceipts);
+
+      saveReceiptToFirestore(newReceipt).catch(e => console.error("Erro ao salvar comprovativo na Firestore:", e));
+
+      if (auditPassed) {
+        // Perform Direct Settlement - Attach voucher automatically to member profile
+        const updatedMembers = members.map((m) => {
+          if (m.id === selectedMember.id) {
+            return {
+              ...m,
+              contributions: {
+                ...m.contributions,
+                [targetMonth]: {
+                  paid: true,
+                  paidAt: new Date().toISOString(),
+                  receiptFileName: selectedFile.name,
+                  receiptFileSize: `${(selectedFile.size / 1024).toFixed(0)} KB`,
+                  receiptUploadedAt: new Date().toISOString(),
+                  amount: 120000,
+                  pendingAdminValidation: true // Custom flag for audit control
+                },
+              },
+            };
+          }
+          return m;
+        });
+
+        // Write beautiful, compliance audit log with admin request message (As requested)
+        const newLogObj: KixLog = {
+          id: `log-rec-${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          type: 'contribution',
+          memberName: selectedMember.name,
+          amount: 120000,
+          description: `📥 [MENSAGEM AO ADMINISTRADOR / RECONCILIAÇÃO REQUERIDA]: Comprovativo "${selectedFile.name}" associado automaticamente a ${selectedMember.name} para o Mês ${targetMonth}. Solicita-se validação física de depósito (120.000,00 KZs) na conta bancária corporativa do Kixi-Fundo.`,
+          month: targetMonth,
+        };
+
+        const updatedLogs = [newLogObj, ...logs];
+        setMembers(updatedMembers);
+        setLogs(updatedLogs);
+        saveState(updatedMembers, updatedLogs);
+
+        setSuccessMsg(`Sucesso: O comprovativo foi associado automaticamente ao cooperante ${selectedMember.name}! Foi gerado um Alerta de Validação para o Administrador.`);
+      } else {
+        // If audit fails, we DO NOT mark the quota as paid
+        setErrorMsg(`AUDITORIA REJEITADA ⚠️: O auditor automático recusou a validação deste comprovativo. Motivo: ${auditDetails}. A quota do Mês ${targetMonth} de ${selectedMember.name} permanece como NÃO PAGA.`);
+      }
+
+      // Reset form states
+      setSelectedFile(null);
+      setFileBase64('');
+      setShowAssociationPrompt(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      setIsProcessing(false);
+    }, 1300);
+  };
+
+  // Administrator action: Approve and validate the entry (As requested)
+  const handleApproveDeposit = (receiptId: string) => {
+    const receiptToApprove = receiptsList.find(r => r.id === receiptId);
+    if (!receiptToApprove) return;
+
+    // 1. Update receipt status
+    const updatedReceipts = receiptsList.map(r => {
+      if (r.id === receiptId) {
+        return {
+          ...r,
+          status: 'matched_paid' as const,
+          auditDetails: `Validação do Administrador: Depósito físico verificado e aprovado com sucesso em ${new Date().toLocaleDateString('pt-PT')}.`
+        };
+      }
+      return r;
+    });
+    setReceiptsList(updatedReceipts);
+
+    const updatedReceiptObj = {
+      ...receiptToApprove,
+      status: 'matched_paid' as const,
+      auditDetails: `Validação do Administrador: Depósito físico verificado e aprovado com sucesso em ${new Date().toLocaleDateString('pt-PT')}.`
+    };
+    saveReceiptToFirestore(updatedReceiptObj).catch(e => console.error("Erro ao sincronizar aprovação na Firestore:", e));
+
+    // 2. Remove the pending validation flag on the member's profile
+    const updatedMembers = members.map(m => {
+      if (m.id === receiptToApprove.detectedMemberId) {
+        const targetMonthContrib = m.contributions[receiptToApprove.targetMonth];
+        return {
+          ...m,
+          contributions: {
+            ...m.contributions,
+            [receiptToApprove.targetMonth]: {
+              ...targetMonthContrib,
+              paid: true,
+              pendingAdminValidation: false
+            }
+          }
+        };
+      }
+      return m;
+    });
+
+    // 3. Log the validation event
+    const newLogObj: KixLog = {
+      id: `log-val-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      type: 'contribution',
+      memberName: receiptToApprove.detectedMemberName,
+      amount: 120000,
+      description: `✓ DEPÓSITO VALIDADO BANCARIAMENTE: O Administrador validou a entrada real de 120.000,00 KZs na conta do Kixi-Fundo em benefício da quota do Mês ${receiptToApprove.targetMonth} de ${receiptToApprove.detectedMemberName}. Distribuição: 100.000,00 KZs para contemplados / 20.000,00 KZs para o Fundo de Interajuda.`,
+      month: receiptToApprove.targetMonth
+    };
+
+    const updatedLogs = [newLogObj, ...logs];
+    setMembers(updatedMembers);
+    setLogs(updatedLogs);
+    saveState(updatedMembers, updatedLogs);
+
+    setSuccessMsg(`Sucesso: Depósito de ${receiptToApprove.detectedMemberName} para o Mês ${receiptToApprove.targetMonth} verificado e validado com sucesso!`);
+  };
+
+  // Administrator action: Reject and invalidate the entry (As requested)
+  const handleRejectDeposit = (receiptId: string) => {
+    const receiptToReject = receiptsList.find(r => r.id === receiptId);
+    if (!receiptToReject) return;
+
+    // 1. Update receipt status
+    const updatedReceipts = receiptsList.map(r => {
+      if (r.id === receiptId) {
+        return {
+          ...r,
+          status: 'unmatched_pending' as const,
+          auditDetails: `Rejeitado pelo Administrador: Entrada não identificada no extrato bancário.`
+        };
+      }
+      return r;
+    });
+    setReceiptsList(updatedReceipts);
+
+    const updatedReceiptObj = {
+      ...receiptToReject,
+      status: 'unmatched_pending' as const,
+      auditDetails: `Rejeitado pelo Administrador: Entrada não identificada no extrato bancário.`
+    };
+    saveReceiptToFirestore(updatedReceiptObj).catch(e => console.error("Erro ao sincronizar rejeição na Firestore:", e));
+
+    // 2. Revert the contribution status (remove paid status)
+    const updatedMembers = members.map(m => {
+      if (m.id === receiptToReject.detectedMemberId) {
+        const updatedContribs = { ...m.contributions };
+        delete updatedContribs[receiptToReject.targetMonth];
+        return {
+          ...m,
+          contributions: updatedContribs
+        };
+      }
+      return m;
+    });
+
+    // 3. Log the rejection
+    const newLogObj: KixLog = {
+      id: `log-val-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      type: 'contribution',
+      memberName: receiptToReject.detectedMemberName,
+      amount: 120000,
+      description: `❌ AUDITORIA DE REJEIÇÃO: O Administrador recusou a validação do comprovativo "${receiptToReject.fileName}" para o Mês ${receiptToReject.targetMonth} de ${receiptToReject.detectedMemberName} (depósito físico não confirmado no banco).`,
+      month: receiptToReject.targetMonth
+    };
+
+    const updatedLogs = [newLogObj, ...logs];
+    setMembers(updatedMembers);
+    setLogs(updatedLogs);
+    saveState(updatedMembers, updatedLogs);
+
+    setErrorMsg(`O comprovativo de ${receiptToReject.detectedMemberName} foi rejeitado e a cota do Mês ${receiptToReject.targetMonth} retornou ao estado de NÃO PAGA.`);
   };
 
   // Simulator flow from unrecognized Whatsapp Webhook triggers
@@ -782,6 +1043,71 @@ export default function ReceiptsAutomation({
         </div>
       </div>
 
+      {/* Admin Action Center: Receipts awaiting physical validation in bank statement (As requested) */}
+      {currentUser?.role === 'admin' && receiptsList.some(r => r.status === 'pending_admin_validation') && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-amber-500/10 border border-amber-500/20 text-slate-800 dark:text-slate-100 rounded-xl p-5 space-y-4 shadow-sm"
+        >
+          <div className="flex items-center gap-2 border-b border-amber-500/20 pb-2">
+            <BellRing className="w-5 h-5 text-amber-600 animate-bounce" />
+            <div className="min-w-0">
+              <h3 className="text-xs font-black uppercase tracking-wider text-amber-700 dark:text-amber-500">
+                📥 Mensagens e Notificações de Validação de Depósito Pendente
+              </h3>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                Os seguintes depósitos foram associados aos perfis dos cooperantes, mas necessitam de validação física no extrato de conta bancária:
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {receiptsList.filter(r => r.status === 'pending_admin_validation').map(r => (
+              <div 
+                key={r.id} 
+                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-3.5 rounded-lg flex flex-col justify-between gap-3 shadow-sm hover:border-amber-500/40 transition-colors"
+              >
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-black text-slate-900 dark:text-white">
+                      {r.detectedMemberName}
+                    </span>
+                    <span className="text-[9px] font-bold font-mono bg-amber-500/10 text-amber-600 px-2 py-0.5 rounded uppercase tracking-wider">
+                      Mês {r.targetMonth}
+                    </span>
+                  </div>
+                  <div className="text-[10px] text-slate-500 space-y-0.5">
+                    <p className="truncate">📁 Ficheiro: <strong className="font-semibold text-slate-700 dark:text-slate-300">{r.fileName}</strong> ({r.fileSize})</p>
+                    <p>🕒 Submetido em: {new Date(r.timestamp).toLocaleString('pt-PT')}</p>
+                    <p className="font-semibold text-sky-600 dark:text-sky-400 font-mono">💰 Valor Requerido: 120.000,00 KZs</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <button
+                    type="button"
+                    onClick={() => handleApproveDeposit(r.id)}
+                    className="flex-1 bg-slate-900 dark:bg-slate-800 hover:bg-black text-white font-extrabold text-[10px] py-1.5 px-3 rounded uppercase tracking-wider flex items-center justify-center gap-1 transition-all cursor-pointer"
+                  >
+                    <CheckSquare className="w-3.5 h-3.5" />
+                    Aprovar e Validar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRejectDeposit(r.id)}
+                    className="bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-[10px] py-1.5 px-3 rounded uppercase tracking-wider flex items-center justify-center gap-1 transition-all cursor-pointer border border-rose-200"
+                  >
+                    <XCircle className="w-3.5 h-3.5" />
+                    Rejeitar
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      )}
+
       {/* Grid: Actual File Uploader & List of uploaded statement files */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
@@ -922,6 +1248,76 @@ export default function ReceiptsAutomation({
                     <span>
                       Regra de Auditoria: O depósito só é considerado VÁLIDO e a quota LIQUIDADA se o valor extraído for exatamente 120.000,00 KZs e o Mês for o Mês {targetMonth}.
                     </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Interactive Association Prompt (As requested) */}
+              {selectedFile && showAssociationPrompt && (
+                <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border-2 border-dashed border-sky-500/35 dark:border-sky-500/20 space-y-3 animate-fadeIn relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-16 h-16 bg-sky-500/5 rounded-bl-full pointer-events-none" />
+                  <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
+                    <Sparkles className="w-4 h-4 text-sky-500" />
+                    <span className="text-[11px] font-black uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                      ❓ Deseja fechar o pagamento?
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-600 dark:text-slate-400 leading-normal font-medium">
+                    O sistema analisou o comprovativo e propõe fechar a cota do Mês {targetMonth}. Confirme para anexar automaticamente o comprovativo ao perfil do membro e notificar o administrador:
+                  </p>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    {/* Candidate Member A Option */}
+                    {candidateMemberA && (
+                      <button
+                        type="button"
+                        onClick={() => confirmAndClosePayment(candidateMemberA)}
+                        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-sky-500 dark:hover:border-sky-500/50 p-3 rounded-lg text-left transition-all hover:shadow-sm cursor-pointer group space-y-1.5"
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className={`w-6 h-6 rounded-full ${candidateMemberA.avatarColor} flex items-center justify-center text-[9px] font-black text-white shrink-0 shadow-sm`}>
+                            {candidateMemberA.name.slice(0, 2).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[11px] font-black text-slate-900 dark:text-white truncate group-hover:text-sky-600 dark:group-hover:text-sky-400">
+                              {candidateMemberA.name}
+                            </p>
+                            <p className="text-[9px] text-slate-400 font-mono">
+                              Membro A (Upload / Selecionado)
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-[9px] font-bold text-sky-600 dark:text-sky-400 bg-sky-500/10 px-1.5 py-0.5 rounded w-fit uppercase tracking-wider">
+                          ✓ Confirmar e Fechar
+                        </div>
+                      </button>
+                    )}
+
+                    {/* Candidate Member B Option */}
+                    {candidateMemberB && (
+                      <button
+                        type="button"
+                        onClick={() => confirmAndClosePayment(candidateMemberB)}
+                        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-amber-500 dark:hover:border-amber-500/50 p-3 rounded-lg text-left transition-all hover:shadow-sm cursor-pointer group space-y-1.5"
+                      >
+                        <div className="flex items-center gap-2">
+                          <div className={`w-6 h-6 rounded-full ${candidateMemberB.avatarColor} flex items-center justify-center text-[9px] font-black text-white shrink-0 shadow-sm`}>
+                            {candidateMemberB.name.slice(0, 2).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[11px] font-black text-slate-900 dark:text-white truncate group-hover:text-amber-600 dark:group-hover:text-amber-400">
+                              {candidateMemberB.name}
+                            </p>
+                            <p className="text-[9px] text-slate-400 font-mono">
+                              Membro B (Devedor Alternativo)
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded w-fit uppercase tracking-wider">
+                          ✓ Confirmar e Fechar
+                        </div>
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
@@ -1101,7 +1497,14 @@ export default function ReceiptsAutomation({
                           </div>
 
                           <div className="text-[11px] flex items-center gap-1.5 pt-1">
-                            {isMatched ? (
+                            {rec.status === 'pending_admin_validation' ? (
+                              <>
+                                <RefreshCw className="w-4 h-4 text-amber-500 animate-spin shrink-0" />
+                                <span className="text-amber-600 dark:text-amber-400 font-bold uppercase tracking-wider text-[9px] flex items-center gap-1">
+                                  📥 Aguardando Validação do Administrador (Depósito Registado)
+                                </span>
+                              </>
+                            ) : isMatched ? (
                               <>
                                 <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
                                 <span className="text-slate-900 dark:text-slate-100 font-bold">
