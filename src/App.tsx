@@ -1901,6 +1901,82 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
     saveState(updatedMembers, updatedLogs);
   };
 
+  // Edit Social Aid log / allocation
+  const handleEditRequestAid = (logId: string, newAmount: number, newDescription: string) => {
+    const isSuperAdmin = currentUser?.email.trim().toLowerCase() === 'lmendesvictor@gmail.com';
+    const hasAdminPerm = currentUser?.role === 'admin' || loggedInMember?.permissions?.actionGrantSocialAid !== false;
+    if (!isSuperAdmin && !hasAdminPerm) {
+      alert('Acesso Negado: Não possui privilégios de gestor para editar apoios financeiros.');
+      return;
+    }
+
+    const logToEdit = logs.find((l) => l.id === logId);
+    if (!logToEdit || logToEdit.type !== 'social_aid') return;
+
+    // Find member by name
+    const targetMember = members.find((m) => m.name === logToEdit.memberName);
+    if (!targetMember) return;
+
+    const amountDiff = newAmount - logToEdit.amount;
+
+    const updatedMembers = members.map((m) => {
+      if (m.id === targetMember.id) {
+        return {
+          ...m,
+          socialSupportReceived: Math.max(0, m.socialSupportReceived + amountDiff),
+        };
+      }
+      return m;
+    });
+
+    const updatedLogs = logs.map((l) => {
+      if (l.id === logId) {
+        return {
+          ...l,
+          amount: newAmount,
+          description: `AUXÍLIO SOCIAL CORRIGIDO (ADMIN): Concedido o montante de ${new Intl.NumberFormat('pt-AO', { style: 'currency', currency: 'AOA' }).format(newAmount).replace('AOA', 'KZs')} para o membro ${targetMember.name}. Finalidade: ${newDescription}. (Anterior: ${new Intl.NumberFormat('pt-AO', { style: 'currency', currency: 'AOA' }).format(logToEdit.amount).replace('AOA', 'KZs')})`,
+        };
+      }
+      return l;
+    });
+
+    setMembers(updatedMembers);
+    setLogs(updatedLogs);
+    saveState(updatedMembers, updatedLogs);
+  };
+
+  // Delete Social Aid log / allocation
+  const handleDeleteRequestAid = (logId: string) => {
+    const isSuperAdmin = currentUser?.email.trim().toLowerCase() === 'lmendesvictor@gmail.com';
+    const hasAdminPerm = currentUser?.role === 'admin' || loggedInMember?.permissions?.actionGrantSocialAid !== false;
+    if (!isSuperAdmin && !hasAdminPerm) {
+      alert('Acesso Negado: Não possui privilégios de gestor para eliminar apoios financeiros.');
+      return;
+    }
+
+    const logToDelete = logs.find((l) => l.id === logId);
+    if (!logToDelete || logToDelete.type !== 'social_aid') return;
+
+    // Find member by name
+    const targetMember = members.find((m) => m.name === logToDelete.memberName);
+    
+    const updatedMembers = members.map((m) => {
+      if (targetMember && m.id === targetMember.id) {
+        return {
+          ...m,
+          socialSupportReceived: Math.max(0, m.socialSupportReceived - logToDelete.amount),
+        };
+      }
+      return m;
+    });
+
+    const updatedLogs = logs.filter((l) => l.id !== logId);
+
+    setMembers(updatedMembers);
+    setLogs(updatedLogs);
+    saveState(updatedMembers, updatedLogs);
+  };
+
   // Credit loan event handlers
   const handleAddLoan = async (newLoan: Loan): Promise<void> => {
     const isSuperAdmin = currentUser?.email.trim().toLowerCase() === 'lmendesvictor@gmail.com';
@@ -2389,7 +2465,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
             </div>
 
             {/* Desktop Navigation Row (hidden on mobile, flex on desktop) */}
-            <div className="hidden md:flex items-center gap-1 px-1 py-1 overflow-x-auto scrollbar-none whitespace-nowrap lg:overflow-visible flex-1 justify-center max-w-4xl">
+            <div className="hidden lg:flex items-center gap-1.5 px-1 py-1 min-w-0 flex-1 justify-center max-w-4xl">
               {allowedNavigationItems.map((item) => {
                 const isActive = activeTab === item.id;
                 
@@ -2397,7 +2473,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                   <button
                     key={item.id}
                     onClick={() => navigateToTab(item.id)}
-                    className={`px-2.5 sm:px-3 py-1.8 rounded-xl text-xs font-bold transition-all duration-300 flex items-center gap-1 cursor-pointer hover:scale-105 active:scale-95 shrink-0 ${
+                    className={`px-2 xl:px-3.5 py-2 rounded-xl text-[11px] xl:text-xs font-bold transition-all duration-300 flex items-center gap-1 cursor-pointer hover:scale-105 active:scale-95 shrink-0 ${
                       isActive
                         ? 'bg-white text-sky-700 shadow-md font-black border border-white'
                         : 'text-white hover:bg-white/12 hover:text-white'
@@ -2411,7 +2487,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
             </div>
 
             {/* Mobile Actions and Controls Row (visible only on mobile) */}
-            <div className="flex md:hidden items-center gap-2 shrink-0">
+            <div className="flex lg:hidden items-center gap-2 shrink-0">
               {/* Moon / Sun minimal theme selector for quick access on mobile */}
               <button
                 onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
@@ -2581,11 +2657,11 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
               </div>
             </div>
             {/* Desktop Only status instruments - hidden on mobile, compact on desktop */}
-            <div className="hidden md:flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+            <div className="hidden lg:flex items-center gap-1.5 sm:gap-2.5 shrink-0">
 
               {/* Cloud DB Sync Status Badge */}
               <div 
-                className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[8px] font-black leading-none ${
+                className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[8px] font-black leading-none ${
                   isDbSyncing 
                     ? 'bg-emerald-500/10 text-emerald-400 animate-pulse' 
                     : 'bg-emerald-500/5 text-emerald-500/60'
@@ -2593,12 +2669,12 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                 title={isDbSyncing ? 'A sincronizar dados com o servidor...' : 'Dados Sincronizados na Cloud'}
               >
                 <Cloud className={`w-3 h-3 ${isDbSyncing ? 'animate-spin' : ''}`} />
-                <span className="hidden md:inline">{isDbSyncing ? 'A SINCRONIZAR' : 'G-CLOUD ACTIVA'}</span>
+                <span className="hidden xl:inline">{isDbSyncing ? 'A SINCRONIZAR' : 'G-CLOUD ACTIVA'}</span>
               </div>
 
               {/* Connection Status Badge (Compact dot) */}
               <div 
-                className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[8px] font-black leading-none ${
+                className={`flex items-center gap-1 px-1.5 py-1 rounded-md text-[8px] font-black leading-none ${
                   isOnline 
                     ? 'bg-[#10B981]/15 text-[#D1FAE5]' 
                     : 'bg-amber-500/15 text-amber-300'
@@ -2606,7 +2682,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                 title={isOnline ? 'ONLINE' : 'OFFLINE'}
               >
                 <div className={`w-1 h-1 rounded-full ${isOnline ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'}`} />
-                <span className="hidden md:inline">{isOnline ? 'ONLINE' : 'OFFLINE'}</span>
+                <span className="hidden xl:inline">{isOnline ? 'ONLINE' : 'OFFLINE'}</span>
               </div>
 
               {/* Pending Sync Counter Badge */}
@@ -2634,14 +2710,14 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                   ) : (
                     <Cloud className="w-3 h-3 shrink-0 text-emerald-500" />
                   )}
-                  <span className="hidden sm:inline ml-0.5">
+                  <span className="hidden xl:inline ml-0.5">
                     {isSyncingPending 
                       ? 'A Sincronizar...' 
                       : pendingSyncCount > 0 
-                        ? `Pendentes (${pendingSyncCount})` 
+                        ? `Pendentes` 
                         : 'Sincronizado'}
                   </span>
-                  {pendingSyncCount > 0 && <span className="sm:hidden font-mono">({pendingSyncCount})</span>}
+                  {pendingSyncCount > 0 && <span className="font-mono bg-amber-500/20 px-1 py-0.2 rounded text-[8px] ml-0.5">({pendingSyncCount})</span>}
                 </button>
               )}
 
@@ -2649,17 +2725,17 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
               <button
                 onClick={() => setShowRegulations(true)}
                 title="Ver Normativos do Kix-Fundo"
-                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-[10px] uppercase tracking-wider px-2 py-1.5 sm:py-1 rounded-lg shadow-sm transition-all cursor-pointer flex items-center gap-1 shrink-0 select-none"
+                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-[10px] uppercase tracking-wider px-2 py-1.5 rounded-lg shadow-sm transition-all cursor-pointer flex items-center gap-1 shrink-0 select-none"
               >
                 <BookOpen className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">NORMATIVOS</span>
+                <span className="hidden xl:inline">NORMATIVOS</span>
               </button>
 
               {/* Moon / Sun theme selector */}
               <button
                 onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
                 title={theme === 'light' ? 'Mudar para Escuro' : 'Mudar para Claro'}
-                className="p-1.5 rounded-full hover:bg-white/10 text-white transition-all cursor-pointer flex items-center justify-center shrink-0"
+                className="p-1.5 rounded-full hover:bg-white/10 text-white transition-all cursor-pointer flex items-center justify-center shrink-0 w-8 h-8"
               >
                 {theme === 'light' ? (
                   <Moon className="w-3.5 h-3.5 text-white" />
@@ -2674,10 +2750,10 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                   localStorage.removeItem('kix_current_user');
                   setCurrentUser(null);
                 }}
-                className="bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-[10px] uppercase tracking-wider px-2 py-1 rounded-lg shadow-sm transition-all cursor-pointer flex items-center gap-1 shrink-0 select-none"
+                className="bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-[10px] uppercase tracking-wider px-2 py-1.5 rounded-lg shadow-sm transition-all cursor-pointer flex items-center gap-1 shrink-0 select-none"
               >
                 <LogOut className="w-3 h-3" />
-                <span className="hidden sm:inline">SAIR</span>
+                <span className="hidden xl:inline">SAIR</span>
               </button>
             </div>
 
@@ -3180,6 +3256,9 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                   socialBalance={socialBalance}
                   currentMonth={currentMonth}
                   onRequestAid={handleRequestAid}
+                  onEditAid={handleEditRequestAid}
+                  onDeleteAid={handleDeleteRequestAid}
+                  logs={logs}
                   isAdmin={currentUser.role === 'admin'}
                 />
               </motion.div>

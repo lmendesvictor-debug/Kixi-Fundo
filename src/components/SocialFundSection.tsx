@@ -13,15 +13,22 @@ import {
   Info,
   GitFork,
   ArrowRightLeft,
-  DollarSign
+  DollarSign,
+  Edit2,
+  Trash2,
+  X,
+  Check
 } from 'lucide-react';
-import { Member } from '../types';
+import { Member, KixLog } from '../types';
 
 interface SocialFundSectionProps {
   members: Member[];
   socialBalance: number;
   currentMonth: number;
   onRequestAid: (memberId: number, amount: number, description: string) => void;
+  onEditAid?: (logId: string, newAmount: number, newDescription: string) => void;
+  onDeleteAid?: (logId: string) => void;
+  logs?: KixLog[];
   isAdmin?: boolean;
 }
 
@@ -30,6 +37,9 @@ export default function SocialFundSection({
   socialBalance,
   currentMonth,
   onRequestAid,
+  onEditAid,
+  onDeleteAid,
+  logs = [],
   isAdmin = false,
 }: SocialFundSectionProps) {
   const [selectedMemberId, setSelectedMemberId] = useState<number>(members[0]?.id || 1);
@@ -37,6 +47,12 @@ export default function SocialFundSection({
   const [description, setDescription] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [successMsg, setSuccessMsg] = useState<string>('');
+
+  // States for correcting/editing errors
+  const [editingLogId, setEditingLogId] = useState<string | null>(null);
+  const [deletingLogId, setDeletingLogId] = useState<string | null>(null);
+  const [editAmount, setEditAmount] = useState<string>('');
+  const [editDescription, setEditDescription] = useState<string>('');
 
   // States for Cabimentação (Earmarking/Earmarking simulation)
   const [simulatedAmount, setSimulatedAmount] = useState<string>('120000');
@@ -146,25 +162,189 @@ export default function SocialFundSection({
               </div>
             </div>
 
-            <div className="mt-5 space-y-2">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-400 font-display">Histórico de Apoios Recentes</h3>
-              {members.filter((m) => m.socialSupportReceived > 0).length === 0 ? (
-                <p className="text-xs text-slate-400 dark:text-slate-500 italic">Nenhum auxílio social pago até o momento.</p>
-              ) : (
-                <div className="space-y-2">
-                  {members
-                    .filter((m) => m.socialSupportReceived > 0)
-                    .map((m) => (
-                      <div key={m.id} className="flex items-center justify-between text-xs bg-slate-50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-800/80 px-3 py-2 rounded-lg">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                          <span className="font-semibold text-slate-700 dark:text-slate-300">{m.name}</span>
+            <div className="mt-5 space-y-4">
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-400 font-display mb-2">Histórico de Apoios Recentes (Soma por Membro)</h3>
+                {members.filter((m) => m.socialSupportReceived > 0).length === 0 ? (
+                  <p className="text-xs text-slate-400 dark:text-slate-500 italic">Nenhum auxílio social pago até o momento.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {members
+                      .filter((m) => m.socialSupportReceived > 0)
+                      .map((m) => (
+                        <div key={m.id} className="flex items-center justify-between text-xs bg-slate-50/50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-850/60 px-3 py-2 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-550" />
+                            <span className="font-semibold text-slate-700 dark:text-slate-300">{m.name}</span>
+                          </div>
+                          <span className="text-slate-500 dark:text-slate-400">Total Recebido: <strong className="font-mono text-emerald-800 dark:text-emerald-400">{formatCurrency(m.socialSupportReceived)}</strong></span>
                         </div>
-                        <span className="text-slate-500 dark:text-slate-400">Total Recebido: <strong className="font-mono text-emerald-800 dark:text-emerald-400">{formatCurrency(m.socialSupportReceived)}</strong></span>
-                      </div>
-                    ))}
-                </div>
-              )}
+                      ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="border-t border-slate-100 dark:border-slate-800/80 pt-4 space-y-2">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-400 font-display flex items-center gap-1.5 justify-between">
+                  <span>Registos de Apoio Individuais</span>
+                  {isAdmin && (
+                    <span className="text-[9px] bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold px-2 py-0.5 rounded tracking-wide">
+                      Administrador (Pode Editar/Eliminar)
+                    </span>
+                  )}
+                </h3>
+
+                {!logs || logs.filter((log) => log.type === 'social_aid').length === 0 ? (
+                  <p className="text-xs text-slate-400 dark:text-slate-500 italic">Nenhum auxílio individual registado até o momento.</p>
+                ) : (
+                  <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
+                    {logs
+                      .filter((log) => log.type === 'social_aid')
+                      .map((log) => {
+                        const isEditing = editingLogId === log.id;
+                        const isDeleting = deletingLogId === log.id;
+                        return (
+                          <div key={log.id} className="bg-slate-50 dark:bg-slate-950/40 border border-slate-100 dark:border-slate-800/80 p-3 rounded-lg space-y-2">
+                            {isEditing ? (
+                              <div className="space-y-2.5">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">A Corrigir Apoio de {log.memberName}</span>
+                                  <span className="text-[9px] text-slate-400 font-mono">ID: {log.id}</span>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                  <div className="sm:col-span-1">
+                                    <label className="text-[9px] font-bold text-slate-400 uppercase block mb-0.5">Montante</label>
+                                    <input
+                                      type="number"
+                                      value={editAmount}
+                                      onChange={(e) => setEditAmount(e.target.value)}
+                                      className="w-full text-xs font-mono font-bold border border-slate-200 dark:border-slate-800 rounded px-2 py-1 bg-white dark:bg-slate-950 text-slate-800 dark:text-white"
+                                    />
+                                  </div>
+                                  <div className="sm:col-span-2">
+                                    <label className="text-[9px] font-bold text-slate-400 uppercase block mb-0.5">Descrição</label>
+                                    <input
+                                      type="text"
+                                      value={editDescription}
+                                      onChange={(e) => setEditDescription(e.target.value)}
+                                      className="w-full text-xs border border-slate-200 dark:border-slate-800 rounded px-2 py-1 bg-white dark:bg-slate-950 text-slate-800 dark:text-white"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1.5 justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingLogId(null)}
+                                    className="px-2 py-1 bg-slate-150 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-300 rounded text-[10px] font-bold transition-all"
+                                  >
+                                    Cancelar
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const numAmt = parseFloat(editAmount);
+                                      if (isNaN(numAmt) || numAmt <= 0) {
+                                        alert('Insira um valor válido maior que zero.');
+                                        return;
+                                      }
+                                      const diff = numAmt - log.amount;
+                                      if (diff > socialBalance) {
+                                        alert(`Saldo social insuficiente para esta alteração. Saldo máximo adicional disponível: ${formatCurrency(socialBalance)}.`);
+                                        return;
+                                      }
+                                      onEditAid?.(log.id, numAmt, editDescription);
+                                      setEditingLogId(null);
+                                    }}
+                                    className="px-2 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-[10px] font-bold transition-all flex items-center gap-1"
+                                  >
+                                    <Check className="w-3 h-3" />
+                                    Guardar
+                                  </button>
+                                </div>
+                              </div>
+                            ) : isDeleting ? (
+                              <div className="space-y-2 py-1 bg-rose-500/5 dark:bg-rose-500/10 p-1.5 rounded-lg">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs font-bold text-rose-700 dark:text-rose-400">Deseja eliminar este registo de auxílio?</span>
+                                </div>
+                                <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-normal">
+                                  O apoio de <strong className="font-mono text-rose-600 dark:text-rose-450">{formatCurrency(log.amount)}</strong> para <strong>{log.memberName}</strong> será removido e o montante correspondente será devolvido ao fundo social.
+                                </p>
+                                <div className="flex items-center gap-1.5 justify-end mt-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => setDeletingLogId(null)}
+                                    className="px-2 py-1 bg-slate-200/60 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-300 rounded text-[10px] font-bold transition-all cursor-pointer"
+                                  >
+                                    Cancelar
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      onDeleteAid?.(log.id);
+                                      setDeletingLogId(null);
+                                    }}
+                                    className="px-2 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded text-[10px] font-bold transition-all flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3 h-3" />
+                                    Sim, Eliminar
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex items-start justify-between gap-3 text-xs">
+                                <div className="space-y-0.5">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-bold text-slate-800 dark:text-slate-200">{log.memberName}</span>
+                                    <span className="text-[9px] text-slate-400 dark:text-slate-500 font-mono">
+                                      {new Date(log.timestamp).toLocaleDateString('pt-AO')}
+                                    </span>
+                                  </div>
+                                  <p className="text-[11px] text-slate-500 dark:text-slate-450 leading-relaxed italic">
+                                    "{log.description.includes('Finalidade:') ? log.description.split('Finalidade:')[1].trim().replace(/\.$/, '') : log.description}"
+                                  </p>
+                                </div>
+                                <div className="text-right shrink-0 flex flex-col items-end">
+                                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">{formatCurrency(log.amount)}</span>
+                                  {isAdmin && (
+                                    <div className="flex items-center gap-1 mt-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setEditingLogId(log.id);
+                                          setEditAmount(String(log.amount));
+                                          let cleanDesc = log.description;
+                                          if (log.description.includes('Finalidade:')) {
+                                            cleanDesc = log.description.split('Finalidade:')[1].trim().replace(/\.$/, '');
+                                          }
+                                          setEditDescription(cleanDesc);
+                                        }}
+                                        title="Editar Registo"
+                                        className="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 text-amber-600 dark:text-amber-400 rounded transition-all cursor-pointer"
+                                      >
+                                        <Edit2 className="w-3 h-3" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setDeletingLogId(log.id);
+                                        }}
+                                        title="Eliminar Registo"
+                                        className="p-1 hover:bg-slate-200 dark:hover:bg-slate-800 text-rose-600 dark:text-rose-400 rounded transition-all cursor-pointer"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
