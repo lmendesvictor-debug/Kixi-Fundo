@@ -628,15 +628,16 @@ export default function App() {
       if (tabId === 'credit-management') return getPerm(m.permissions.accessContracts, true);
       if (tabId === 'admin-module') return getPerm(m.permissions.accessAdminModule, isAdminRole);
       if (tabId === 'dashboard') return getPerm(m.permissions.accessDashboard, isAdminRole);
+      if (tabId === 'social') return true;
     }
 
     // 3. Fallback defaults (if no custom permissions configured on this account yet)
     if (currentUser.role === 'admin') {
-      return ['inicio', 'membro-dashboard', 'members', 'cycles', 'reports', 'dashboard', 'admin-module', 'credit-management'].includes(tabId);
+      return ['inicio', 'membro-dashboard', 'members', 'cycles', 'reports', 'dashboard', 'admin-module', 'credit-management', 'social'].includes(tabId);
     }
     
     // Lista padrão de fallback para membros comuns sem registo explícito de permissões
-    return ['inicio', 'membro-dashboard', 'cycles', 'reports', 'credit-management'].includes(tabId);
+    return ['inicio', 'membro-dashboard', 'cycles', 'reports', 'credit-management', 'social'].includes(tabId);
   };
 
   const allNavigationItems = [
@@ -645,6 +646,7 @@ export default function App() {
     { id: 'members', label: 'Cadastro', icon: <Users className="w-3.5 h-3.5" /> },
     { id: 'cycles', label: 'Pagamentos', icon: <Coins className="w-3.5 h-3.5" /> },
     { id: 'credit-management', label: 'Créditos', icon: <Coins className="w-3.5 h-3.5" /> },
+    { id: 'social', label: 'Fundo Social', icon: <HeartHandshake className="w-3.5 h-3.5 text-emerald-500 font-bold" /> },
     { id: 'reports', label: 'Relatórios', icon: <FileText className="w-3.5 h-3.5" /> },
     { id: 'admin-module', label: 'Administração', icon: <ShieldCheck className="w-3.5 h-3.5 text-rose-500 font-bold" /> },
   ];
