@@ -156,8 +156,8 @@ export default function MetricCards({
   const socialPercent = combinedTotal > 0 ? ((socialPrice / combinedTotal) * 100).toFixed(1) : '16.7';
 
   const pieData = [
-    { name: 'Fluxo de Rotação', value: rotationPrice, color: '#0d5c3a', percent: rotationPercent },
-    { name: 'Fundo Social', value: socialPrice, color: '#1351a5', percent: socialPercent }
+    { name: 'Fluxo de Rotação', value: rotationPrice, color: '#0284C7', percent: rotationPercent },
+    { name: 'Fundo Social', value: socialPrice, color: '#10B981', percent: socialPercent }
   ];
 
   const isHovered = hoveredIndex !== null;
@@ -249,7 +249,7 @@ export default function MetricCards({
                 onMouseEnter={() => setHoveredIndex(0)}
                 onMouseLeave={() => setHoveredIndex(null)}
               >
-                <span className="w-3.5 h-3.5 rounded-xs bg-[#0d5c3a] shrink-0" />
+                <span className="w-3.5 h-3.5 rounded-xs bg-[#0284C7] shrink-0" />
                 <span className="text-slate-600 dark:text-slate-350 text-[11px] transition-colors duration-200">
                   Fluxo de Rotação ({rotationPercent}% - {formatCurrency(rotationPrice)})
                 </span>
@@ -259,7 +259,7 @@ export default function MetricCards({
                 onMouseEnter={() => setHoveredIndex(1)}
                 onMouseLeave={() => setHoveredIndex(null)}
               >
-                <span className="w-3.5 h-3.5 rounded-xs bg-[#1351a5] shrink-0" />
+                <span className="w-3.5 h-3.5 rounded-xs bg-[#10B981] shrink-0" />
                 <span className="text-slate-600 dark:text-slate-350 text-[11px] transition-colors duration-200">
                   Fundo Social ({socialPercent}% - {formatCurrency(socialPrice)})
                 </span>
@@ -372,41 +372,61 @@ export default function MetricCards({
           </div>
 
           {/* Social Progress and Status Indicators */}
-          <div className="py-4 space-y-6 text-xs">
-            {/* Bar 1: Retido/Segurança */}
-            <div className="space-y-1.5">
-              <div className="flex justify-between items-center font-bold text-slate-650 dark:text-slate-300">
-                <span>Retido/Segurança</span>
-                <span className="font-mono text-slate-900 dark:text-white">{formatCurrency(socialBalance)}</span>
-              </div>
-              <div className="w-full bg-slate-200/80 dark:bg-slate-800 h-6 rounded-full overflow-hidden">
-                <div 
-                  className="bg-[#0b5a3e] h-full rounded-full transition-all duration-300"
-                  style={{ width: '100%' }}
-                />
-              </div>
-            </div>
+          {(() => {
+            const totalSocialAccumulated = socialBalance + totalSocialDisbursed;
+            const percentRetained = totalSocialAccumulated > 0 ? (socialBalance / totalSocialAccumulated) * 100 : 100;
+            const percentDisbursed = totalSocialAccumulated > 0 ? (totalSocialDisbursed / totalSocialAccumulated) * 100 : 0;
+            return (
+              <div className="py-4 space-y-6 text-xs animate-fadeIn">
+                {/* Bar 1: Retido/Segurança */}
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center font-bold text-slate-650 dark:text-slate-300">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                      Retido/Segurança (Saldo Disponível)
+                    </span>
+                    <span className="font-mono text-slate-900 dark:text-white">{formatCurrency(socialBalance)}</span>
+                  </div>
+                  <div className="w-full bg-slate-100 dark:bg-slate-950/60 border border-slate-200/40 dark:border-slate-800/40 h-6 rounded-full overflow-hidden relative shadow-inner">
+                    <div 
+                      className="bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 h-full rounded-full transition-all duration-500 ease-out shadow-xs"
+                      style={{ width: `${percentRetained}%` }}
+                    />
+                    <div className="absolute inset-0 flex items-center justify-between px-3.5 text-[10px] font-extrabold text-white mix-blend-difference pointer-events-none">
+                      <span>{percentRetained.toFixed(1)}% de Reserva Ativa</span>
+                      <span>Disponível</span>
+                    </div>
+                  </div>
+                </div>
 
-            {/* Bar 2: Apoios Concedidos */}
-            <div className="space-y-1.5">
-              <div className="flex justify-between items-center font-bold text-slate-650 dark:text-slate-350">
-                <span>Apoios Concedidos</span>
-                <span className="font-mono text-slate-900 dark:text-white">{formatCurrency(totalSocialDisbursed)}</span>
-              </div>
-              <div className="w-full bg-slate-200/80 dark:bg-slate-800 h-6 rounded-full overflow-hidden flex items-center justify-between px-4 text-[10px] text-slate-500 dark:text-slate-400 font-bold">
-                <div 
-                  className="bg-slate-300 dark:bg-slate-700 h-full rounded-full transition-all duration-300" 
-                  style={{ width: totalSocialDisbursed > 0 ? '100%' : '0%' }}
-                />
-                <span>0,00 Kz</span>
-              </div>
-            </div>
+                {/* Bar 2: Apoios Concedidos */}
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center font-bold text-slate-650 dark:text-slate-350">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" />
+                      Apoios Concedidos
+                    </span>
+                    <span className="font-mono text-slate-900 dark:text-white">{formatCurrency(totalSocialDisbursed)}</span>
+                  </div>
+                  <div className="w-full bg-slate-100 dark:bg-slate-950/60 border border-slate-200/40 dark:border-slate-800/40 h-6 rounded-full overflow-hidden relative shadow-inner">
+                    <div 
+                      className="bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 h-full rounded-full transition-all duration-500 ease-out shadow-xs" 
+                      style={{ width: `${percentDisbursed}%` }}
+                    />
+                    <div className="absolute inset-0 flex items-center justify-between px-3.5 text-[10px] font-extrabold text-white mix-blend-difference pointer-events-none">
+                      <span>{percentDisbursed.toFixed(1)}% do Fundo Utilizado</span>
+                      <span>{totalSocialDisbursed > 0 ? 'Entregue' : '0,00 Kz'}</span>
+                    </div>
+                  </div>
+                </div>
 
-            {/* Footer Status Message */}
-            <div className="text-[11px] font-bold text-slate-450 dark:text-slate-500 pt-3 text-left">
-              {totalSocialDisbursed === 0 ? 'Fundo Integral, sem desembolsos' : 'Ocorreram desembolsos de apoio no ciclo.'}
-            </div>
-          </div>
+                {/* Footer Status Message */}
+                <div className="text-[11px] font-bold text-slate-450 dark:text-slate-500 pt-1 text-left">
+                  {totalSocialDisbursed === 0 ? 'Fundo Integral, sem desembolsos' : 'Ocorreram desembolsos de apoio no ciclo.'}
+                </div>
+              </div>
+            );
+          })()}
         </div>
       </div>
 
