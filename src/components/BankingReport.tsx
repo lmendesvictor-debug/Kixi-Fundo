@@ -13,7 +13,7 @@ import {
   Layers,
   FileText
 } from 'lucide-react';
-import { Member, KixLog } from '../types';
+import { Member, KixLog, Loan } from '../types';
 
 interface BankingReportProps {
   currentMonth: number;
@@ -21,6 +21,7 @@ interface BankingReportProps {
   logs: KixLog[];
   payoutsCompleted: { [month: number]: boolean };
   formatCurrency: (val: number) => string;
+  loans?: Loan[];
 }
 
 export default function BankingReport({
@@ -29,6 +30,7 @@ export default function BankingReport({
   logs,
   payoutsCompleted,
   formatCurrency,
+  loans = [],
 }: BankingReportProps) {
   
   // Total overall contributions made
@@ -40,7 +42,10 @@ export default function BankingReport({
   }, 0);
 
   // Fundo de Interajuda logic
-  const totalSocialRetained = totalPaidContributionsCount * 20000;
+  const totalInterestPaidFromLoans = loans.reduce((acc, l) => {
+    return acc + (l.payments || []).filter(p => p.paid).reduce((sum, p) => sum + p.interestPaid, 0);
+  }, 0);
+  const totalSocialRetained = (totalPaidContributionsCount * 20000) + totalInterestPaidFromLoans;
   
   // Total Social support disbursed from logs
   const socialAids = logs.filter((log) => log.type === 'social_aid');

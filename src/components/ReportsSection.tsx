@@ -96,7 +96,10 @@ export default function ReportsSection({
       return monthAcc;
     }, 0);
   }, 0);
-  const totalSocialRetained = totalPaidContributionsCount * 20000;
+  const totalInterestPaidFromLoans = (loans || []).reduce((acc, l) => {
+    return acc + (l.payments || []).filter(p => p.paid).reduce((sum, p) => sum + p.interestPaid, 0);
+  }, 0);
+  const totalSocialRetained = (totalPaidContributionsCount * 20000) + totalInterestPaidFromLoans;
   const totalSocialDisbursed = logs
     .filter((log) => log.type === 'social_aid')
     .reduce((acc, log) => acc + log.amount, 0);

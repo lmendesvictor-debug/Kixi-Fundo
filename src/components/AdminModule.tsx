@@ -73,6 +73,7 @@ interface AdminModuleProps {
   firestorePendingOps?: { id: string; timestamp: string; description: string }[];
   setFirestorePendingOps?: React.Dispatch<React.SetStateAction<{ id: string; timestamp: string; description: string }[]>>;
   onRegisterSecurityAttempt?: (userId: string) => void;
+  loans?: any[];
 }
 
 export default function AdminModule({
@@ -97,6 +98,7 @@ export default function AdminModule({
   firestorePendingOps = [],
   setFirestorePendingOps,
   onRegisterSecurityAttempt,
+  loans = [],
 }: AdminModuleProps) {
   const [activeSubTab, setActiveSubTab] = useState<'users' | 'receipts' | 'banking' | 'carousel' | 'audit' | 'backup' | 'privileges' | 'member-cleanup'>('users');
 
@@ -1204,6 +1206,7 @@ export default function AdminModule({
               logs={logs}
               payoutsCompleted={payoutsCompleted}
               formatCurrency={formatCurrency}
+              loans={loans}
             />
           </motion.div>
         )}

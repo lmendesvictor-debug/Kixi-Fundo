@@ -398,7 +398,20 @@ export default function MetricCards({
                 2
               </span>
               <h2 className="text-[13.5px] font-black tracking-tight text-slate-900 dark:text-white uppercase">
-                Status do Fundo Social ({formatCurrency(socialPrice + (loans?.reduce((acc, l) => acc + (l.payments || []).filter(p => p.paid).reduce((sum, p) => sum + p.interestPaid, 0), 0) > 0 ? 0 : 10000))})
+                Status do Fundo Social ({(() => {
+                  const actualInterestPaid = loans?.reduce((acc, l) => {
+                    return acc + (l.payments || []).filter(p => p.paid).reduce((sum, p) => sum + p.interestPaid, 0);
+                  }, 0) || 0;
+                  const singularLoans = loans?.filter(l => l.borrowerType === 'singular') || [];
+                  const expectedSingularInterest = singularLoans.length > 0
+                    ? singularLoans.reduce((acc, l) => acc + l.payments.reduce((sum, p) => sum + p.interestPaid, 0), 0)
+                    : 10000;
+                  const totalPaidContributionsCount = members?.reduce((acc, m) => {
+                    return acc + Object.keys(m.contributions).filter(mk => m.contributions[Number(mk)]?.paid).length;
+                  }, 0) || 0;
+                  const baseSocialPrice = totalPaidContributionsCount * 20000;
+                  return formatCurrency(baseSocialPrice + (actualInterestPaid > 0 ? actualInterestPaid : expectedSingularInterest));
+                })()})
               </h2>
             </div>
             <div className="p-1.5 bg-rose-50 dark:bg-rose-950/20 text-rose-500 rounded-md shrink-0">
@@ -408,23 +421,41 @@ export default function MetricCards({
 
           {/* Social Progress and Status Indicators */}
           {(() => {
-            // Calculate actual interest paid dynamically from loans, or use the 10,000.00 example as fallback
+            // Calculate actual paid interest and principal from all loans dynamically
             const actualInterestPaid = loans?.reduce((acc, l) => {
               return acc + (l.payments || []).filter(p => p.paid).reduce((sum, p) => sum + p.interestPaid, 0);
             }, 0) || 0;
 
-            const interestEarned = actualInterestPaid > 0 ? actualInterestPaid : 10000;
-            const creditToThirdParty = actualInterestPaid > 0 
-              ? (loans?.reduce((acc, l) => acc + (l.payments || []).filter(p => p.paid).reduce((sum, p) => sum + p.principalPaid, 0), 0) || 40000)
-              : 40000;
-            const totalReimbursement = creditToThirdParty + interestEarned;
+            // Extract all singular/third-party loans
+            const singularLoans = loans?.filter(l => l.borrowerType === 'singular') || [];
 
-            // Ensure socialPrice (totalSocialRetained) includes the interest earned
-            const baseSocialPrice = Math.max(0, socialPrice - (actualInterestPaid > 0 ? 0 : interestEarned));
-            const displaySocialPrice = baseSocialPrice + interestEarned;
+            // Calculate total principal of singular loans or use fallback of 40000
+            const creditToThirdParty = singularLoans.length > 0
+              ? singularLoans.reduce((acc, l) => acc + l.amountRequested, 0)
+              : 40000;
+
+            // Calculate total contracted interest of singular loans (25%) or use fallback of 10000
+            const expectedSingularInterest = singularLoans.length > 0
+              ? singularLoans.reduce((acc, l) => acc + l.payments.reduce((sum, p) => sum + p.interestPaid, 0), 0)
+              : 10000;
+
+            // Use actual paid interest if any loan has repayments, otherwise project the expected singular interest
+            const interestEarned = actualInterestPaid > 0 ? actualInterestPaid : expectedSingularInterest;
+            const totalReimbursement = creditToThirdParty + expectedSingularInterest;
+
+            // Total overall contributions made (each deposits 20,000.00 into the social fund)
+            const totalPaidContributionsCount = members?.reduce((acc, m) => {
+              const paidInMember = Object.keys(m.contributions).filter(
+                (monthKey) => m.contributions[Number(monthKey)]?.paid
+              ).length;
+              return acc + paidInMember;
+            }, 0) || 0;
+
+            const baseSocialPrice = totalPaidContributionsCount * 20000;
+            const displaySocialPrice = baseSocialPrice + (actualInterestPaid > 0 ? actualInterestPaid : interestEarned);
 
             // Gross accumulated social fund
-            const totalSocialAccumulated = displaySocialPrice + totalSocialDisbursed;
+            const totalSocialAccumulated = (baseSocialPrice + interestEarned) + totalSocialDisbursed;
 
             const percentRetained = totalSocialAccumulated > 0 ? (baseSocialPrice / totalSocialAccumulated) * 100 : 100;
             const percentInterest = totalSocialAccumulated > 0 ? (interestEarned / totalSocialAccumulated) * 100 : 0;
