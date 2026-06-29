@@ -2042,9 +2042,10 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
     const payment = targetLoan.payments.find(p => p.month === paymentMonth);
     const wasPaid = payment ? payment.paid : false;
 
-    // RULE: Automatically distribute reimbursed principal + earned interest back to members' contributions
+    // RULE: Automatically distribute reimbursed principal back to members' contributions (into rotation fund)
+    // The interest paid is alocated fully to the Fundo de Interajuda (Fundo Social)
     const isAdding = !wasPaid;
-    const amountToDistribute = payment ? (payment.principalPaid + payment.interestPaid) : 0;
+    const amountToDistribute = payment ? payment.principalPaid : 0;
     const share = amountToDistribute / (members.length || 1);
 
     const updatedMembers = members.map((m) => {
@@ -2120,8 +2121,8 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
       amount: payment ? payment.amount : 0,
       month: currentMonth,
       description: !wasPaid
-        ? `AMORTIZAÇÃO EFECTUADA: Prestação nº ${paymentMonth} recebida de ${targetLoan.borrowerName} (${targetLoan.borrowerType === 'socio' ? 'sócio' : 'singular'}). Montante Total de ${formatCurrency(payment ? payment.amount : 0)} redistribuído automaticamente aos cooperantes (+${formatCurrency(share)} cada).`
-        : `AMORTIZAÇÃO ANULADA: Pagamento da prestação nº ${paymentMonth} de ${targetLoan.borrowerName} cancelado e redistribuição estornada.`,
+        ? `AMORTIZAÇÃO EFECTUADA: Prestação nº ${paymentMonth} recebida de ${targetLoan.borrowerName} (${targetLoan.borrowerType === 'socio' ? 'sócio' : 'singular'}). Amortização de principal (${formatCurrency(payment ? payment.principalPaid : 0)}) redistribuída automaticamente ao fundo rotativo dos cooperantes (+${formatCurrency(share)} cada) e os juros (${formatCurrency(payment ? payment.interestPaid : 0)}) alocados diretamente ao Fundo Social.`
+        : `AMORTIZAÇÃO ANULADA: Pagamento da prestação nº ${paymentMonth} de ${targetLoan.borrowerName} cancelado e estornos realizados.`,
     };
 
     const updatedLogs = [newLog, ...logs];
@@ -2162,7 +2163,12 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
 
   // Fundo de Interajuda logic:
   // Each paid contribution deposits 20,000.00 automatically
-  const totalSocialRetained = totalPaidContributionsCount * 20000;
+  // All interest earned from repayments is alocated fully to the Fundo de Interajuda (Fundo Social)
+  const totalInterestPaidFromLoans = loans.reduce((acc, l) => {
+    return acc + (l.payments || []).filter(p => p.paid).reduce((sum, p) => sum + p.interestPaid, 0);
+  }, 0);
+
+  const totalSocialRetained = (totalPaidContributionsCount * 20000) + totalInterestPaidFromLoans;
   // Total Social support disbursed
   const totalSocialDisbursed = logs
     .filter((log) => log.type === 'social_aid')
@@ -2170,8 +2176,8 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
 
   const socialBalance = totalSocialRetained - totalSocialDisbursed;
 
-  // Global Financial Distribution calculations
-  const totalBeneficiaryDestined = totalQuotasCollected - totalSocialRetained;
+  // Global Financial Distribution calculations (the principal returned returns to the rotation fund)
+  const totalBeneficiaryDestined = totalQuotasCollected - (totalPaidContributionsCount * 20000);
   const totalBeneficiaryPaid = Object.values(payoutsCompleted).filter((v) => v === true).length * 1200000;
   const totalBeneficiaryPending = totalBeneficiaryDestined - totalBeneficiaryPaid;
 
@@ -2906,6 +2912,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                   totalBeneficiaryPending={totalBeneficiaryPending}
                   payoutsCompleted={payoutsCompleted}
                   members={members}
+                  loans={loans}
                 />
 
                 {/* Coordenadas Bancárias & Código QR de Depósito Directo */}
@@ -3346,14 +3353,14 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
           <footer className={`w-full mt-14 border-t pt-6 pb-2 text-xs transition-colors ${
             theme === 'dark' ? 'border-slate-800 text-slate-400' : 'border-slate-200/60 text-slate-600'
           }`}>
-            <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="max-w-7xl mx-auto flex flex-col items-center justify-center gap-4 text-center">
               
-              {/* Left Column: Essential copyright and info */}
-              <div className="flex flex-col items-center md:items-start text-center md:text-left gap-1">
-                <p className="font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1.5 leading-none text-[10px]">
+              {/* Centered Column: Essential copyright and info */}
+              <div className="flex flex-col items-center text-center gap-1.5 w-full">
+                <p className="font-bold text-slate-500 dark:text-slate-400 flex items-center justify-center gap-1.5 leading-none text-[10px]">
                   <span>🛡️</span> Todos os direitos reservados a kurkita software e desenvolvimento copyright @2026
                 </p>
-                <div className="flex flex-wrap items-center justify-center md:justify-start gap-x-3 gap-y-1 text-[10px] text-slate-500 dark:text-slate-400 font-bold mt-1">
+                <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[10px] text-slate-500 dark:text-slate-400 font-bold mt-1">
                   <span>📧 <strong className="font-bold text-slate-700 dark:text-slate-300">E-mail:</strong> <a href="mailto:geral.kurkita.ao" className="hover:text-amber-500 hover:underline transition">geral.kurkita.ao</a></span>
                   <span className="hidden sm:inline">•</span>
                   <span>📞 <strong className="font-bold text-slate-700 dark:text-slate-300">Telefone:</strong> <a href="tel:925204065" className="hover:text-amber-500 hover:underline transition">925204065</a></span>
@@ -3362,8 +3369,8 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                 </div>
               </div>
 
-              {/* Right Column: Original shortcuts and deposit actions simplified */}
-              <div className="flex flex-wrap items-center justify-center md:justify-end gap-2.5 shrink-0">
+              {/* Bottom Column: Original shortcuts and deposit actions simplified */}
+              <div className="flex flex-wrap items-center justify-center gap-2.5 shrink-0">
                 <div 
                   onClick={() => {
                     navigator.clipboard.writeText(appConfig.bankIban);

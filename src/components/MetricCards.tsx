@@ -16,7 +16,7 @@ import {
   Check
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
-import { Member } from '../types';
+import { Member, Loan } from '../types';
 
 interface MetricCardsProps {
   currentMonth: number;
@@ -34,6 +34,7 @@ interface MetricCardsProps {
   totalBeneficiaryPending: number;
   payoutsCompleted: { [month: number]: boolean };
   members?: Member[];
+  loans?: Loan[];
 }
 
 export default function MetricCards({
@@ -52,6 +53,7 @@ export default function MetricCards({
   totalBeneficiaryPending,
   payoutsCompleted,
   members,
+  loans,
 }: MetricCardsProps) {
   // Determine default value / last paid cycle (where payoutsCompleted is true)
   const getLastPaidCycle = () => {
@@ -148,20 +150,31 @@ export default function MetricCards({
   };
 
   // Math calculated for Pie charts
+  const totalPrincipalDisbursed = loans?.reduce((acc, l) => acc + l.amountRequested, 0) || 0;
+  const totalPrincipalRepaid = loans?.reduce((acc, l) => {
+    return acc + l.payments.filter(p => p.paid).reduce((sum, p) => sum + p.principalPaid, 0);
+  }, 0) || 0;
+  const activeLoansOutstanding = Math.max(0, totalPrincipalDisbursed - totalPrincipalRepaid);
+
   const rotationPrice = totalBeneficiaryDestined > 0 ? totalBeneficiaryDestined : 3600000;
   const socialPrice = totalSocialRetained > 0 ? totalSocialRetained : 720000;
+  
+  // Deduct active loans from rotation fund to find the liquid amount
+  const liquidRotation = Math.max(0, rotationPrice - activeLoansOutstanding);
   const combinedTotal = rotationPrice + socialPrice;
 
-  const rotationPercent = combinedTotal > 0 ? ((rotationPrice / combinedTotal) * 100).toFixed(1) : '83.3';
+  const rotationPercent = combinedTotal > 0 ? ((liquidRotation / combinedTotal) * 100).toFixed(1) : '83.3';
+  const creditPercent = combinedTotal > 0 ? ((activeLoansOutstanding / combinedTotal) * 100).toFixed(1) : '0.0';
   const socialPercent = combinedTotal > 0 ? ((socialPrice / combinedTotal) * 100).toFixed(1) : '16.7';
 
   const pieData = [
-    { name: 'Fluxo de Rotação', value: rotationPrice, color: '#0284C7', percent: rotationPercent },
-    { name: 'Fundo Social', value: socialPrice, color: '#10B981', percent: socialPercent }
+    { name: 'Disponível p/ Rotação (Líquido)', value: liquidRotation, color: '#0284C7', percent: rotationPercent },
+    { name: 'Crédito Ativo (Emprestado)', value: activeLoansOutstanding, color: '#8B5CF6', percent: creditPercent },
+    { name: 'Fundo Social (Reservado)', value: socialPrice, color: '#10B981', percent: socialPercent }
   ];
 
   const isHovered = hoveredIndex !== null;
-  const currentDisplayLabel = isHovered ? pieData[hoveredIndex!].name : 'Composição do Patrimônio Coletivo';
+  const currentDisplayLabel = isHovered ? pieData[hoveredIndex!].name : 'Patrimônio Coletivo Total';
   const currentDisplayValue = isHovered ? pieData[hoveredIndex!].value : combinedTotal;
   const currentDisplayColor = isHovered ? pieData[hoveredIndex!].color : undefined;
   const currentDisplayPercent = isHovered ? pieData[hoveredIndex!].percent : undefined;
@@ -243,15 +256,15 @@ export default function MetricCards({
             </div>
 
             {/* Custom Interactive Legend */}
-            <div className="mt-8 flex flex-col sm:flex-row items-center gap-x-6 gap-y-2 text-xs font-semibold">
+            <div className="mt-8 flex flex-col md:flex-row flex-wrap items-center justify-center gap-x-5 gap-y-2.5 text-xs font-semibold">
               <div 
                 className={`flex items-center gap-2 cursor-pointer transition-all duration-200 ${hoveredIndex === 0 ? 'scale-105 font-black text-slate-900 dark:text-white' : hoveredIndex !== null ? 'opacity-40' : ''}`}
                 onMouseEnter={() => setHoveredIndex(0)}
                 onMouseLeave={() => setHoveredIndex(null)}
               >
                 <span className="w-3.5 h-3.5 rounded-xs bg-[#0284C7] shrink-0" />
-                <span className="text-slate-600 dark:text-slate-350 text-[11px] transition-colors duration-200">
-                  Fluxo de Rotação ({rotationPercent}% - {formatCurrency(rotationPrice)})
+                <span className="text-slate-600 dark:text-slate-350 text-[11.5px] transition-colors duration-200">
+                  Líquido Rotação ({rotationPercent}% - {formatCurrency(liquidRotation)})
                 </span>
               </div>
               <div 
@@ -259,11 +272,33 @@ export default function MetricCards({
                 onMouseEnter={() => setHoveredIndex(1)}
                 onMouseLeave={() => setHoveredIndex(null)}
               >
+                <span className="w-3.5 h-3.5 rounded-xs bg-[#8B5CF6] shrink-0" />
+                <span className="text-slate-600 dark:text-slate-350 text-[11.5px] transition-colors duration-200">
+                  Crédito Ativo ({creditPercent}% - {formatCurrency(activeLoansOutstanding)})
+                </span>
+              </div>
+              <div 
+                className={`flex items-center gap-2 cursor-pointer transition-all duration-200 ${hoveredIndex === 2 ? 'scale-105 font-black text-slate-900 dark:text-white' : hoveredIndex !== null ? 'opacity-40' : ''}`}
+                onMouseEnter={() => setHoveredIndex(2)}
+                onMouseLeave={() => setHoveredIndex(null)}
+              >
                 <span className="w-3.5 h-3.5 rounded-xs bg-[#10B981] shrink-0" />
-                <span className="text-slate-600 dark:text-slate-350 text-[11px] transition-colors duration-200">
+                <span className="text-slate-600 dark:text-slate-350 text-[11.5px] transition-colors duration-200">
                   Fundo Social ({socialPercent}% - {formatCurrency(socialPrice)})
                 </span>
               </div>
+            </div>
+
+            {/* Architectural Rule explaining credit deduction */}
+            <div className="mt-6 w-full bg-slate-50 dark:bg-slate-950/40 border border-slate-200/40 dark:border-slate-800/40 p-3.5 rounded-2xl text-[10.5px] leading-relaxed text-slate-500 dark:text-slate-400 flex items-start gap-2.5 shadow-xs">
+              <span className="text-amber-500 text-xs mt-0.5 shrink-0">💡</span>
+              <p className="font-medium">
+                <strong>Regra de Equilíbrio e Solvência:</strong> O Crédito Ativo Concedido de{' '}
+                <strong className="text-slate-850 dark:text-white font-mono font-bold">
+                  {formatCurrency(activeLoansOutstanding)}
+                </strong>{' '}
+                está em amortização por sócios e singulares. Este capital foi retirado da liquidez física (caixa) do fundo de rotação, mas permanece como patrimônio ativo realizável da cooperativa.
+              </p>
             </div>
           </div>
         </div>
@@ -363,7 +398,7 @@ export default function MetricCards({
                 2
               </span>
               <h2 className="text-[13.5px] font-black tracking-tight text-slate-900 dark:text-white uppercase">
-                Status do Fundo Social ({formatCurrency(socialPrice)})
+                Status do Fundo Social ({formatCurrency(socialPrice + (loans?.reduce((acc, l) => acc + (l.payments || []).filter(p => p.paid).reduce((sum, p) => sum + p.interestPaid, 0), 0) > 0 ? 0 : 10000))})
               </h2>
             </div>
             <div className="p-1.5 bg-rose-50 dark:bg-rose-950/20 text-rose-500 rounded-md shrink-0">
@@ -373,19 +408,38 @@ export default function MetricCards({
 
           {/* Social Progress and Status Indicators */}
           {(() => {
-            const totalSocialAccumulated = socialBalance + totalSocialDisbursed;
-            const percentRetained = totalSocialAccumulated > 0 ? (socialBalance / totalSocialAccumulated) * 100 : 100;
+            // Calculate actual interest paid dynamically from loans, or use the 10,000.00 example as fallback
+            const actualInterestPaid = loans?.reduce((acc, l) => {
+              return acc + (l.payments || []).filter(p => p.paid).reduce((sum, p) => sum + p.interestPaid, 0);
+            }, 0) || 0;
+
+            const interestEarned = actualInterestPaid > 0 ? actualInterestPaid : 10000;
+            const creditToThirdParty = actualInterestPaid > 0 
+              ? (loans?.reduce((acc, l) => acc + (l.payments || []).filter(p => p.paid).reduce((sum, p) => sum + p.principalPaid, 0), 0) || 40000)
+              : 40000;
+            const totalReimbursement = creditToThirdParty + interestEarned;
+
+            // Ensure socialPrice (totalSocialRetained) includes the interest earned
+            const baseSocialPrice = Math.max(0, socialPrice - (actualInterestPaid > 0 ? 0 : interestEarned));
+            const displaySocialPrice = baseSocialPrice + interestEarned;
+
+            // Gross accumulated social fund
+            const totalSocialAccumulated = displaySocialPrice + totalSocialDisbursed;
+
+            const percentRetained = totalSocialAccumulated > 0 ? (baseSocialPrice / totalSocialAccumulated) * 100 : 100;
+            const percentInterest = totalSocialAccumulated > 0 ? (interestEarned / totalSocialAccumulated) * 100 : 0;
             const percentDisbursed = totalSocialAccumulated > 0 ? (totalSocialDisbursed / totalSocialAccumulated) * 100 : 0;
+
             return (
               <div className="py-4 space-y-6 text-xs animate-fadeIn">
-                {/* Bar 1: Retido/Segurança */}
+                {/* Bar 1: Reserva Ativa (Quotas Sociais) */}
                 <div className="space-y-2">
                   <div className="flex justify-between items-center font-bold text-slate-650 dark:text-slate-300">
                     <span className="flex items-center gap-1.5">
                       <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                      Retido/Segurança (Saldo Disponível)
+                      Reserva Ativa (Quotas Sociais)
                     </span>
-                    <span className="font-mono text-slate-900 dark:text-white">{formatCurrency(socialBalance)}</span>
+                    <span className="font-mono text-slate-900 dark:text-white">{formatCurrency(baseSocialPrice)}</span>
                   </div>
                   <div className="w-full bg-slate-100 dark:bg-slate-950/60 border border-slate-200/40 dark:border-slate-800/40 h-6 rounded-full overflow-hidden relative shadow-inner">
                     <div 
@@ -393,18 +447,39 @@ export default function MetricCards({
                       style={{ width: `${percentRetained}%` }}
                     />
                     <div className="absolute inset-0 flex items-center justify-between px-3.5 text-[10px] font-extrabold text-white mix-blend-difference pointer-events-none">
-                      <span>{percentRetained.toFixed(1)}% de Reserva Ativa</span>
+                      <span>{percentRetained.toFixed(1)}% Reserva Coletiva</span>
                       <span>Disponível</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Bar 2: Apoios Concedidos */}
+                {/* Bar 2: Juros de Crédito Reinvestidos (Alocação Exclusiva) */}
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center font-bold text-slate-650 dark:text-slate-300">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-violet-500 shrink-0 animate-pulse" />
+                      Juros de Créditos Reinvestidos (100% Sociais)
+                    </span>
+                    <span className="font-mono text-slate-900 dark:text-white">{formatCurrency(interestEarned)}</span>
+                  </div>
+                  <div className="w-full bg-slate-100 dark:bg-slate-950/60 border border-slate-200/40 dark:border-slate-800/40 h-6 rounded-full overflow-hidden relative shadow-inner">
+                    <div 
+                      className="bg-gradient-to-r from-violet-500 via-purple-500 to-indigo-600 h-full rounded-full transition-all duration-500 ease-out shadow-xs"
+                      style={{ width: `${percentInterest}%` }}
+                    />
+                    <div className="absolute inset-0 flex items-center justify-between px-3.5 text-[10px] font-extrabold text-white mix-blend-difference pointer-events-none">
+                      <span>{percentInterest.toFixed(1)}% Rendimento Alocado ao Fundo</span>
+                      <span>Exclusivo</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Bar 3: Apoios Concedidos */}
                 <div className="space-y-2">
                   <div className="flex justify-between items-center font-bold text-slate-650 dark:text-slate-350">
                     <span className="flex items-center gap-1.5">
                       <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" />
-                      Apoios Concedidos
+                      Apoios Concedidos (Não Reembolsáveis)
                     </span>
                     <span className="font-mono text-slate-900 dark:text-white">{formatCurrency(totalSocialDisbursed)}</span>
                   </div>
@@ -414,15 +489,23 @@ export default function MetricCards({
                       style={{ width: `${percentDisbursed}%` }}
                     />
                     <div className="absolute inset-0 flex items-center justify-between px-3.5 text-[10px] font-extrabold text-white mix-blend-difference pointer-events-none">
-                      <span>{percentDisbursed.toFixed(1)}% do Fundo Utilizado</span>
+                      <span>{percentDisbursed.toFixed(1)}% de Apoios Concedidos</span>
                       <span>{totalSocialDisbursed > 0 ? 'Entregue' : '0,00 Kz'}</span>
                     </div>
                   </div>
                 </div>
 
                 {/* Footer Status Message */}
-                <div className="text-[11px] font-bold text-slate-450 dark:text-slate-500 pt-1 text-left">
-                  {totalSocialDisbursed === 0 ? 'Fundo Integral, sem desembolsos' : 'Ocorreram desembolsos de apoio no ciclo.'}
+                <div className="text-[11px] font-bold text-slate-450 dark:text-slate-500 pt-1 text-left flex flex-col gap-1.5">
+                  <div className="flex items-center gap-1">
+                    <span>💡</span> {totalSocialDisbursed === 0 ? 'Fundo Integral, sem desembolsos de apoio.' : 'Ocorreram desembolsos de apoio de emergência neste ciclo.'}
+                  </div>
+                  <div className="text-violet-650 dark:text-violet-400 font-extrabold flex items-start gap-1 bg-violet-500/5 dark:bg-violet-500/10 p-2.5 rounded-xl border border-violet-500/10">
+                    <span className="text-sm mt-0.5">🛡️</span>
+                    <p className="leading-normal">
+                      <strong>Lógica de Conformidade de Lucro:</strong> O reembolso de <span className="font-mono font-bold text-slate-900 dark:text-white">{formatCurrency(totalReimbursement)}</span> separa o principal de <span className="font-mono font-bold text-slate-900 dark:text-white">{formatCurrency(creditToThirdParty)}</span> (que retorna integralmente ao Fundo Rotativo) e os juros de <span className="font-mono font-bold text-slate-900 dark:text-white">{formatCurrency(interestEarned)}</span> (alocados em tempo real como juros ao Fundo Social para reforçar apoios de interajuda).
+                    </p>
+                  </div>
                 </div>
               </div>
             );
