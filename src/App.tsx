@@ -190,6 +190,51 @@ export default function App() {
     }
     return null;
   });
+
+  // Regra de Segurança: Terminar sessão automaticamente após 2 minutos de inatividade total
+  useEffect(() => {
+    if (!currentUser) return;
+
+    let timeoutId: any;
+
+    const performAutoLogout = () => {
+      console.log("[Segurança] Sessão expirada por inatividade. Executando logout fiduciário.");
+      localStorage.setItem('kix_logout_reason', 'inactivity');
+      localStorage.removeItem('kix_current_user');
+      setCurrentUser(null);
+    };
+
+    const resetInactivityTimer = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(performAutoLogout, 120000); // 2 minutos (120000 ms)
+    };
+
+    // Monitorizar múltiplos eventos de interação humana para detetar atividade
+    const userActivityEvents = [
+      'mousedown',
+      'mousemove',
+      'keypress',
+      'scroll',
+      'touchstart',
+      'click'
+    ];
+
+    // Iniciar o temporizador inicial
+    resetInactivityTimer();
+
+    // Registar escutas de interação de forma passiva
+    userActivityEvents.forEach((evName) => {
+      window.addEventListener(evName, resetInactivityTimer, { passive: true });
+    });
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      userActivityEvents.forEach((evName) => {
+        window.removeEventListener(evName, resetInactivityTimer);
+      });
+    };
+  }, [currentUser]);
+
   const [isLoadingDb, setIsLoadingDb] = useState<boolean>(true);
   const [isInitialLoadCompleted, setIsInitialLoadCompleted] = useState<boolean>(false);
   const [dbLoadedSuccessfully, setDbLoadedSuccessfully] = useState<boolean>(false);

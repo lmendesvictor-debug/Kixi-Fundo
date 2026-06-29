@@ -64,6 +64,14 @@ export default function LoginScreen({ members, onLogin, userEmail, onResetPasswo
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
+  const [infoMsg, setInfoMsg] = useState(() => {
+    const reason = localStorage.getItem('kix_logout_reason');
+    if (reason === 'inactivity') {
+      localStorage.removeItem('kix_logout_reason');
+      return 'A sua sessão foi encerrada por inatividade (2 min) por motivos de segurança.';
+    }
+    return '';
+  });
   const [carouselIndex, setCarouselIndex] = useState(0);
   const [showDemoUsers, setShowDemoUsers] = useState(false);
   const [showRecoveryModal, setShowRecoveryModal] = useState(false);
@@ -375,6 +383,14 @@ export default function LoginScreen({ members, onLogin, userEmail, onResetPasswo
               </div>
             )}
 
+            {/* Info/Inactivity banner */}
+            {infoMsg && (
+              <div className="p-3 bg-amber-500/10 border border-amber-550/40 text-amber-200 rounded-xl text-xs flex items-center gap-2 mb-5">
+                <AlertCircle className="w-4.5 h-4.5 text-amber-400 shrink-0 animate-bounce" />
+                <span>{infoMsg}</span>
+              </div>
+            )}
+
             {/* Form controls */}
             <form onSubmit={handleFormLogin} className="space-y-4" autoComplete="off">
               
@@ -392,7 +408,10 @@ export default function LoginScreen({ members, onLogin, userEmail, onResetPasswo
                     required
                     placeholder="Username ou email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (infoMsg) setInfoMsg('');
+                    }}
                     autoComplete="new-password"
                     className="w-full bg-[#111827] border border-slate-800 rounded-xl pl-10 pr-4 py-3 text-xs focus:outline-none focus:border-[#0EA5E9] focus:bg-[#131a2e] text-white placeholder-slate-500 transition-all font-medium font-sans"
                   />
@@ -428,7 +447,10 @@ export default function LoginScreen({ members, onLogin, userEmail, onResetPasswo
                     required
                     placeholder="********"
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => {
+                      setPassword(e.target.value);
+                      if (infoMsg) setInfoMsg('');
+                    }}
                     autoComplete="new-password"
                     className="w-full bg-[#111827] border border-slate-800 rounded-xl pl-10 pr-4 py-3 text-xs focus:outline-none focus:border-[#0EA5E9] focus:bg-[#131a2e] text-white placeholder-slate-500 transition-all font-medium"
                   />
