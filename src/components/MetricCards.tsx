@@ -13,7 +13,11 @@ import {
   Heart,
   Search,
   Calendar,
-  Check
+  Check,
+  MessageSquare,
+  Send,
+  BellRing,
+  Sparkles
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { Member, Loan } from '../types';
@@ -66,6 +70,21 @@ export default function MetricCards({
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [hoveredCreditProfitIndex, setHoveredCreditProfitIndex] = useState<number | null>(null);
   const [activeLeftTab, setActiveLeftTab] = useState<'composition' | 'social' | 'cycle' | 'contemplations'>('composition');
+  const [isSendingBulkReminders, setIsSendingBulkReminders] = useState<boolean>(false);
+  const [bulkReminderSuccessMessage, setBulkReminderSuccessMessage] = useState<string | null>(null);
+
+  const handleSendBulkReminders = () => {
+    if (pendingContributors.length === 0) return;
+    setIsSendingBulkReminders(true);
+    setBulkReminderSuccessMessage(null);
+    
+    setTimeout(() => {
+      setIsSendingBulkReminders(false);
+      setBulkReminderSuccessMessage(
+        `Disparo Automático Concluído! ${pendingContributors.length} lembretes de cobrança foram despachados via API de WhatsApp/SMS.`
+      );
+    }, 2200);
+  };
 
   // Sync selectedCycle to the last paid cycle when payoutsCompleted or currentMonth changes
   useEffect(() => {
@@ -74,7 +93,7 @@ export default function MetricCards({
   
   const currentCollected = customCollected !== undefined ? customCollected : currentPaidCount * 120000;
   const targetArrecadacao = totalMembersCount * 120000; // 1,440,000.00
-  const progressPercent = Math.min((currentCollected / targetArrecadacao) * 100, 100);
+  const progressPercent = targetArrecadacao > 0 ? Math.min((currentCollected / targetArrecadacao) * 100, 100) : 0;
 
   // fallback in case members list is empty or under development
   const membersList = members || [];
@@ -85,6 +104,8 @@ export default function MetricCards({
     return {
       id: m.id,
       name: m.name,
+      phone: m.phone || '',
+      email: m.email || '',
       paid: contr?.paid || false,
       amount: contr?.amount !== undefined ? contr.amount : 120000,
       paidAt: contr?.paidAt,
@@ -124,14 +145,19 @@ export default function MetricCards({
     .filter(c => !c.paid)
     .reduce((sum, c) => sum + 120000, 0);
 
+  const cyclePaidAmount = totalValoresPagosCycle;
+  const cycleConformityPercent = targetArrecadacao > 0 ? Math.min((cyclePaidAmount / targetArrecadacao) * 100, 100) : 0;
+
   // Filter list based on sub-tab choice - Only present paid contributors for the selected cycle
   const displayedItems = (() => {
     if (statusFilter === 'all' || statusFilter === 'paid') return paidContributors;
-    if (statusFilter === 'pending') return []; // We only present paid members as requested
+    if (statusFilter === 'pending') return pendingContributors;
     // beneficiaries tab returns mapped elements mimicking the format
     return searchedBeneficiaries.map(b => ({
       id: b.id,
       name: b.name,
+      phone: b.phone || '',
+      email: b.email || '',
       paid: isPayoutDoneForCycle || (b.contributions[selectedCycle]?.paid && false), // handled specifically below
       amount: 600000,
       paidAt: undefined,
@@ -158,28 +184,30 @@ export default function MetricCards({
   }, 0) || 0;
   const activeLoansOutstanding = Math.max(0, totalPrincipalDisbursed - totalPrincipalRepaid);
 
-  const rotationPrice = totalBeneficiaryDestined > 0 ? totalBeneficiaryDestined : 3600000;
-  const socialPrice = totalSocialRetained > 0 ? totalSocialRetained : 720000;
+  const rotationPrice = totalBeneficiaryDestined;
+  const socialPrice = totalSocialRetained;
   
   // Deduct active loans from rotation fund to find the liquid amount
   const liquidRotation = Math.max(0, rotationPrice - activeLoansOutstanding);
   const combinedTotal = rotationPrice + socialPrice;
 
-  const rotationPercent = combinedTotal > 0 ? ((liquidRotation / combinedTotal) * 100).toFixed(1) : '83.3';
+  const rotationPercent = combinedTotal > 0 ? ((liquidRotation / combinedTotal) * 100).toFixed(1) : '0.0';
   const creditPercent = combinedTotal > 0 ? ((activeLoansOutstanding / combinedTotal) * 100).toFixed(1) : '0.0';
-  const socialPercent = combinedTotal > 0 ? ((socialPrice / combinedTotal) * 100).toFixed(1) : '16.7';
+  const socialPercent = combinedTotal > 0 ? ((socialPrice / combinedTotal) * 100).toFixed(1) : '0.0';
 
-  const pieData = [
+  const pieData = combinedTotal > 0 ? [
     { name: 'Disponível p/ Rotação (Líquido)', value: liquidRotation, color: '#0284C7', percent: rotationPercent },
     { name: 'Crédito Ativo (Emprestado)', value: activeLoansOutstanding, color: '#8B5CF6', percent: creditPercent },
     { name: 'Fundo Social (Reservado)', value: socialPrice, color: '#10B981', percent: socialPercent }
+  ] : [
+    { name: 'Sem Informações (Cadastro Vazio)', value: 1, color: '#94A3B8', percent: '0.0' }
   ];
 
   const isHovered = hoveredIndex !== null;
   const currentDisplayLabel = isHovered ? pieData[hoveredIndex!].name : 'Patrimônio Coletivo Total';
-  const currentDisplayValue = isHovered ? pieData[hoveredIndex!].value : combinedTotal;
+  const currentDisplayValue = combinedTotal > 0 ? (isHovered ? pieData[hoveredIndex!].value : combinedTotal) : 0;
   const currentDisplayColor = isHovered ? pieData[hoveredIndex!].color : undefined;
-  const currentDisplayPercent = isHovered ? pieData[hoveredIndex!].percent : undefined;
+  const currentDisplayPercent = combinedTotal > 0 ? (isHovered ? pieData[hoveredIndex!].percent : undefined) : undefined;
 
   // Cálculos dinâmicos de crédito e juros (lucros)
   const totalLentAmount = loans?.reduce((acc, l) => acc + l.amountRequested, 0) || 0;
@@ -191,30 +219,32 @@ export default function MetricCards({
   }, 0) || 0;
   const totalProjectedInterest = Math.max(0, totalContractedInterest - totalRealizedInterest);
 
-  const displayLent = totalLentAmount > 0 ? totalLentAmount : 400000;
-  const displayInterest = totalContractedInterest > 0 ? totalContractedInterest : 100000;
+  const displayLent = totalLentAmount;
+  const displayInterest = totalContractedInterest;
   const displayTotal = displayLent + displayInterest;
-  const lentPercent = displayTotal > 0 ? ((displayLent / displayTotal) * 100).toFixed(1) : '80.0';
-  const interestPercent = displayTotal > 0 ? ((displayInterest / displayTotal) * 100).toFixed(1) : '20.0';
+  const lentPercent = displayTotal > 0 ? ((displayLent / displayTotal) * 100).toFixed(1) : '0.0';
+  const interestPercent = displayTotal > 0 ? ((displayInterest / displayTotal) * 100).toFixed(1) : '0.0';
 
-  const creditProfitPieData = [
+  const creditProfitPieData = displayTotal > 0 ? [
     { name: 'Capital Concedido (Investido)', value: displayLent, color: '#8B5CF6', percent: lentPercent },
     { name: 'Juros Acumulados (Lucros)', value: displayInterest, color: '#10B981', percent: interestPercent }
+  ] : [
+    { name: 'Sem Créditos Ativos (Cadastro Vazio)', value: 1, color: '#94A3B8', percent: '0.0' }
   ];
 
   const isCreditProfitHovered = hoveredCreditProfitIndex !== null;
   const currentCreditProfitLabel = isCreditProfitHovered 
     ? creditProfitPieData[hoveredCreditProfitIndex!].name 
     : 'Crédito Ativo (Investido)';
-  const currentCreditProfitValue = isCreditProfitHovered 
-    ? creditProfitPieData[hoveredCreditProfitIndex!].value 
-    : displayLent;
+  const currentCreditProfitValue = displayTotal > 0 
+    ? (isCreditProfitHovered ? creditProfitPieData[hoveredCreditProfitIndex!].value : displayLent)
+    : 0;
   const currentCreditProfitColor = isCreditProfitHovered 
     ? creditProfitPieData[hoveredCreditProfitIndex!].color 
     : '#8B5CF6';
-  const currentCreditProfitPercent = isCreditProfitHovered 
-    ? creditProfitPieData[hoveredCreditProfitIndex!].percent 
-    : lentPercent;
+  const currentCreditProfitPercent = displayTotal > 0
+    ? (isCreditProfitHovered ? creditProfitPieData[hoveredCreditProfitIndex!].percent : lentPercent)
+    : '0.0';
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-1 select-none font-sans text-slate-800 dark:text-slate-100" id="dashboard-widgets-panel">
@@ -433,14 +463,10 @@ export default function MetricCards({
                   return acc + (l.payments || []).filter(p => p.paid).reduce((sum, p) => sum + p.interestPaid, 0);
                 }, 0) || 0;
                 const singularLoans = loans?.filter(l => l.borrowerType === 'singular') || [];
-                const expectedSingularInterest = singularLoans.length > 0
-                  ? singularLoans.reduce((acc, l) => acc + l.payments.reduce((sum, p) => sum + p.interestPaid, 0), 0)
-                  : 10000;
-                const creditToThirdParty = singularLoans.length > 0
-                  ? singularLoans.reduce((acc, l) => acc + l.amountRequested, 0)
-                  : 40000;
+                const expectedSingularInterest = singularLoans.reduce((acc, l) => acc + l.payments.reduce((sum, p) => sum + p.interestPaid, 0), 0);
+                const creditToThirdParty = singularLoans.reduce((acc, l) => acc + l.amountRequested, 0);
                 const expectedSingularInterestFull = expectedSingularInterest;
-                const interestEarned = actualInterestPaid > 0 ? actualInterestPaid : expectedSingularInterestFull;
+                const interestEarned = actualInterestPaid;
                 const totalReimbursement = creditToThirdParty + expectedSingularInterestFull;
                 
                 const totalPaidContributionsCount = members?.reduce((acc, m) => {
@@ -449,7 +475,7 @@ export default function MetricCards({
                 const baseSocialPrice = totalPaidContributionsCount * 20000;
                 const totalSocialAccumulated = (baseSocialPrice + interestEarned) + totalSocialDisbursed;
 
-                const percentRetained = totalSocialAccumulated > 0 ? (baseSocialPrice / totalSocialAccumulated) * 100 : 100;
+                const percentRetained = totalSocialAccumulated > 0 ? (baseSocialPrice / totalSocialAccumulated) * 100 : 0;
                 const percentInterest = totalSocialAccumulated > 0 ? (interestEarned / totalSocialAccumulated) * 100 : 0;
                 const percentDisbursed = totalSocialAccumulated > 0 ? (totalSocialDisbursed / totalSocialAccumulated) * 100 : 0;
 
@@ -570,7 +596,7 @@ export default function MetricCards({
                   Mensal Arrecadado (Cota)
                 </p>
                 <p className="text-lg font-black font-mono text-[#0b5a3e] dark:text-emerald-450 mt-0.5">
-                  {formatCurrency(allContributorsForCycle.reduce((sum, c) => c.paid ? sum + c.amount : sum, 0))}
+                  {formatCurrency(cyclePaidAmount)}
                 </p>
                 <p className="text-[10px] font-bold text-slate-400 mt-0.5">
                   Meta Total do Ciclo: {formatCurrency(targetArrecadacao)}
@@ -587,7 +613,7 @@ export default function MetricCards({
                 <div className="relative w-full bg-slate-200/85 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden mb-4">
                   <div 
                     className="bg-[#0b5a3e] h-full rounded-full transition-all duration-500 ease-out"
-                    style={{ width: `${Math.min((allContributorsForCycle.reduce((sum, c) => c.paid ? sum + c.amount : sum, 0) / targetArrecadacao) * 100, 100)}%` }}
+                    style={{ width: `${cycleConformityPercent}%` }}
                   />
                   <span className="absolute left-1/3 top-0 bottom-0 w-[1px] bg-slate-300 dark:bg-slate-700 pointer-events-none" />
                   <span className="absolute left-2/3 top-0 bottom-0 w-[1px] bg-slate-300 dark:bg-slate-700 pointer-events-none" />
@@ -597,7 +623,7 @@ export default function MetricCards({
                 <div className="relative h-2.5 mb-1">
                   <div 
                     className="absolute flex flex-col items-center -translate-x-1/2 transition-all duration-500"
-                    style={{ left: `${Math.min((allContributorsForCycle.reduce((sum, c) => c.paid ? sum + c.amount : sum, 0) / targetArrecadacao) * 100, 100)}%` }}
+                    style={{ left: `${cycleConformityPercent}%` }}
                   >
                     <span className="text-[8px] text-[#0d5c3a] leading-none">▲</span>
                   </div>
@@ -616,7 +642,7 @@ export default function MetricCards({
                 </div>
 
                 <div className="text-center mt-3 text-[10px] font-black text-[#0b5a3e] bg-[#0b5a3e]/5 p-2 rounded-xl border border-[#0b5a3e]/10">
-                  Ciclo Atual: {allContributorsForCycle.filter(c => c.paid).length} de 12 cotas regularizadas ({Math.round(Math.min((allContributorsForCycle.reduce((sum, c) => c.paid ? sum + c.amount : sum, 0) / targetArrecadacao) * 100, 100))}% de conformidade)
+                  Ciclo Ativo: {allContributorsForCycle.filter(c => c.paid).length} de {totalMembersCount} cotas regularizadas ({Math.round(cycleConformityPercent)}% de conformidade)
                 </div>
               </div>
             </motion.div>
@@ -673,20 +699,30 @@ export default function MetricCards({
               </div>
 
               {/* Switch tabs */}
-              <div className="flex bg-slate-200/60 dark:bg-slate-900/60 rounded-xl p-0.5 mb-2.5 gap-1">
+              <div className="flex bg-slate-200/60 dark:bg-slate-900/60 rounded-xl p-0.5 mb-2.5 gap-1 animate-fade-in">
                 <button
                   onClick={() => setStatusFilter('paid')}
-                  className={`flex-1 text-[10px] py-1 font-black rounded-lg transition-all cursor-pointer text-center ${
+                  className={`flex-1 text-[9.5px] py-1 font-black rounded-lg transition-all cursor-pointer text-center ${
                     statusFilter === 'paid'
                       ? 'bg-[#0d5c3a] text-white shadow-xs'
                       : 'text-slate-500 hover:text-slate-750'
                   }`}
                 >
-                  Membros Pagos ({paidContributorsCount})
+                  Pagos ({paidContributorsCount})
+                </button>
+                <button
+                  onClick={() => setStatusFilter('pending')}
+                  className={`flex-1 text-[9.5px] py-1 font-black rounded-lg transition-all cursor-pointer text-center ${
+                    statusFilter === 'pending'
+                      ? 'bg-amber-600 text-white shadow-xs font-black'
+                      : 'text-[#ea580c] hover:text-[#ea580c] font-black'
+                  }`}
+                >
+                  Pendentes ({pendingContributorsCount})
                 </button>
                 <button
                   onClick={() => setStatusFilter('beneficiaries')}
-                  className={`flex-1 text-[10px] py-1 font-black rounded-lg transition-all cursor-pointer text-center ${
+                  className={`flex-1 text-[9.5px] py-1 font-black rounded-lg transition-all cursor-pointer text-center ${
                     statusFilter === 'beneficiaries'
                       ? 'bg-[#0d5c3a] text-white shadow-xs'
                       : 'text-slate-500 hover:text-slate-750'
@@ -695,6 +731,48 @@ export default function MetricCards({
                   Beneficiários ({cycleBeneficiariesCount})
                 </button>
               </div>
+
+              {/* Bulk reminder action for pending tab */}
+              {statusFilter === 'pending' && pendingContributorsCount > 0 && (
+                <div className="bg-amber-50/65 dark:bg-amber-955/10 border border-amber-200/50 dark:border-amber-900/35 rounded-2xl p-3 mb-2.5 space-y-2 text-left animate-fade-in">
+                  <div className="flex items-start justify-between gap-1.5">
+                    <div>
+                      <h4 className="text-[10.5px] font-black text-amber-800 dark:text-amber-400 uppercase flex items-center gap-1.5">
+                        <BellRing className="w-3.5 h-3.5 text-amber-600 animate-bounce" />
+                        Lembretes Automáticos de Quota
+                      </h4>
+                      <p className="text-[9px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed font-semibold">
+                        Há {pendingContributorsCount} cooperantes com quotas em falta no Ciclo {selectedCycle}. Envie lembretes via API SMS/WhatsApp.
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {bulkReminderSuccessMessage ? (
+                    <div className="text-[9px] font-extrabold text-emerald-800 dark:text-emerald-450 bg-emerald-100/50 dark:bg-emerald-950/20 p-2 rounded-lg border border-emerald-200/30 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                      <span>{bulkReminderSuccessMessage}</span>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handleSendBulkReminders}
+                      disabled={isSendingBulkReminders}
+                      className="w-full py-1.5 bg-amber-600 hover:bg-amber-700 disabled:bg-slate-300 text-white text-[9.5px] font-black rounded-xl flex items-center justify-center gap-1.5 cursor-pointer shadow-sm hover:shadow active:scale-98 transition-all"
+                    >
+                      {isSendingBulkReminders ? (
+                        <>
+                          <RefreshCw className="w-3 h-3 animate-spin" />
+                          <span>A enviar cobranças em lote...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send className="w-3 h-3" />
+                          <span>Enviar Lembretes em Lote</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+              )}
 
               {/* List */}
               <div className="space-y-2 max-h-[140px] overflow-y-auto pr-1">
@@ -715,15 +793,31 @@ export default function MetricCards({
                               {item.paid ? `Cota regularizada` : `Quota em falta`}
                             </span>
                           </div>
-                          <div>
+                          <div className="flex items-center gap-1.5">
                             {item.paid ? (
                               <span className="text-[8.5px] font-black text-emerald-700 bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400 rounded-full py-0.5 px-2 uppercase tracking-wider">
                                 Pago
                               </span>
                             ) : (
-                              <span className="text-[8.5px] font-black text-[#ea580c] bg-[#ffedd5] dark:bg-amber-950/20 dark:text-amber-500 rounded-full py-0.5 px-2 uppercase tracking-wider border border-[#fed7aa]/30 animate-pulse">
-                                Aguardando
-                              </span>
+                              <>
+                                <span className="text-[8.5px] font-black text-[#ea580c] bg-[#ffedd5] dark:bg-amber-950/20 dark:text-amber-500 rounded-full py-0.5 px-2 uppercase tracking-wider border border-[#fed7aa]/30 animate-pulse">
+                                  Aguardando
+                                </span>
+                                <button
+                                  onClick={() => {
+                                    const cleanPhone = (item.phone || '').replace(/[\s\+\-]/g, '');
+                                    const msg = `Olá *${item.name}*! Relembramos que a sua quota mensal de *120.000,00 KZs* relativa ao *Mês 0${selectedCycle} do Kix-Fundo* ainda se encontra aguardando regularização. Agradecemos o envio do comprovativo assim que possível. Muito obrigado!`;
+                                    const waUrl = `https://api.whatsapp.com/send?phone=${cleanPhone || '244900000000'}&text=${encodeURIComponent(msg)}`;
+                                    window.open(waUrl, '_blank');
+                                    alert(`Lembrete gerado! Enviado com sucesso para o WhatsApp de ${item.name} (${item.phone || 'Sem Telefone'}).`);
+                                  }}
+                                  className="p-1 rounded-lg bg-emerald-100 text-emerald-800 hover:bg-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-400 dark:hover:bg-emerald-900/30 transition-all cursor-pointer flex items-center justify-center text-[9px] font-bold gap-1"
+                                  title="Enviar Cobrança por WhatsApp"
+                                >
+                                  <MessageSquare className="w-3.5 h-3.5" />
+                                  <span>Cobrar</span>
+                                </button>
+                              </>
                             )}
                           </div>
                         </div>

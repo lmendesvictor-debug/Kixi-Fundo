@@ -68,7 +68,7 @@ export default function LoginScreen({ members, onLogin, userEmail, onResetPasswo
     const reason = localStorage.getItem('kix_logout_reason');
     if (reason === 'inactivity') {
       localStorage.removeItem('kix_logout_reason');
-      return 'A sua sessão foi encerrada por inatividade (2 min) por motivos de segurança.';
+      return 'A sua sessão foi encerrada por inatividade (10 min para Administrador, 2 min para Membros) por motivos de segurança.';
     }
     return '';
   });
@@ -132,15 +132,17 @@ export default function LoginScreen({ members, onLogin, userEmail, onResetPasswo
     const isAdminAccount = 
       targetEmail === 'admin@kixfundo.ao' || 
       targetEmail === 'admin' || 
+      targetEmail === 'lpambo' || 
       targetEmail === 'lmendesvictor@gmail.com' ||
       targetEmail === (userEmail || '').toLowerCase();
 
     if (isAdminAccount) {
       if (targetPass === customAdminPass || targetPass === 'Historia100' || targetPass === 'admin123' || targetPass === 'admin' || targetPass === '1234') {
+        const resolvedEmail = (targetEmail === 'lpambo' || targetEmail === 'admin') ? 'lmendesvictor@gmail.com' : targetEmail;
         setEmail('');
         setPassword('');
         onLogin({
-          email: targetEmail,
+          email: resolvedEmail,
           role: 'admin',
           name: 'Administrador Principal'
         });

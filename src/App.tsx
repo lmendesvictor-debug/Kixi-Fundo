@@ -191,7 +191,7 @@ export default function App() {
     return null;
   });
 
-  // Regra de Segurança: Terminar sessão automaticamente após 2 minutos de inatividade total
+  // Regra de Segurança: Terminar sessão automaticamente após 10 minutos para Administrador e 2 minutos para outros utilizadores
   useEffect(() => {
     if (!currentUser) return;
 
@@ -206,7 +206,12 @@ export default function App() {
 
     const resetInactivityTimer = () => {
       if (timeoutId) clearTimeout(timeoutId);
-      timeoutId = setTimeout(performAutoLogout, 120000); // 2 minutos (120000 ms)
+      // Administrador lmendesvictor@gmail.com ou com role admin tem 10 minutos (600000 ms), demais têm 2 minutos (120000 ms)
+      const isAdmin = 
+        currentUser.email.toLowerCase() === 'lmendesvictor@gmail.com' || 
+        currentUser.role === 'admin';
+      const delay = isAdmin ? 600000 : 120000;
+      timeoutId = setTimeout(performAutoLogout, delay);
     };
 
     // Monitorizar múltiplos eventos de interação humana para detetar atividade
@@ -2965,7 +2970,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                   socialBalance={socialBalance}
                   currentPaidCount={currentMonthPaidCount}
                   currentCollected={currentMonthCollected}
-                  totalMembersCount={12}
+                  totalMembersCount={members.length}
                   beneficiaries={getBeneficiariesList()}
                   isPayoutDone={isCurrentMonthPayoutDone}
                   totalQuotasCollected={totalQuotasCollected}
