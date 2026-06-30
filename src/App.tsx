@@ -238,6 +238,11 @@ export default function App() {
   const [isLoadingDb, setIsLoadingDb] = useState<boolean>(true);
   const [isInitialLoadCompleted, setIsInitialLoadCompleted] = useState<boolean>(false);
   const [dbLoadedSuccessfully, setDbLoadedSuccessfully] = useState<boolean>(false);
+  const [contributionConfirm, setContributionConfirm] = useState<{
+    memberId: number;
+    memberName: string;
+    isPaidCurrently: boolean;
+  } | null>(null);
   const [currentMonth, setCurrentMonth] = useState<number>(() => {
     return Number(localStorage.getItem('kix_current_month') || '1');
   });
@@ -1791,7 +1796,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
   };
 
   // Toggle contribution status of a member for the current active month
-  const handleToggleContribution = (memberId: number) => {
+  const handleToggleContribution = (memberId: number, forceConfirm: boolean = false) => {
     const isSuperAdmin = currentUser?.email.trim().toLowerCase() === 'lmendesvictor@gmail.com';
     if (!isSuperAdmin && loggedInMember?.permissions?.actionRegisterPayments === false) {
       alert('Acesso Negado: Não possui privilégios de gestor para registar ou alterar pagamentos de quotas de cooperantes.');
@@ -1811,6 +1816,16 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
     const hadPaid = targetedMember.contributions[currentMonth]?.paid;
     if (hadPaid && appConfig.adminPrivilegeCanRefund === false) {
       alert('Acesso Negado: O estorno ou cancelamento de cotas recolhidas está desativado nas políticas de privilégio do administrador do sistema. Ative esta permissão na Administração Estratégica para o permitir.');
+      return;
+    }
+
+    // Intercept default calls to confirm first
+    if (!forceConfirm) {
+      setContributionConfirm({
+        memberId,
+        memberName: targetedMember.name,
+        isPaidCurrently: !!hadPaid
+      });
       return;
     }
 
@@ -2516,7 +2531,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
             </div>
 
             {/* Desktop Navigation Row (hidden on mobile, flex on desktop) */}
-            <div className="hidden lg:flex items-center gap-1 xl:gap-1.5 px-1 py-1 min-w-0 flex-1 justify-center max-w-5xl">
+            <div id="kix-desktop-nav-row" className="hidden lg:flex items-center gap-0.5 xl:gap-1 px-1 py-1 min-w-0 flex-1 justify-center max-w-5xl">
               {allowedNavigationItems.map((item) => {
                 const isActive = activeTab === item.id;
                 const labelText = item.id === 'membro-dashboard' ? 'Minha Área' : item.label;
@@ -2526,18 +2541,14 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                     key={item.id}
                     onClick={() => navigateToTab(item.id)}
                     title={labelText}
-                    className={`px-2.5 xl:px-3.5 py-2 rounded-xl text-[10.5px] xl:text-[11.5px] font-bold transition-all duration-300 flex items-center gap-1.5 cursor-pointer hover:scale-105 active:scale-95 shrink-0 ${
+                    className={`kix-nav-btn px-1.5 lg:px-2 xl:px-3 py-1.5 lg:py-2 rounded-xl text-[9px] lg:text-[10px] xl:text-[11px] 2xl:text-[11.5px] font-bold transition-all duration-300 flex items-center gap-1 xl:gap-1.5 cursor-pointer hover:scale-105 active:scale-95 shrink-0 ${
                       isActive
                         ? 'bg-white text-sky-700 shadow-md font-black border border-white'
                         : 'text-white hover:bg-white/12 hover:text-white'
                     }`}
                   >
                     <span className="shrink-0">{item.icon}</span>
-                    <span className={`transition-all duration-300 ${
-                      isActive 
-                        ? 'inline' 
-                        : 'hidden 2xl:inline'
-                    }`}>
+                    <span className="transition-all duration-300">
                       {labelText}
                     </span>
                   </button>
@@ -2716,7 +2727,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
               </div>
             </div>
             {/* Desktop Only status instruments - hidden on mobile, compact on desktop */}
-            <div className="hidden lg:flex items-center gap-1.5 sm:gap-2. shrink-0">
+            <div id="kix-desktop-status-row" className="hidden lg:flex items-center gap-1.5 sm:gap-2 shrink-0">
 
               {/* Cloud DB Sync Status Badge */}
               <div 
@@ -3135,6 +3146,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                       setLogs={setLogs}
                       saveState={saveState}
                       loans={loans}
+                      payoutsCompleted={payoutsCompleted}
                     />
                   ) : (
                     <div className="p-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-center">
@@ -3544,6 +3556,79 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
       </div>
 
       <RegulationsModal isOpen={showRegulations} onClose={() => setShowRegulations(false)} />
+
+      {/* Custom Contribution/Payment Confirmation Modal */}
+      <AnimatePresence>
+        {contributionConfirm && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 overflow-y-auto bg-slate-950/60 backdrop-blur-xs font-sans">
+            <motion.div 
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className={`relative w-full max-w-md p-6 overflow-hidden rounded-2xl shadow-2xl border transition-all ${
+                theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'
+              }`}
+            >
+              <div className="flex items-start gap-4">
+                {contributionConfirm.isPaidCurrently ? (
+                  <div className="p-3 bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 rounded-xl shrink-0">
+                    <AlertCircle className="w-5.5 h-5.5 animate-pulse" />
+                  </div>
+                ) : (
+                  <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-xl shrink-0">
+                    <Coins className="w-5.5 h-5.5" />
+                  </div>
+                )}
+                
+                <div className="space-y-1.5 flex-1">
+                  <h3 className={`text-sm font-extrabold uppercase tracking-wide ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                    {contributionConfirm.isPaidCurrently ? 'Desfazer Pagamento?' : 'Confirmar Pagamento de Quota?'}
+                  </h3>
+                  <div className={`text-xs leading-relaxed ${theme === 'dark' ? 'text-slate-300' : 'text-slate-500'}`}>
+                    {contributionConfirm.isPaidCurrently ? (
+                      <span>
+                        Deseja realmente <strong>cancelar o pagamento</strong> da quota de <strong className="font-semibold text-rose-500">{contributionConfirm.memberName}</strong> para o <strong>Mês {currentMonth}</strong>? Esta ação fará o estorno automático dos valores.
+                      </span>
+                    ) : (
+                      <span>
+                        Tem a certeza de que deseja <strong>confirmar o recebimento</strong> da quota de <strong className="font-semibold text-emerald-500">{contributionConfirm.memberName}</strong> para o <strong>Mês {currentMonth}</strong>?
+                        <br />
+                        <span className="block mt-2 text-[11px] text-slate-400 dark:text-slate-400">
+                          A quota de 120.000,00 KZs será distribuída como 100.000,00 KZs para benefícios gerais de rotação e 20.000,00 KZs para o Fundo de Interajuda Social.
+                        </span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setContributionConfirm(null)}
+                  className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const { memberId } = contributionConfirm;
+                    setContributionConfirm(null);
+                    handleToggleContribution(memberId, true);
+                  }}
+                  className={`px-5 py-2 rounded-xl text-xs font-bold shadow-lg transition-all cursor-pointer text-white ${
+                    contributionConfirm.isPaidCurrently
+                      ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-500/15'
+                      : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-500/15'
+                  }`}
+                >
+                  {contributionConfirm.isPaidCurrently ? 'CONFIRMAR ESTORNO' : 'EFETUAR REGISTRO'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

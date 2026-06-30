@@ -19,7 +19,10 @@ import {
   Download,
   Calculator,
   Bell,
-  AlertTriangle
+  AlertTriangle,
+  Mail,
+  MessageSquare,
+  Search
 } from 'lucide-react';
 import { Member, KixLog, getMemberIdCode, getMemberDisplayCode, Loan } from '../types';
 import { saveReceiptToFirestore } from '../firebaseSync';
@@ -34,6 +37,7 @@ interface MemberProfileWorkspaceProps {
   setLogs: React.Dispatch<React.SetStateAction<KixLog[]>>;
   saveState: (newMembers: Member[], newLogs: KixLog[]) => void;
   loans?: Loan[];
+  payoutsCompleted?: { [month: number]: boolean };
 }
 
 export default function MemberProfileWorkspace({
@@ -46,6 +50,7 @@ export default function MemberProfileWorkspace({
   setLogs,
   saveState,
   loans = [],
+  payoutsCompleted = {},
 }: MemberProfileWorkspaceProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -132,6 +137,181 @@ export default function MemberProfileWorkspace({
   }, 0);
   const individualSocialRetained = paidMonths.length * 20000;
   const individualRotationDeposited = totalPaidAmount - individualSocialRetained;
+
+  // New Inbox states for dynamic member notifications & communications
+  const [inboxFilter, setInboxFilter] = useState<'all' | 'email' | 'whatsapp' | 'in_app'>('all');
+  const [inboxSearch, setInboxSearch] = useState('');
+  const [selectedInboxMsgId, setSelectedInboxMsgId] = useState<string | null>(null);
+
+  // Dynamic Message Builder for this member
+  const buildSimulatedInboxMessages = () => {
+    const msgs: Array<{
+      id: string;
+      timestamp: string;
+      type: 'cycle_receipt' | 'rotation_payout' | 'social_aid' | 'credit_disbursement' | 'credit_payment';
+      channel: 'email' | 'whatsapp' | 'in_app';
+      channelLabel: string;
+      title: string;
+      body: string;
+      read: boolean;
+    }> = [];
+
+    // 1. Quotas Pagas (Recebimentos de Ciclo)
+    [1, 2, 3, 4, 5, 6].forEach((mNum) => {
+      const contrib = member.contributions[mNum];
+      if (contrib && contrib.paid) {
+        const dateStr = contrib.paidAt || `15/${String(5 + mNum).padStart(2, '0')}/2026`;
+        
+        msgs.push({
+          id: `msg-quota-inapp-${mNum}`,
+          timestamp: dateStr,
+          type: 'cycle_receipt',
+          channel: 'in_app',
+          channelLabel: 'Mensagem do Portal',
+          title: `Quota de Poupança Validada - Mês 0${mNum}`,
+          body: `Olá, ${member.name}! O seu depósito de 120.000,00 Kz para o Mês de Referência 0${mNum} foi recebido e validado com sucesso no Banco BIC.\n\nFundo Coletivo: 100.000,00 Kz\nRetenção de Solidariedade Social: 20.000,00 Kz.\n\nObrigado pela sua contribuição assídua para o crescimento do nosso fundo cooperativo!`,
+          read: true
+        });
+
+        msgs.push({
+          id: `msg-quota-whatsapp-${mNum}`,
+          timestamp: dateStr,
+          type: 'cycle_receipt',
+          channel: 'whatsapp',
+          channelLabel: 'Telemóvel / SMS',
+          title: `Comprovativo de Recebimento de Quota (Mês 0${mNum})`,
+          body: `Olá, *${member.name}*! A Direção do Kixi-Fundo confirma o recebimento da sua quota do *Mês 0${mNum}*. \n\n💵 *Valor Pago:* 120.000,00 KZs\n🛡 *Retenção p/ Fundo de Apoio Social:* 20.000,00 KZs\n🏦 *Canal:* Banco BIC Angola (IBAN AO06...10149)\n\nPode consultar o seu comprovativo oficial em pdf no portal da associação: https://kixi-fundo.ao/recibos/m${mNum}/#id-${member.id}`,
+          read: true
+        });
+
+        msgs.push({
+          id: `msg-quota-email-${mNum}`,
+          timestamp: dateStr,
+          type: 'cycle_receipt',
+          channel: 'email',
+          channelLabel: 'E-mail Oficial',
+          title: `Confirmado: Recibo Digital de Quota Regularizada (Mês 0${mNum})`,
+          body: `Prezado(a) ${member.name},\n\nConfirmamos a liquidação e reconciliação bancária da sua quota mensal regulamentar referente ao Mês 0${mNum}.\n\nDetalhamento da Operação:\n- Valor Liquidado: 120.000,00 Kz\n- Fundo Coletivo Comum: 100.000,00 Kz\n- Fundo de Apoio Social: 20.000,00 Kz\n\nEm anexo encontra-se o seu Comprovativo em PDF assinado digitalmente.\n\nAtenciosamente,\nDireção Financeira do Kixi-Fundo Angola`,
+          read: true
+        });
+      }
+    });
+
+    // 2. Benefício de Rotação Pago (Pagamento do Ciclo)
+    const isPayoutCompleted = payoutsCompleted && payoutsCompleted[member.assignedMonth];
+    if (isPayoutCompleted) {
+      msgs.push({
+        id: `msg-rotation-payout-wa`,
+        timestamp: `18/${String(5 + member.assignedMonth).padStart(2, '0')}/2026`,
+        type: 'rotation_payout',
+        channel: 'whatsapp',
+        channelLabel: 'Telemóvel / SMS',
+        title: `Seu Benefício do Ciclo foi Liquidado!`,
+        body: `Olá, de Angola! Grande novidade, cooperante *${member.name}*! É com enorme prazer que informamos que o seu Mês de Recebimento de Rotação chegou (*Mês ${member.assignedMonth}*).\n\n💰 *Mês Contemplado:* Mês 0${member.assignedMonth}\n💸 *Benefício do Ciclo:* 600.000,00 KZs (Arrecadação Coletiva Transparente)\n🧾 *Comprovativo:* BIC AO06_PAG_CONCORD_${member.id}.pdf\n\nAs verbas já estão depositadas e disponíveis!`,
+        read: true
+      });
+
+      msgs.push({
+        id: `msg-rotation-payout-email`,
+        timestamp: `18/${String(5 + member.assignedMonth).padStart(2, '0')}/2026`,
+        type: 'rotation_payout',
+        channel: 'email',
+        channelLabel: 'E-mail Oficial',
+        title: `Aviso de Pagamento: Benefício de Rotação Cooperativa Kixi-Fundo Mês ${member.assignedMonth}`,
+        body: `Prezado(a) ${member.name},\n\nComunicamos que a transferência de fundos correspondente ao seu Mês de Contemplação e Recebimento de Rotação (Mês 0${member.assignedMonth}) foi efetuada com sucesso para a sua conta bancária de preferência registada.\n\n- Benefício Bruto Creditado: 600.000,00 Kz\n- Origem: Fundo Cooperativo Solidário Regulado Kixi-Fundo\n\nPor favor, confirme a receção nos seus extratos.\n\nCom os melhores cumprimentos,\nConselho Executivo de Interajuda Kixi-Fundo`,
+        read: true
+      });
+    }
+
+    // 3. Apoios Sociais Recebidos (Ajuda)
+    const myAids = logs.filter(l => l.type === 'social_aid' && l.memberName?.toLowerCase().trim() === member.name.toLowerCase().trim());
+    myAids.forEach((aid, index) => {
+      const dateStr = aid.timestamp ? aid.timestamp.substring(0, 10).split('-').reverse().join('/') : `10/${String(5 + currentMonth).padStart(2, '0')}/2026`;
+      
+      msgs.push({
+        id: `msg-aid-inapp-${aid.id || index}`,
+        timestamp: dateStr,
+        type: 'social_aid',
+        channel: 'in_app',
+        channelLabel: 'Mensagem do Portal',
+        title: `Fundo de Apoio Social Concedido`,
+        body: `Olá, ${member.name}! O seu pedido de apoio financeiro de caráter não-reembolsável do Fundo Social de Interajuda foi aprovado e liquidado.\n\nValor Liberado: ${formatCurrency(aid.amount)}\nMotivo: ${aid.description}\n\nEstamos sempre unidos para apoiar os nossos membros nos momentos mais cruciais!`,
+        read: true
+      });
+
+      msgs.push({
+        id: `msg-aid-email-${aid.id || index}`,
+        timestamp: dateStr,
+        type: 'social_aid',
+        channel: 'email',
+        channelLabel: 'E-mail Oficial',
+        title: `Kixi-Fundo: Desembolso de Apoio Social Não-Reembolsável`,
+        body: `Prezado(a) ${member.name},\n\nA Direção Geral do Kixi-Fundo confirma o desembolso e pagamento do seu apoio solidário do Fundo de Apoio Social Interajuda.\n\nEspecificações:\n- Valor Concedido: ${formatCurrency(aid.amount)}\n- Natureza: Não-reembolsável e Solidária\n- Descrição: ${aid.description}\n\nEsperamos que este amparo seja de extrema valia.\n\nAtenciosamente,\nSecretaria Social do Kixi-Fundo Angola`,
+        read: true
+      });
+    });
+
+    // 4. Créditos Concedidos & Prestações Pagas (Crédito)
+    const myLoans = (loans || []).filter((l) => {
+      return (l.memberId === member.id) || 
+             (l.borrowerName && l.borrowerName.toLowerCase().trim() === member.name.toLowerCase().trim());
+    });
+
+    myLoans.forEach((loan) => {
+      const contrDateStr = loan.contractDate || `01/${String(5 + currentMonth).padStart(2, '0')}/2026`;
+      
+      // Loan approval message
+      msgs.push({
+        id: `msg-loan-disb-${loan.id}`,
+        timestamp: contrDateStr,
+        type: 'credit_disbursement',
+        channel: 'in_app',
+        channelLabel: 'Mensagem do Portal',
+        title: `Linha de Crédito Ativada - Contrato ${loan.id}`,
+        body: `Olá, ${member.name}! O seu contrato de crédito de mútuo sob o ID ${loan.id} foi integralmente aprovado e o capital já se encontra disponível para transferência bancária.\n\nCapital Concedido: ${formatCurrency(loan.amountRequested)}\nTaxa de Juro Mensal: ${loan.interestRate}%\nDuração Total: ${loan.durationMonths} meses.\n\nAssegure-se de manter as parcelas em dia para continuar a gozar de score saudável na nossa cooperativa!`,
+        read: true
+      });
+
+      // Payments made
+      (loan.payments || []).forEach((p) => {
+        if (p.paid) {
+          const payDateStr = p.paidAt || p.dueDate;
+          
+          msgs.push({
+            id: `msg-loan-pay-wa-${loan.id}-${p.month}`,
+            timestamp: payDateStr,
+            type: 'credit_payment',
+            channel: 'whatsapp',
+            channelLabel: 'Telemóvel / SMS',
+            title: `Confirmação de Amortização - Crédito ${loan.id}`,
+            body: `Olá, *${member.name}*! A Direção Financeira confirma o pagamento da parcela nº *${p.month}* do seu crédito mútuo *${loan.id}*.\n\n💵 *Valor da Parcela:* ${formatCurrency(p.amount)}\n📉 *Amortização de Principal:* ${formatCurrency(p.principalPaid)}\n📈 *Juros Recebidos (Fundo Social):* ${formatCurrency(p.interestPaid)}\n\nObrigado pela sua integridade fiduciária!`,
+            read: true
+          });
+
+          msgs.push({
+            id: `msg-loan-pay-email-${loan.id}-${p.month}`,
+            timestamp: payDateStr,
+            type: 'credit_payment',
+            channel: 'email',
+            channelLabel: 'E-mail Oficial',
+            title: `Recibo de Pagamento de Parcela de Crédito (Contrato ${loan.id} / Parcela ${p.month})`,
+            body: `Prezado(a) ${member.name},\n\nConfirmamos a receção e quitação da Parcela Contratual nº ${p.month} referente ao crédito ${loan.id}.\n\nEspecificações de Quitação:\n- Valor Pago: ${formatCurrency(p.amount)}\n- Amortização de Principal: ${formatCurrency(p.principalPaid)}\n- Juros Integrados ao Fundo: ${formatCurrency(p.interestPaid)}\n\nEste comprovativo serve de extrato de amortização.\n\nAtenciosamente,\nContabilidade Kixi-Fundo`,
+            read: true
+          });
+        }
+      });
+    });
+
+    // Filter by channel/type and search query
+    return msgs.filter(m => {
+      const channelMatch = inboxFilter === 'all' || m.channel === inboxFilter;
+      const searchLower = inboxSearch.toLowerCase();
+      const searchMatch = !inboxSearch || 
+        m.title.toLowerCase().includes(searchLower) || 
+        m.body.toLowerCase().includes(searchLower);
+      return channelMatch && searchMatch;
+    }).sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  };
 
   const isCurrentMonthPaid = member.contributions[currentMonth]?.paid;
   const isTargetMonthPaid = member.contributions[targetPaymentMonth]?.paid;
@@ -759,6 +939,182 @@ export default function MemberProfileWorkspace({
             })}
           </div>
         )}
+      </div>
+
+      {/* 📥 CAIXA DE ENTRADA & MENSAGENS OFICIAIS (RECEBIMENTOS, AJUDAS E CRÉDITOS) */}
+      <div className="bg-white dark:bg-slate-900/60 rounded-xl border border-slate-200 dark:border-slate-800/80 p-5 shadow-sm space-y-4 text-left">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400 rounded-lg">
+              <Mail className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="font-sans font-extrabold text-[#1e293b] dark:text-white text-xs uppercase tracking-wider">
+                Minha Caixa de Entrada & Mensagens Oficiais
+              </h3>
+              <p className="text-[10px] text-slate-400 font-sans">
+                Recibos de quota, avisos de benefício de rotação, ajuda de emergência social e amortizações de crédito.
+              </p>
+            </div>
+          </div>
+          
+          {/* Channel Filters */}
+          <div className="flex flex-wrap gap-1">
+            {(['all', 'in_app', 'whatsapp', 'email'] as const).map((ch) => {
+              const label = ch === 'all' ? 'Todas' : ch === 'in_app' ? 'Portal' : ch === 'whatsapp' ? 'WhatsApp/SMS' : 'E-mail';
+              const active = inboxFilter === ch;
+              return (
+                <button
+                  key={ch}
+                  type="button"
+                  onClick={() => {
+                    setInboxFilter(ch);
+                    setSelectedInboxMsgId(null);
+                  }}
+                  className={`text-[9px] font-bold px-2.5 py-1 rounded-lg transition-all border ${
+                    active 
+                      ? 'bg-blue-600 border-blue-600 text-white shadow-sm' 
+                      : 'bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-850 text-slate-600 dark:text-slate-450 hover:bg-slate-100 dark:hover:bg-slate-900'
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Search Bar & Messages List */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+          {/* Left Column: Messages List (span 5) */}
+          <div className="lg:col-span-5 space-y-3">
+            {/* Search Input */}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 w-3.5 h-3.5 text-slate-400" />
+              <input
+                type="text"
+                value={inboxSearch}
+                onChange={(e) => {
+                  setInboxSearch(e.target.value);
+                  setSelectedInboxMsgId(null);
+                }}
+                placeholder="Pesquisar mensagens oficiais..."
+                className="w-full pl-8 pr-3 py-2 border rounded-lg text-[11px] focus:outline-none bg-slate-50 dark:bg-slate-950 border-slate-205 dark:border-slate-800 text-slate-900 dark:text-white"
+              />
+            </div>
+
+            {/* List */}
+            {(() => {
+              const msgs = buildSimulatedInboxMessages();
+              if (msgs.length === 0) {
+                return (
+                  <div className="py-8 text-center bg-slate-50/50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-850 rounded-xl">
+                    <p className="text-[10px] text-slate-400 font-sans">Nenhuma mensagem oficial encontrada com os filtros selecionados.</p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                  {msgs.map((m) => {
+                    const isSelected = selectedInboxMsgId === m.id;
+                    const chIcon = m.channel === 'whatsapp' ? '💬' : m.channel === 'email' ? '📧' : '🛡️';
+                    const badgeColor = m.channel === 'whatsapp' ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400' : m.channel === 'email' ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/20 dark:text-blue-400' : 'bg-violet-50 text-violet-700 dark:bg-violet-950/20 dark:text-violet-400';
+
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => setSelectedInboxMsgId(m.id)}
+                        className={`w-full text-left p-3 rounded-lg border transition-all flex flex-col gap-1 cursor-pointer ${
+                          isSelected 
+                            ? 'bg-blue-50/50 dark:bg-blue-950/20 border-blue-400 dark:border-blue-500 shadow-sm' 
+                            : 'bg-slate-50 dark:bg-slate-950 border-slate-150 dark:border-slate-850 hover:bg-slate-100 dark:hover:bg-slate-900'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className={`text-[8px] font-bold uppercase px-1.5 py-0.5 rounded ${badgeColor}`}>
+                            {chIcon} {m.channelLabel}
+                          </span>
+                          <span className="text-[9px] text-slate-400 font-mono">{m.timestamp}</span>
+                        </div>
+                        <h4 className="text-[11px] font-extrabold text-slate-800 dark:text-white truncate">
+                          {m.title}
+                        </h4>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 truncate leading-snug">
+                          {m.body}
+                        </p>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+          </div>
+
+          {/* Right Column: Reading Pane (span 7) */}
+          <div className="lg:col-span-7 bg-slate-50/50 dark:bg-slate-950/10 border border-slate-150 dark:border-slate-850 rounded-xl p-4 min-h-[220px] flex flex-col justify-between">
+            {(() => {
+              const msgs = buildSimulatedInboxMessages();
+              const activeMsg = msgs.find(m => m.id === selectedInboxMsgId) || msgs[0];
+
+              if (!activeMsg) {
+                return (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center p-6 space-y-2">
+                    <Mail className="w-8 h-8 text-slate-300 dark:text-slate-700" />
+                    <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400">Nenhuma Comunicação Emitida</p>
+                    <p className="text-[10px] text-slate-400 max-w-xs leading-relaxed">As comunicações oficiais serão listadas aqui de forma dinâmica conforme efetuar ou receber transações financeiras.</p>
+                  </div>
+                );
+              }
+
+              const headerIcon = activeMsg.channel === 'whatsapp' ? '📱 SMS / WhatsApp' : activeMsg.channel === 'email' ? '📧 Correio Eletrónico' : '🛡️ Notificação do Portal';
+
+              return (
+                <div className="flex-1 flex flex-col justify-between h-full space-y-4">
+                  <div>
+                    {/* Header Details */}
+                    <div className="flex items-center justify-between gap-3 border-b border-slate-150 dark:border-slate-800 pb-3 mb-3">
+                      <div>
+                        <span className="text-[9px] font-mono font-bold uppercase text-slate-400 dark:text-slate-500 block leading-none mb-1">CANAL DE TRANSMISSÃO</span>
+                        <span className="text-[10px] font-black text-slate-800 dark:text-white flex items-center gap-1">
+                          {headerIcon}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[9px] font-mono font-bold uppercase text-slate-400 dark:text-slate-500 block leading-none mb-1">RECEBIDO EM</span>
+                        <span className="text-[10px] font-mono text-slate-600 dark:text-slate-400 font-bold">{activeMsg.timestamp}</span>
+                      </div>
+                    </div>
+
+                    {/* Message Body */}
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-black text-slate-850 dark:text-white leading-tight">
+                        {activeMsg.title}
+                      </h4>
+                      <p className="text-[10px] text-slate-600 dark:text-slate-350 leading-relaxed whitespace-pre-wrap font-sans bg-white dark:bg-slate-900 border border-slate-200/50 dark:border-slate-800/50 rounded-xl p-3 shadow-sm">
+                        {activeMsg.body}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Attachment indicator if email */}
+                  {activeMsg.channel === 'email' && (
+                    <div className="p-2 border border-blue-100 dark:border-blue-950 bg-blue-50/20 dark:bg-blue-950/10 rounded-lg flex items-center justify-between text-[9px] text-slate-500 dark:text-slate-400">
+                      <span className="flex items-center gap-1">📎 <strong>Anexo Técnico:</strong> Recibo_Oficial_Consorcio.pdf</span>
+                      <span className="text-blue-500 dark:text-blue-400 font-bold">✓ Assinado</span>
+                    </div>
+                  )}
+
+                  {/* Channel disclaimer */}
+                  <div className="text-[9px] text-slate-400 dark:text-slate-500 italic flex items-center gap-1 pt-2 border-t border-slate-100 dark:border-slate-850 mt-2 font-mono">
+                    <span>* Disparado automaticamente para {member.phone} e {member.email} em conformidade com o Regulamento.</span>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
       </div>
 
       {/* Body Core Workspace columns */}

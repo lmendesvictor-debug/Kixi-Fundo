@@ -3,6 +3,25 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      (function() {
+        function adjustViewport() {
+          const width = window.innerWidth || document.documentElement.clientWidth || window.screen.width;
+          const meta = document.querySelector('meta[name="viewport"]');
+          if (meta) {
+            // Se for um ecrã de 15 polegadas ou portátil padrão (larguras de 1024px a 1440px)
+            if (width >= 1024 && width <= 1440) {
+              meta.setAttribute('content', 'width=1280, initial-scale=0.9, maximum-scale=1.0, user-scalable=no');
+            } else {
+              meta.setAttribute('content', 'width=device-width, initial-scale=1.0');
+            }
+          }
+        }
+        adjustViewport();
+        window.addEventListener('resize', adjustViewport);
+        window.addEventListener('orientationchange', adjustViewport);
+      })();
+    </script>
     <title>Kixi-Fundo | Gestão de Finanças Comparticipadas</title>
   </head>
   <body>

@@ -148,4 +148,85 @@ html.dark {
   color: #030712 !important; /* absolute solid black for bold text contrast on white contract paper */
 }
 
+/* ==========================================================
+   DYNAMIC 15-INCH MONITOR RESPONSIVENESS OVERRIDES
+   Ensures perfect fit and prevents overlaps of menus & elements
+   ========================================================== */
+
+@media (min-width: 1024px) and (max-width: 1440px) {
+  :root, html {
+    font-size: 13.5px !important; /* Dynamically scale down rem values globally for 15-inch displays */
+  }
+
+  /* Compact top navbar container and heights */
+  nav .max-w-7xl {
+    max-width: 100% !important;
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+
+  nav .h-20 {
+    height: 4.5rem !important; /* Slightly more compact header bar */
+  }
+
+  /* Compact desktop navigation row gap & maximum width boundaries */
+  #kix-desktop-nav-row {
+    gap: 3px !important;
+    max-width: none !important;
+    padding: 1px !important;
+  }
+
+  /* Navigation button resizing */
+  .kix-nav-btn {
+    padding-left: 0.45rem !important;
+    padding-right: 0.45rem !important;
+    padding-top: 0.35rem !important;
+    padding-bottom: 0.35rem !important;
+    font-size: 9.5px !important;
+    gap: 0.25rem !important;
+    border-radius: 0.5rem !important;
+  }
+
+  .kix-nav-btn span {
+    font-size: 9px !important;
+  }
+
+  /* Compact status badges and action buttons on the right side */
+  #kix-desktop-status-row {
+    gap: 4px !important;
+  }
+
+  #kix-desktop-status-row button,
+  #kix-desktop-status-row div {
+    padding-left: 0.4rem !important;
+    padding-right: 0.4rem !important;
+    padding-top: 0.35rem !important;
+    padding-bottom: 0.35rem !important;
+    font-size: 8.5px !important;
+    border-radius: 0.5rem !important;
+  }
+
+  #kix-desktop-status-row svg {
+    width: 11px !important;
+    height: 11px !important;
+  }
+
+  #kix-desktop-status-row span {
+    font-size: 8px !important;
+  }
+}
+
+/* Ensure critical grids adapt gracefully on narrower screen resolutions */
+@media (max-width: 1280px) {
+  .grid-cols-3, .lg\:grid-cols-3 {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 1023px) {
+  :root, html {
+    font-size: 15px !important;
+  }
+}
+
 

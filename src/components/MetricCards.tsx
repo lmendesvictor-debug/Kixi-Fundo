@@ -64,6 +64,7 @@ export default function MetricCards({
   const [statusFilter, setStatusFilter] = useState<'all' | 'paid' | 'pending' | 'beneficiaries'>('paid');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [hoveredCreditProfitIndex, setHoveredCreditProfitIndex] = useState<number | null>(null);
 
   // Sync selectedCycle to the last paid cycle when payoutsCompleted or currentMonth changes
   useEffect(() => {
@@ -178,6 +179,41 @@ export default function MetricCards({
   const currentDisplayValue = isHovered ? pieData[hoveredIndex!].value : combinedTotal;
   const currentDisplayColor = isHovered ? pieData[hoveredIndex!].color : undefined;
   const currentDisplayPercent = isHovered ? pieData[hoveredIndex!].percent : undefined;
+
+  // Cálculos dinâmicos de crédito e juros (lucros)
+  const totalLentAmount = loans?.reduce((acc, l) => acc + l.amountRequested, 0) || 0;
+  const totalContractedInterest = loans?.reduce((acc, l) => {
+    return acc + (l.payments || []).reduce((sum, p) => sum + p.interestPaid, 0);
+  }, 0) || 0;
+  const totalRealizedInterest = loans?.reduce((acc, l) => {
+    return acc + (l.payments || []).filter(p => p.paid).reduce((sum, p) => sum + p.interestPaid, 0);
+  }, 0) || 0;
+  const totalProjectedInterest = Math.max(0, totalContractedInterest - totalRealizedInterest);
+
+  const displayLent = totalLentAmount > 0 ? totalLentAmount : 400000;
+  const displayInterest = totalContractedInterest > 0 ? totalContractedInterest : 100000;
+  const displayTotal = displayLent + displayInterest;
+  const lentPercent = displayTotal > 0 ? ((displayLent / displayTotal) * 100).toFixed(1) : '80.0';
+  const interestPercent = displayTotal > 0 ? ((displayInterest / displayTotal) * 100).toFixed(1) : '20.0';
+
+  const creditProfitPieData = [
+    { name: 'Capital Concedido (Investido)', value: displayLent, color: '#8B5CF6', percent: lentPercent },
+    { name: 'Juros Acumulados (Lucros)', value: displayInterest, color: '#10B981', percent: interestPercent }
+  ];
+
+  const isCreditProfitHovered = hoveredCreditProfitIndex !== null;
+  const currentCreditProfitLabel = isCreditProfitHovered 
+    ? creditProfitPieData[hoveredCreditProfitIndex!].name 
+    : 'Crédito Ativo (Investido)';
+  const currentCreditProfitValue = isCreditProfitHovered 
+    ? creditProfitPieData[hoveredCreditProfitIndex!].value 
+    : displayLent;
+  const currentCreditProfitColor = isCreditProfitHovered 
+    ? creditProfitPieData[hoveredCreditProfitIndex!].color 
+    : '#8B5CF6';
+  const currentCreditProfitPercent = isCreditProfitHovered 
+    ? creditProfitPieData[hoveredCreditProfitIndex!].percent 
+    : lentPercent;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-1 select-none font-sans text-slate-800 dark:text-slate-100" id="dashboard-widgets-panel">
@@ -744,6 +780,249 @@ export default function MetricCards({
             </div>
           </div>
 
+        </div>
+      </div>
+
+      {/* 5. GESTÃO DE CRÉDITO & LUCRATIVIDADE (LUCROS DE JUROS) */}
+      <div className="col-span-1 lg:col-span-2 bg-white/45 dark:bg-slate-900/40 backdrop-blur-md rounded-3xl border border-slate-200/50 dark:border-slate-800/60 p-6 shadow-md hover:shadow-lg transition-all duration-300 hover:border-violet-300/40 dark:hover:border-violet-800/50">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pb-4 border-b border-slate-200/40 dark:border-slate-800/60">
+          <div className="flex items-center gap-3">
+            <span className="w-8 h-8 rounded-full bg-violet-600 text-white flex items-center justify-center font-black text-sm">
+              5
+            </span>
+            <div>
+              <h2 className="text-[13.5px] font-black tracking-tight text-slate-900 dark:text-white uppercase flex items-center gap-1.5">
+                Rendimento de Crédito & Lucratividade do Fundo
+              </h2>
+              <p className="text-[10px] text-slate-400">Total emprestado e lucros gerados através de juros de amortização.</p>
+            </div>
+          </div>
+          <div className="px-3 py-1 bg-violet-100 dark:bg-violet-950/30 border border-violet-200/30 dark:border-violet-850 rounded-xl text-violet-750 dark:text-violet-300 text-xs font-bold font-mono">
+            Rendimento Ativo
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          {/* Card 1: Total Emprestado */}
+          <div className="bg-slate-50 dark:bg-slate-950/30 border border-slate-200/40 dark:border-slate-800/60 p-4 rounded-2xl">
+            <span className="block font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-[8.5px]">Capital Concedido</span>
+            <span className="font-mono font-black text-slate-900 dark:text-white text-xs block mt-1">
+              {formatCurrency(totalLentAmount)}
+            </span>
+            <span className="text-[9.5px] text-slate-450 block mt-0.5 font-medium">Total de principal emprestado</span>
+          </div>
+
+          {/* Card 2: Lucro Total em Juros */}
+          <div className="bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/10 p-4 rounded-2xl">
+            <span className="block font-bold text-emerald-600 dark:text-emerald-450 uppercase tracking-widest text-[8.5px] font-sans">Lucro Total de Juros (Contratado)</span>
+            <span className="font-mono font-black text-emerald-600 dark:text-emerald-450 text-xs block mt-1">
+              {formatCurrency(totalContractedInterest)}
+            </span>
+            <span className="text-[9.5px] text-emerald-600/80 dark:text-emerald-400/80 block mt-0.5 font-semibold">Rendimento bruto esperado</span>
+          </div>
+
+          {/* Card 3: Lucro Recebido */}
+          <div className="bg-sky-500/5 dark:bg-sky-500/10 border border-sky-500/10 p-4 rounded-2xl">
+            <span className="block font-bold text-sky-600 dark:text-sky-400 uppercase tracking-widest text-[8.5px]">Lucro Realizado (Juros Recebidos)</span>
+            <span className="font-mono font-black text-sky-600 dark:text-sky-400 text-xs block mt-1">
+              {formatCurrency(totalRealizedInterest)}
+            </span>
+            <span className="text-[9.5px] text-sky-550 dark:text-sky-400/80 block mt-0.5 font-semibold">Valor já arrecadado</span>
+          </div>
+
+          {/* Card 4: Lucro Pendente */}
+          <div className="bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/10 p-4 rounded-2xl">
+            <span className="block font-bold text-amber-600 dark:text-amber-450 uppercase tracking-widest text-[8.5px]">Lucro Projetado (A Receber)</span>
+            <span className="font-mono font-black text-amber-600 dark:text-amber-400 text-xs block mt-1">
+              {formatCurrency(totalProjectedInterest)}
+            </span>
+            <span className="text-[9.5px] text-amber-555 dark:text-amber-400/80 block mt-0.5 font-semibold">A receber de prestações</span>
+          </div>
+        </div>
+
+        {/* Gráfico de Rosca de Rentabilidade & Detalhamento */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-6 pt-6 border-t border-slate-200/40 dark:border-slate-800/60">
+          
+          {/* Left Column: Doughnut Chart (span 5) */}
+          <div className="lg:col-span-5 flex flex-col items-center justify-center p-5 bg-slate-50/50 dark:bg-slate-950/20 rounded-3xl border border-slate-200/50 dark:border-slate-800/60 relative animate-fadeIn min-h-[300px]">
+            <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2 text-center">
+              Rentabilidade de Empréstimos
+            </h4>
+            <p className="text-[10px] text-slate-400 dark:text-slate-500 mb-4 text-center leading-relaxed">
+              Proporção entre o Capital Concedido (Investido) e os Juros Acumulados (Rentabilidade).
+            </p>
+
+            <div className="w-[180px] h-[180px] flex items-center justify-center relative">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={creditProfitPieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={56}
+                    outerRadius={76}
+                    paddingAngle={3}
+                    dataKey="value"
+                    startAngle={90}
+                    endAngle={450}
+                    onMouseEnter={(_: any, index: number) => setHoveredCreditProfitIndex(index)}
+                    onMouseLeave={() => setHoveredCreditProfitIndex(null)}
+                  >
+                    {creditProfitPieData.map((entry, index) => (
+                      <Cell 
+                        key={`credit-profit-cell-${index}`} 
+                        fill={entry.color} 
+                        stroke={hoveredCreditProfitIndex === index ? entry.color : "transparent"}
+                        strokeWidth={hoveredCreditProfitIndex === index ? 3 : 0}
+                        style={{
+                          transform: hoveredCreditProfitIndex === index ? 'scale(1.03)' : 'scale(1)',
+                          transformOrigin: '50% 50%',
+                          transition: 'all 0.2s ease-in-out',
+                          cursor: 'pointer'
+                        }}
+                      />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+              {/* Inner Center Label inside the doughnut */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-3 pointer-events-none transition-all duration-200">
+                <span 
+                  className="text-[8.5px] font-black uppercase tracking-wider leading-tight max-w-[100px] transition-colors duration-200 text-slate-400 dark:text-slate-500"
+                  style={{ color: currentCreditProfitColor }}
+                >
+                  {currentCreditProfitLabel}
+                </span>
+                <span 
+                  className="text-[11px] font-bold mt-1 font-mono whitespace-nowrap transition-colors duration-200 text-slate-900 dark:text-white"
+                  style={{ color: currentCreditProfitColor }}
+                >
+                  {formatCurrency(currentCreditProfitValue)}
+                </span>
+                <span 
+                  className="text-[9.5px] font-extrabold mt-1.5 px-2 py-0.5 rounded-full text-white font-sans scale-95 transition-all duration-200"
+                  style={{ backgroundColor: currentCreditProfitColor }}
+                >
+                  {currentCreditProfitPercent}%
+                </span>
+              </div>
+            </div>
+
+            {/* Custom Interactive Legend with Credit Highlight */}
+            <div className="mt-5 w-full space-y-1.5 text-xs font-semibold">
+              <div 
+                className={`flex items-center justify-between p-2 rounded-xl transition-all duration-200 border border-transparent cursor-pointer ${hoveredCreditProfitIndex === 0 ? 'bg-violet-500/10 border-violet-500/20 font-black' : hoveredCreditProfitIndex !== null ? 'opacity-40' : ''}`}
+                onMouseEnter={() => setHoveredCreditProfitIndex(0)}
+                onMouseLeave={() => setHoveredCreditProfitIndex(null)}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-xs bg-[#8B5CF6] shrink-0" />
+                  <span className="text-slate-600 dark:text-slate-350 text-[11px]">
+                    Capital Concedido (Crédito)
+                  </span>
+                </div>
+                <span className="font-mono font-black text-violet-600 dark:text-violet-400 text-[11px] bg-violet-500/10 px-1.5 py-0.5 rounded-md">
+                  {lentPercent}%
+                </span>
+              </div>
+
+              <div 
+                className={`flex items-center justify-between p-2 rounded-xl transition-all duration-200 border border-transparent cursor-pointer ${hoveredCreditProfitIndex === 1 ? 'bg-emerald-500/10 border-emerald-500/20 font-black' : hoveredCreditProfitIndex !== null ? 'opacity-40' : ''}`}
+                onMouseEnter={() => setHoveredCreditProfitIndex(1)}
+                onMouseLeave={() => setHoveredCreditProfitIndex(null)}
+              >
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-xs bg-[#10B981] shrink-0" />
+                  <span className="text-slate-600 dark:text-slate-350 text-[11px]">
+                    Juros Acumulados (Lucros)
+                  </span>
+                </div>
+                <span className="font-mono font-black text-emerald-600 dark:text-emerald-450 text-[11px] bg-emerald-500/10 px-1.5 py-0.5 rounded-md">
+                  {interestPercent}%
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column: Detalhamento de Contratos (span 7) */}
+          <div className="lg:col-span-7 flex flex-col justify-between space-y-3">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+              <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+                Detalhamento de Contratos & Lucratividade por Devedor
+              </h4>
+              <span className="text-[10px] font-bold text-violet-600 dark:text-violet-400 font-mono">
+                Portfólio Ativo
+              </span>
+            </div>
+
+            {(!loans || loans.length === 0) ? (
+              <div className="flex-1 flex items-center justify-center py-12 text-center bg-slate-50/50 dark:bg-slate-950/20 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">
+                <p className="text-xs text-slate-400 italic font-sans">Nenhum contrato de crédito ativo registrado.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[280px] overflow-y-auto pr-1">
+                {loans.map((l) => {
+                  const totalLent = l.amountRequested;
+                  const totalInterest = (l.payments || []).reduce((sum, p) => sum + p.interestPaid, 0);
+                  const paidInterest = (l.payments || []).filter(p => p.paid).reduce((sum, p) => sum + p.interestPaid, 0);
+                  const interestProgress = totalInterest > 0 ? (paidInterest / totalInterest) * 100 : 0;
+
+                  return (
+                    <div key={l.id} className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950/20 border border-slate-200/50 dark:border-slate-800 text-xs flex flex-col gap-2.5">
+                      <div className="flex justify-between items-center border-b border-slate-200/40 dark:border-slate-800 pb-1.5">
+                        <div className="min-w-0 flex-1">
+                          <span className="font-extrabold text-slate-800 dark:text-slate-200 truncate block">
+                            {l.borrowerName}
+                          </span>
+                          <span className="text-[9.5px] text-slate-450 font-mono block truncate">
+                            Contrato: {l.id} • {l.borrowerType === 'socio' ? 'Sócio' : 'Singular'}
+                          </span>
+                        </div>
+                        <span className={`text-[9px] px-2 py-0.5 rounded-lg font-black uppercase shrink-0 ${
+                          l.status === 'completed'
+                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400'
+                            : 'bg-violet-100 text-violet-800 dark:bg-violet-950/30 dark:text-violet-400 animate-pulse'
+                        }`}>
+                          {l.status === 'completed' ? 'Liquidado' : 'Ativo'}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-[11px]">
+                        <div>
+                          <span className="text-slate-400 block text-[9px] font-semibold uppercase font-sans">Valor Emprestado</span>
+                          <span className="font-mono font-bold text-slate-700 dark:text-slate-300 text-xs">
+                            {formatCurrency(totalLent)}
+                          </span>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-slate-400 block text-[9px] font-semibold uppercase font-sans">Lucro de Juros ({l.interestRate}%)</span>
+                          <span className="font-mono font-black text-emerald-600 dark:text-emerald-450 text-xs">
+                            +{formatCurrency(totalInterest)}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Progress tracking for specific borrower interest */}
+                      <div className="space-y-1 pt-1 border-t border-slate-200/30 dark:border-slate-800/40">
+                        <div className="flex justify-between items-center text-[9px] font-bold text-slate-400">
+                          <span>Progresso do Juro (Lucro Arrecadado):</span>
+                          <span className="font-mono text-emerald-600 dark:text-emerald-450">
+                            {formatCurrency(paidInterest)} / {formatCurrency(totalInterest)} ({Math.round(interestProgress)}%)
+                          </span>
+                        </div>
+                        <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                          <div 
+                            className="bg-emerald-500 h-full rounded-full transition-all duration-300"
+                            style={{ width: `${interestProgress}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

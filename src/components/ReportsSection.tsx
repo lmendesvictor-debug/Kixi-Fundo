@@ -32,7 +32,9 @@ import {
   Tooltip, 
   Legend, 
   ResponsiveContainer,
-  Cell
+  Cell,
+  LineChart,
+  Line
 } from 'recharts';
 import { Member, KixLog, Loan } from '../types';
 
@@ -226,6 +228,117 @@ export default function ReportsSection({
               <p className={`font-mono flex items-center gap-1.5 ${saldo >= 0 ? "text-emerald-450" : "text-rose-400"}`}>
                 <span className={`w-2 h-2 rounded ${saldo >= 0 ? "bg-emerald-500" : "bg-rose-500"}`}></span>
                 Diferença Líquida: <strong className="font-extrabold">{formatCurrency(saldo)}</strong>
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  // Cálculos dinâmicos de crédito e juros para o gráfico de lucratividade
+  const totalLentAmountReport = (loans || []).reduce((acc, l) => acc + l.amountRequested, 0);
+  const totalContractedInterestAmountReport = (loans || []).reduce((acc, l) => {
+    return acc + (l.payments || []).reduce((sum, p) => sum + p.interestPaid, 0);
+  }, 0);
+  const totalPaidInterestAmountReport = (loans || []).reduce((acc, l) => {
+    return acc + (l.payments || []).filter(p => p.paid).reduce((sum, p) => sum + p.interestPaid, 0);
+  }, 0);
+  const totalPendingInterestAmountReport = Math.max(0, totalContractedInterestAmountReport - totalPaidInterestAmountReport);
+
+  const creditProfitChartData = [
+    {
+      name: "Capital Emprestado",
+      "Valor": totalLentAmountReport,
+      fill: "#8b5cf6" // Violet
+    },
+    {
+      name: "Lucro Total (Juros)",
+      "Valor": totalContractedInterestAmountReport,
+      fill: "#10b981" // Emerald
+    },
+    {
+      name: "Lucro Recebido",
+      "Valor": totalPaidInterestAmountReport,
+      fill: "#0ea5e9" // Sky Blue
+    },
+    {
+      name: "Lucro Pendente",
+      "Valor": totalPendingInterestAmountReport,
+      fill: "#f59e0b" // Amber
+    }
+  ];
+
+  const CustomCreditProfitTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="bg-slate-900 border border-slate-700/80 p-3 rounded-xl shadow-xl text-xs font-semibold text-white animate-fadeIn text-left font-sans">
+          <p className="text-slate-300 mb-1.5 font-bold uppercase tracking-wider">{data.name}</p>
+          <p className="text-white font-mono font-extrabold text-sm">
+            {formatCurrency(data["Valor"])}
+          </p>
+          <p className="text-slate-400 text-[10px] font-sans mt-1">
+            {data.name === "Capital Emprestado" && "Total de principal desembolsado sob contratos de crédito ativo."}
+            {data.name === "Lucro Total (Juros)" && "Total de receitas de juros acordadas de todos os empréstimos."}
+            {data.name === "Lucro Recebido" && "Valor real de juros que já foram pagos pelos tomadores do crédito."}
+            {data.name === "Lucro Pendente" && "Valor de juros ainda a receber ao longo do período do empréstimo."}
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  // Cálculo de crescimento acumulado do Fundo de Interajuda (Social Retained: 20k/quota + Loan Interests - Social Aids)
+  let runningSocialSum = 0;
+  const socialGrowthData = [1, 2, 3, 4, 5, 6].map((m) => {
+    const paidInMonth = members.filter((member) => member.contributions[m]?.paid).length;
+    const socialRetained = paidInMonth * 20000;
+    
+    // Somar juros de empréstimos pagos no mês correspondente
+    const interestPaid = (loans || []).reduce((acc, l) => {
+      return acc + (l.payments || []).filter(p => p.paid && p.month === m).reduce((sum, p) => sum + p.interestPaid, 0);
+    }, 0);
+    
+    const totalMonthRetained = socialRetained + interestPaid;
+    
+    const aidsInMonth = logs
+      .filter((log) => log.type === 'social_aid' && log.month === m)
+      .reduce((acc, log) => acc + log.amount, 0);
+      
+    runningSocialSum = runningSocialSum + totalMonthRetained - aidsInMonth;
+    
+    return {
+      name: `Mês ${m}`,
+      "Receita Mensal": totalMonthRetained,
+      "Despesa Mensal": aidsInMonth,
+      "Saldo Acumulado": runningSocialSum,
+    };
+  });
+
+  const CustomSocialGrowthTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const receita = payload.find((p: any) => p.dataKey === "Receita Mensal")?.value ?? 0;
+      const despesa = payload.find((p: any) => p.dataKey === "Despesa Mensal")?.value ?? 0;
+      const saldoAcumulado = payload.find((p: any) => p.dataKey === "Saldo Acumulado")?.value ?? 0;
+      return (
+        <div className="bg-slate-900 border border-slate-700/80 p-3 rounded-xl shadow-xl text-xs font-semibold text-white animate-fadeIn text-left font-sans">
+          <p className="text-slate-350 mb-1.5 font-bold uppercase tracking-wider">{label}</p>
+          <div className="space-y-1">
+            <p className="text-emerald-400 font-mono flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded bg-emerald-500"></span>
+              Receita: <strong className="font-extrabold">{formatCurrency(receita)}</strong>
+            </p>
+            <p className="text-rose-400 font-mono flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded bg-rose-500"></span>
+              Apoios/Despesas: <strong className="font-extrabold">{formatCurrency(despesa)}</strong>
+            </p>
+            <div className="border-t border-slate-800 pt-1 mt-1">
+              <p className="text-sky-400 font-mono flex items-center gap-1.5 font-bold">
+                <span className="w-2 h-2 rounded bg-sky-500"></span>
+                Acumulado: <strong className="font-extrabold">{formatCurrency(saldoAcumulado)}</strong>
               </p>
             </div>
           </div>
@@ -2000,7 +2113,78 @@ export default function ReportsSection({
                 </div>
               </div>
 
-              {/* Card 2: Gráfico de Desempenho Mensal */}
+              {/* Card 2: Crescimento do Fundo de Interajuda */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-5 shadow-sm animate-fadeIn flex flex-col justify-between min-w-0">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+                  <div className="space-y-0.5">
+                    <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                      <TrendingUp className="w-4 h-4 text-[#0ea5e9]" />
+                      Crescimento do Fundo de Interajuda
+                    </h4>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium font-sans">
+                      Histórico do saldo acumulado (Receita Social & Juros (-) Apoios Concedidos).
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-200/60 dark:border-slate-800/60 shadow-sm shrink-0">
+                      <span className="w-2.5 h-1 bg-sky-500 inline-block align-middle mr-1 rounded"></span>
+                      <span>Acumulado</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-200/60 dark:border-slate-800/60 shadow-sm shrink-0">
+                      <span className="w-2.5 h-0.5 bg-emerald-500 border-t border-dashed inline-block align-middle mr-1"></span>
+                      <span>Receita</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Chart Container Stage */}
+                <div className="h-64 sm:h-72 w-full font-sans">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                    <LineChart
+                      data={socialGrowthData}
+                      margin={{ top: 10, right: 15, left: -5, bottom: 0 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
+                      <XAxis 
+                        dataKey="name" 
+                        stroke="#94a3b8" 
+                        fontSize={11} 
+                        tickLine={false} 
+                        axisLine={false}
+                        dy={10}
+                        tick={{ fontWeight: 600 }}
+                      />
+                      <YAxis 
+                        stroke="#94a3b8" 
+                        fontSize={10} 
+                        tickLine={false} 
+                        axisLine={false}
+                        tickFormatter={(value) => `${value / 1000}k`}
+                        tick={{ fontWeight: 600 }}
+                      />
+                      <Tooltip content={<CustomSocialGrowthTooltip />} />
+                      <Line 
+                        type="monotone" 
+                        dataKey="Saldo Acumulado" 
+                        stroke="#0ea5e9" 
+                        strokeWidth={3} 
+                        activeDot={{ r: 6 }} 
+                        dot={{ r: 4, strokeWidth: 2, fill: "#fff" }}
+                      />
+                      <Line 
+                        type="monotone" 
+                        dataKey="Receita Mensal" 
+                        stroke="#10b981" 
+                        strokeDasharray="4 4"
+                        strokeWidth={2} 
+                        dot={false}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Card 3: Gráfico de Desempenho Mensal */}
               <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-5 shadow-sm animate-fadeIn flex flex-col justify-between min-w-0">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
                   <div className="space-y-0.5">
@@ -2073,6 +2257,56 @@ export default function ReportsSection({
                             />
                           );
                         })}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Card 4: Rentabilidade de Créditos & Lucros de Juros */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800/80 rounded-2xl p-5 shadow-sm animate-fadeIn flex flex-col justify-between min-w-0">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+                  <div className="space-y-0.5">
+                    <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider flex items-center gap-1.5">
+                      <Coins className="w-4 h-4 text-violet-500" />
+                      Rentabilidade de Créditos & Lucros de Juros
+                    </h4>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium font-sans">
+                      Demonstrativo do principal concedido vs. lucro em juros coletados ou pendentes.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Chart Container Stage */}
+                <div className="h-64 sm:h-72 w-full font-sans">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+                    <BarChart
+                      data={creditProfitChartData}
+                      margin={{ top: 10, right: 10, left: -5, bottom: 0 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" className="dark:stroke-slate-800/50" />
+                      <XAxis 
+                        dataKey="name" 
+                        stroke="#94a3b8" 
+                        fontSize={10} 
+                        tickLine={false} 
+                        axisLine={false}
+                        dy={10}
+                        tick={{ fontWeight: 600 }}
+                      />
+                      <YAxis 
+                        stroke="#94a3b8" 
+                        fontSize={10} 
+                        tickLine={false} 
+                        axisLine={false}
+                        tickFormatter={(value) => `${value / 1000}k`}
+                        tick={{ fontWeight: 600 }}
+                      />
+                      <Tooltip content={<CustomCreditProfitTooltip />} cursor={{ fill: 'rgba(139, 92, 246, 0.04)' }} />
+                      <Bar dataKey="Valor" radius={[6, 6, 0, 0]} barSize={32}>
+                        {creditProfitChartData.map((entry, index) => (
+                          <Cell key={`credit-profit-cell-${index}`} fill={entry.fill} />
+                        ))}
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
