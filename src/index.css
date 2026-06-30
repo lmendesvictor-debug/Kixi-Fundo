@@ -153,7 +153,7 @@ html.dark {
    Ensures perfect fit and prevents overlaps of menus & elements
    ========================================================== */
 
-@media (min-width: 1024px) and (max-width: 1440px) {
+@media (min-width: 1024px) and (max-width: 1600px) {
   :root, html {
     font-size: 13.5px !important; /* Dynamically scale down rem values globally for 15-inch displays */
   }
@@ -169,26 +169,38 @@ html.dark {
     height: 4.5rem !important; /* Slightly more compact header bar */
   }
 
+  nav .h-20.gap-4 {
+    gap: 0.375rem !important; /* Reduce gap between brand, nav-row and status-row */
+  }
+
   /* Compact desktop navigation row gap & maximum width boundaries */
   #kix-desktop-nav-row {
-    gap: 3px !important;
+    gap: 2px !important;
     max-width: none !important;
-    padding: 1px !important;
+    padding: 0px !important;
+    margin: 0px !important;
+    flex-wrap: nowrap !important;
   }
 
   /* Navigation button resizing */
   .kix-nav-btn {
-    padding-left: 0.45rem !important;
-    padding-right: 0.45rem !important;
-    padding-top: 0.35rem !important;
-    padding-bottom: 0.35rem !important;
-    font-size: 9.5px !important;
-    gap: 0.25rem !important;
-    border-radius: 0.5rem !important;
+    padding-left: 0.35rem !important;
+    padding-right: 0.35rem !important;
+    padding-top: 0.25rem !important;
+    padding-bottom: 0.25rem !important;
+    font-size: 9px !important;
+    gap: 0.15rem !important;
+    border-radius: 0.375rem !important;
   }
 
   .kix-nav-btn span {
-    font-size: 9px !important;
+    font-size: 8.5px !important;
+    white-space: nowrap !important;
+  }
+
+  .kix-nav-btn svg {
+    width: 11px !important;
+    height: 11px !important;
   }
 
   /* Compact status badges and action buttons on the right side */

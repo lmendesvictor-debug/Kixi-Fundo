@@ -65,6 +65,7 @@ export default function MetricCards({
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [hoveredCreditProfitIndex, setHoveredCreditProfitIndex] = useState<number | null>(null);
+  const [activeLeftTab, setActiveLeftTab] = useState<'composition' | 'social' | 'cycle' | 'contemplations'>('composition');
 
   // Sync selectedCycle to the last paid cycle when payoutsCompleted or currentMonth changes
   useEffect(() => {
@@ -218,810 +219,815 @@ export default function MetricCards({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-1 select-none font-sans text-slate-800 dark:text-slate-100" id="dashboard-widgets-panel">
       
-      {/* 1. COMPOSIÇÃO DO PATRIMÓNIO COLETIVO */}
-      <div className="bg-white/45 dark:bg-slate-900/40 backdrop-blur-md rounded-3xl border border-slate-200/50 dark:border-slate-800/60 p-6 flex flex-col justify-between shadow-md hover:shadow-lg transition-all duration-300 hover:border-sky-350 dark:hover:border-sky-800/80">
+      {/* CARD 1: PAINEL DE PATRIMÓNIO & GOVERNAÇÃO COLETIVA */}
+      <div className="bg-white/45 dark:bg-slate-900/40 backdrop-blur-md rounded-3xl border border-slate-200/50 dark:border-slate-800/60 p-6 flex flex-col justify-between shadow-md hover:shadow-lg transition-all duration-300 hover:border-sky-350 dark:hover:border-sky-800/80 min-h-[640px]">
         <div>
-          {/* Header */}
-          <div className="flex items-center gap-3 mb-6">
-            <span className="w-8 h-8 rounded-full bg-[#0d5c3a] text-white flex items-center justify-center font-black text-sm relative">
-              1
-            </span>
-            <h2 className="text-[13.5px] font-black tracking-tight text-slate-900 dark:text-white uppercase">
-              Composição do Patrimônio Coletivo ({formatCurrency(combinedTotal)})
-            </h2>
+          {/* Header & Main Toggle */}
+          <div className="flex flex-col gap-4 mb-6 border-b border-slate-100 dark:border-slate-800 pb-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-[13px] font-black tracking-tight text-slate-900 dark:text-white uppercase flex items-center gap-2">
+                <span className="w-7 h-7 rounded-lg bg-[#0d5c3a] text-white flex items-center justify-center font-black text-xs">
+                  🏛️
+                </span>
+                Governação & Patrimônio
+              </h2>
+              <span className="text-[9.5px] font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md">
+                Fundo de Rotação
+              </span>
+            </div>
+
+            {/* Pill Bar Selector */}
+            <div className="flex flex-wrap gap-1 bg-slate-150/60 dark:bg-slate-950/40 p-1 rounded-2xl border border-slate-200/35 dark:border-slate-800/30">
+              <button
+                onClick={() => setActiveLeftTab('composition')}
+                className={`flex-1 min-w-[70px] text-[10.5px] py-2 font-black rounded-xl transition-all cursor-pointer text-center whitespace-nowrap ${
+                  activeLeftTab === 'composition'
+                    ? 'bg-[#0d5c3a] text-white shadow-md font-extrabold'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-750 hover:bg-slate-200/40 dark:hover:bg-slate-800/30'
+                }`}
+              >
+                Composição
+              </button>
+              <button
+                onClick={() => setActiveLeftTab('social')}
+                className={`flex-1 min-w-[70px] text-[10.5px] py-2 font-black rounded-xl transition-all cursor-pointer text-center whitespace-nowrap ${
+                  activeLeftTab === 'social'
+                    ? 'bg-[#0d5c3a] text-white shadow-md font-extrabold'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-750 hover:bg-slate-200/40 dark:hover:bg-slate-800/30'
+                }`}
+              >
+                Fundo Social
+              </button>
+              <button
+                onClick={() => setActiveLeftTab('cycle')}
+                className={`flex-1 min-w-[70px] text-[10.5px] py-2 font-black rounded-xl transition-all cursor-pointer text-center whitespace-nowrap ${
+                  activeLeftTab === 'cycle'
+                    ? 'bg-[#0d5c3a] text-white shadow-md font-extrabold'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-750 hover:bg-slate-200/40 dark:hover:bg-slate-800/30'
+                }`}
+              >
+                Ciclo Corrente
+              </button>
+              <button
+                onClick={() => setActiveLeftTab('contemplations')}
+                className={`flex-1 min-w-[70px] text-[10.5px] py-2 font-black rounded-xl transition-all cursor-pointer text-center whitespace-nowrap ${
+                  activeLeftTab === 'contemplations'
+                    ? 'bg-[#0d5c3a] text-white shadow-md font-extrabold'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-750 hover:bg-slate-200/40 dark:hover:bg-slate-800/30'
+                }`}
+              >
+                Contemplações
+              </button>
+            </div>
           </div>
 
-          {/* Pie Chart and inside metrics */}
-          <div className="flex flex-col items-center justify-center py-4 relative">
-            <div className="w-[270px] h-[270px] flex items-center justify-center relative">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={88}
-                    outerRadius={118}
-                    paddingAngle={3}
-                    dataKey="value"
-                    startAngle={90}
-                    endAngle={450}
-                    onMouseEnter={(_: any, index: number) => setHoveredIndex(index)}
+          {/* Conditional Content */}
+          {activeLeftTab === 'composition' && (
+            <motion.div
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-4"
+            >
+              <div className="flex justify-between items-center px-1 mb-1">
+                <span className="text-[11px] font-extrabold text-slate-450 dark:text-slate-400 uppercase tracking-wider">
+                  Composição do Patrimônio Coletivo
+                </span>
+                <span className="text-xs font-black text-[#0d5c3a] dark:text-emerald-400 font-mono bg-emerald-500/5 px-2.5 py-1 rounded-xl border border-emerald-500/10">
+                  {formatCurrency(combinedTotal)}
+                </span>
+              </div>
+              
+              <div className="flex flex-col items-center justify-center py-2 relative">
+                <div className="w-[230px] h-[230px] flex items-center justify-center relative">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={pieData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={72}
+                        outerRadius={98}
+                        paddingAngle={3}
+                        dataKey="value"
+                        startAngle={90}
+                        endAngle={450}
+                        onMouseEnter={(_: any, index: number) => setHoveredIndex(index)}
+                        onMouseLeave={() => setHoveredIndex(null)}
+                      >
+                        {pieData.map((entry, index) => (
+                          <Cell 
+                            key={`cell-${index}`} 
+                            fill={entry.color} 
+                            stroke={hoveredIndex === index ? entry.color : "transparent"}
+                            strokeWidth={hoveredIndex === index ? 4 : 0}
+                            style={{
+                              transform: hoveredIndex === index ? 'scale(1.03)' : 'scale(1)',
+                              transformOrigin: '50% 50%',
+                              transition: 'all 0.2s ease-in-out',
+                              cursor: 'pointer'
+                            }}
+                          />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                  {/* Inner Center Content labels */}
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-4 pointer-events-none transition-all duration-200">
+                    <span 
+                      className="text-[8.5px] font-black uppercase tracking-wider leading-tight max-w-[120px] transition-colors duration-200 text-slate-400 dark:text-slate-500"
+                      style={{ color: currentDisplayColor ? currentDisplayColor : undefined }}
+                    >
+                      {currentDisplayLabel}
+                    </span>
+                    <span 
+                      className="text-[11.5px] font-bold mt-1.5 font-mono whitespace-nowrap transition-colors duration-200 text-slate-900 dark:text-white"
+                      style={{ color: currentDisplayColor ? currentDisplayColor : undefined }}
+                    >
+                      {formatCurrency(currentDisplayValue)}
+                    </span>
+                    {currentDisplayPercent && (
+                      <span 
+                        className="text-[9px] font-extrabold mt-1 px-2 py-0.5 rounded-full text-white font-sans scale-90 transition-all duration-200"
+                        style={{ backgroundColor: currentDisplayColor }}
+                      >
+                        {currentDisplayPercent}% do fundo
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Legend */}
+                <div className="mt-5 flex flex-col gap-1.5 w-full text-xs font-semibold">
+                  <div 
+                    className={`flex items-center justify-between p-2 rounded-xl border border-transparent transition-all duration-200 cursor-pointer ${hoveredIndex === 0 ? 'bg-sky-500/10 border-sky-500/20 font-black' : hoveredIndex !== null ? 'opacity-40' : ''}`}
+                    onMouseEnter={() => setHoveredIndex(0)}
                     onMouseLeave={() => setHoveredIndex(null)}
                   >
-                    {pieData.map((entry, index) => (
-                      <Cell 
-                        key={`cell-${index}`} 
-                        fill={entry.color} 
-                        stroke={hoveredIndex === index ? entry.color : "transparent"}
-                        strokeWidth={hoveredIndex === index ? 4 : 0}
-                        style={{
-                          transform: hoveredIndex === index ? 'scale(1.03)' : 'scale(1)',
-                          transformOrigin: '50% 50%',
-                          transition: 'all 0.2s ease-in-out',
-                          cursor: 'pointer'
-                        }}
-                      />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-              {/* Inner Center Content labels */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-5 pointer-events-none transition-all duration-200">
-                <span 
-                  className="text-[9.5px] font-black uppercase tracking-wider leading-tight max-w-[145px] transition-colors duration-200 text-slate-400 dark:text-slate-500"
-                  style={{ color: currentDisplayColor ? currentDisplayColor : undefined }}
-                >
-                  {currentDisplayLabel}
-                </span>
-                <span 
-                  className="text-[13px] font-bold mt-2 font-mono whitespace-nowrap transition-colors duration-200 text-slate-900 dark:text-white"
-                  style={{ color: currentDisplayColor ? currentDisplayColor : undefined }}
-                >
-                  {formatCurrency(currentDisplayValue)}
-                </span>
-                {currentDisplayPercent && (
-                  <span 
-                    className="text-[10px] font-extrabold mt-2 px-2.5 py-0.5 rounded-full text-white font-sans scale-95 transition-all duration-200"
-                    style={{ backgroundColor: currentDisplayColor }}
+                    <div className="flex items-center gap-2">
+                      <span className="w-3 h-3 rounded-xs bg-[#0284C7] shrink-0" />
+                      <span className="text-slate-600 dark:text-slate-350 text-[11px]">
+                        Líquido Rotação
+                      </span>
+                    </div>
+                    <span className="font-mono text-[11px] font-black text-sky-600 dark:text-sky-450 bg-sky-500/10 px-1.5 py-0.5 rounded-md">
+                      {rotationPercent}% ({formatCurrency(liquidRotation)})
+                    </span>
+                  </div>
+
+                  <div 
+                    className={`flex items-center justify-between p-2 rounded-xl border border-transparent transition-all duration-200 cursor-pointer ${hoveredIndex === 1 ? 'bg-violet-500/10 border-violet-500/20 font-black' : hoveredIndex !== null ? 'opacity-40' : ''}`}
+                    onMouseEnter={() => setHoveredIndex(1)}
+                    onMouseLeave={() => setHoveredIndex(null)}
                   >
-                    {currentDisplayPercent}% do fundo
-                  </span>
-                )}
-              </div>
-            </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-3 h-3 rounded-xs bg-[#8B5CF6] shrink-0" />
+                      <span className="text-slate-600 dark:text-slate-350 text-[11px]">
+                        Crédito Ativo (Emprestado)
+                      </span>
+                    </div>
+                    <span className="font-mono text-[11px] font-black text-violet-600 dark:text-violet-400 bg-violet-500/10 px-1.5 py-0.5 rounded-md">
+                      {creditPercent}% ({formatCurrency(activeLoansOutstanding)})
+                    </span>
+                  </div>
 
-            {/* Custom Interactive Legend */}
-            <div className="mt-8 flex flex-col md:flex-row flex-wrap items-center justify-center gap-x-5 gap-y-2.5 text-xs font-semibold">
-              <div 
-                className={`flex items-center gap-2 cursor-pointer transition-all duration-200 ${hoveredIndex === 0 ? 'scale-105 font-black text-slate-900 dark:text-white' : hoveredIndex !== null ? 'opacity-40' : ''}`}
-                onMouseEnter={() => setHoveredIndex(0)}
-                onMouseLeave={() => setHoveredIndex(null)}
-              >
-                <span className="w-3.5 h-3.5 rounded-xs bg-[#0284C7] shrink-0" />
-                <span className="text-slate-600 dark:text-slate-350 text-[11.5px] transition-colors duration-200">
-                  Líquido Rotação ({rotationPercent}% - {formatCurrency(liquidRotation)})
-                </span>
-              </div>
-              <div 
-                className={`flex items-center gap-2 cursor-pointer transition-all duration-200 ${hoveredIndex === 1 ? 'scale-105 font-black text-slate-900 dark:text-white' : hoveredIndex !== null ? 'opacity-40' : ''}`}
-                onMouseEnter={() => setHoveredIndex(1)}
-                onMouseLeave={() => setHoveredIndex(null)}
-              >
-                <span className="w-3.5 h-3.5 rounded-xs bg-[#8B5CF6] shrink-0" />
-                <span className="text-slate-600 dark:text-slate-350 text-[11.5px] transition-colors duration-200">
-                  Crédito Ativo ({creditPercent}% - {formatCurrency(activeLoansOutstanding)})
-                </span>
-              </div>
-              <div 
-                className={`flex items-center gap-2 cursor-pointer transition-all duration-200 ${hoveredIndex === 2 ? 'scale-105 font-black text-slate-900 dark:text-white' : hoveredIndex !== null ? 'opacity-40' : ''}`}
-                onMouseEnter={() => setHoveredIndex(2)}
-                onMouseLeave={() => setHoveredIndex(null)}
-              >
-                <span className="w-3.5 h-3.5 rounded-xs bg-[#10B981] shrink-0" />
-                <span className="text-slate-600 dark:text-slate-350 text-[11.5px] transition-colors duration-200">
-                  Fundo Social ({socialPercent}% - {formatCurrency(socialPrice)})
-                </span>
-              </div>
-            </div>
+                  <div 
+                    className={`flex items-center justify-between p-2 rounded-xl border border-transparent transition-all duration-200 cursor-pointer ${hoveredIndex === 2 ? 'bg-[#10B981]/10 border-[#10B981]/20 font-black' : hoveredIndex !== null ? 'opacity-40' : ''}`}
+                    onMouseEnter={() => setHoveredIndex(2)}
+                    onMouseLeave={() => setHoveredIndex(null)}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="w-3 h-3 rounded-xs bg-[#10B981] shrink-0" />
+                      <span className="text-slate-600 dark:text-slate-350 text-[11px]">
+                        Fundo Social (Reservado)
+                      </span>
+                    </div>
+                    <span className="font-mono text-[11px] font-black text-emerald-600 dark:text-emerald-450 bg-emerald-500/10 px-1.5 py-0.5 rounded-md">
+                      {socialPercent}% ({formatCurrency(socialPrice)})
+                    </span>
+                  </div>
+                </div>
 
-            {/* Architectural Rule explaining credit deduction */}
-            <div className="mt-6 w-full bg-slate-50 dark:bg-slate-950/40 border border-slate-200/40 dark:border-slate-800/40 p-3.5 rounded-2xl text-[10.5px] leading-relaxed text-slate-500 dark:text-slate-400 flex items-start gap-2.5 shadow-xs">
-              <span className="text-amber-500 text-xs mt-0.5 shrink-0">💡</span>
-              <p className="font-medium">
-                <strong>Regra de Equilíbrio e Solvência:</strong> O Crédito Ativo Concedido de{' '}
-                <strong className="text-slate-850 dark:text-white font-mono font-bold">
-                  {formatCurrency(activeLoansOutstanding)}
-                </strong>{' '}
-                está em amortização por sócios e singulares. Este capital foi retirado da liquidez física (caixa) do fundo de rotação, mas permanece como patrimônio ativo realizável da cooperativa.
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
+                {/* Solvency Rule Card */}
+                <div className="mt-4 w-full bg-slate-50 dark:bg-slate-950/40 border border-slate-200/40 dark:border-slate-800/40 p-3 rounded-2xl text-[10px] leading-relaxed text-slate-500 dark:text-slate-400 flex items-start gap-2 shadow-xs">
+                  <span className="text-amber-500 text-xs mt-0.5 shrink-0">💡</span>
+                  <p className="font-medium">
+                    <strong>Regra de Equilíbrio:</strong> O Crédito de{' '}
+                    <strong className="text-slate-800 dark:text-white font-mono">
+                      {formatCurrency(activeLoansOutstanding)}
+                    </strong>{' '}
+                    está em amortização. Foi retirado da liquidez, mas permanece como patrimônio realizável ativo do fundo.
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          )}
 
-      {/* 3. PROGRESSO DO CICLO ATUAL */}
-      <div className="bg-white/45 dark:bg-slate-900/40 backdrop-blur-md rounded-3xl border border-slate-200/50 dark:border-slate-800/60 p-6 flex flex-col justify-between shadow-md hover:shadow-lg transition-all duration-300 hover:border-[#0d5c3a]/30 dark:hover:border-[#0d5c3a]/50">
-        <div>
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <span className="w-8 h-8 rounded-full bg-[#0d5c3a] text-white flex items-center justify-center font-black text-sm">
-                3
-              </span>
-              <h2 className="text-[13.5px] font-black tracking-tight text-slate-900 dark:text-white uppercase">
-                {selectedCycle === currentMonth ? "Progresso do Ciclo Corrente" : "Progresso do Ciclo Selecionado"} ({selectedCycle}/6)
-              </h2>
-            </div>
-            <button 
-              onClick={() => {
-                setSelectedCycle(currentMonth);
-                setStatusFilter('paid');
-              }}
-              className="p-1 px-1.5 text-sky-600 hover:text-sky-700 bg-sky-100/50 dark:bg-sky-950/20 rounded-md shrink-0 cursor-pointer hover:scale-105 active:scale-95 transition-all"
-              title="Restaurar para o Mês Ativo"
+          {activeLeftTab === 'social' && (
+            <motion.div
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-2 animate-fadeIn"
             >
-              <RefreshCw className="w-4 h-4" />
-            </button>
-          </div>
+              {(() => {
+                const actualInterestPaid = loans?.reduce((acc, l) => {
+                  return acc + (l.payments || []).filter(p => p.paid).reduce((sum, p) => sum + p.interestPaid, 0);
+                }, 0) || 0;
+                const singularLoans = loans?.filter(l => l.borrowerType === 'singular') || [];
+                const expectedSingularInterest = singularLoans.length > 0
+                  ? singularLoans.reduce((acc, l) => acc + l.payments.reduce((sum, p) => sum + p.interestPaid, 0), 0)
+                  : 10000;
+                const creditToThirdParty = singularLoans.length > 0
+                  ? singularLoans.reduce((acc, l) => acc + l.amountRequested, 0)
+                  : 40000;
+                const expectedSingularInterestFull = expectedSingularInterest;
+                const interestEarned = actualInterestPaid > 0 ? actualInterestPaid : expectedSingularInterestFull;
+                const totalReimbursement = creditToThirdParty + expectedSingularInterestFull;
+                
+                const totalPaidContributionsCount = members?.reduce((acc, m) => {
+                  return acc + Object.keys(m.contributions).filter(mk => m.contributions[Number(mk)]?.paid).length;
+                }, 0) || 0;
+                const baseSocialPrice = totalPaidContributionsCount * 20000;
+                const totalSocialAccumulated = (baseSocialPrice + interestEarned) + totalSocialDisbursed;
 
-          {/* Current collected status labels */}
-          <div className="text-center py-5 space-y-1">
-            <p className="text-[10px] font-black tracking-wider text-slate-500 uppercase">
-              Mensal Arrecadado (Cota)
-            </p>
-            <p className="text-xl font-black font-mono text-slate-950 dark:text-white">
-              ({formatCurrency(allContributorsForCycle.reduce((sum, c) => c.paid ? sum + c.amount : sum, 0))})
-            </p>
-          </div>
+                const percentRetained = totalSocialAccumulated > 0 ? (baseSocialPrice / totalSocialAccumulated) * 100 : 100;
+                const percentInterest = totalSocialAccumulated > 0 ? (interestEarned / totalSocialAccumulated) * 100 : 0;
+                const percentDisbursed = totalSocialAccumulated > 0 ? (totalSocialDisbursed / totalSocialAccumulated) * 100 : 0;
 
-          {/* Slider visual element conforming perfectly to Image 1 */}
-          <div className="py-6 px-2">
-            <div className="flex justify-between items-center text-[10.5px] font-black text-slate-400 dark:text-slate-550 mb-1">
-              <span>0,00 Kz</span>
-              <span className="font-mono text-slate-600 dark:text-white">{formatCurrency(targetArrecadacao)}</span>
-            </div>
-            
-            {/* Custom Track */}
-            <div className="relative w-full bg-slate-200/80 dark:bg-slate-800 h-3.5 rounded-full overflow-hidden mb-5">
-              {/* Dynamic filled bar */}
-              <div 
-                className="bg-[#0b5a3e] h-full rounded-full transition-all duration-500 ease-out"
-                style={{ width: `${Math.min((allContributorsForCycle.reduce((sum, c) => c.paid ? sum + c.amount : sum, 0) / targetArrecadacao) * 100, 100)}%` }}
-              />
-              
-              {/* Ticks on progress bar */}
-              <span className="absolute left-1/3 top-0 bottom-0 w-[1px] bg-slate-300 dark:bg-slate-700 pointer-events-none" />
-              <span className="absolute left-2/3 top-0 bottom-0 w-[1px] bg-slate-300 dark:bg-slate-700 pointer-events-none" />
-            </div>
+                return (
+                  <div className="py-1 space-y-4 text-xs">
+                    <div className="flex justify-between items-center font-black border-b border-slate-150 dark:border-slate-800 pb-2 text-slate-900 dark:text-white uppercase tracking-wider text-[11px]">
+                      <span>Patrimônio do Fundo Social:</span>
+                      <span className="font-mono text-rose-500 text-xs">
+                        {formatCurrency(baseSocialPrice + interestEarned)}
+                      </span>
+                    </div>
 
-            {/* Pointer / Triage Indicator below track */}
-            <div className="relative h-4 mb-2">
-              <div 
-                className="absolute flex flex-col items-center -translate-x-1/2 transition-all duration-500"
-                style={{ left: `${Math.min((allContributorsForCycle.reduce((sum, c) => c.paid ? sum + c.amount : sum, 0) / targetArrecadacao) * 100, 100)}%` }}
-              >
-                <span className="text-[10px] text-[#0d5c3a] leading-none">▲</span>
-              </div>
-            </div>
+                    {/* Bar 1: Reserva Ativa */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center font-bold text-slate-655 dark:text-slate-300">
+                        <span className="flex items-center gap-1.5 text-[10.5px]">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                          Reserva Ativa (Quotas Sociais)
+                        </span>
+                        <span className="font-mono text-slate-700 dark:text-slate-300">{formatCurrency(baseSocialPrice)}</span>
+                      </div>
+                      <div className="w-full bg-slate-100 dark:bg-slate-950/60 border border-slate-200/40 dark:border-slate-800/40 h-5 rounded-full overflow-hidden relative shadow-inner">
+                        <div 
+                          className="bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 h-full rounded-full transition-all duration-500"
+                          style={{ width: `${percentRetained}%` }}
+                        />
+                        <div className="absolute inset-0 flex items-center justify-between px-3 text-[9px] font-extrabold text-white mix-blend-difference pointer-events-none">
+                          <span>{percentRetained.toFixed(1)}% Reserva Coletiva</span>
+                          <span>Disponível</span>
+                        </div>
+                      </div>
+                    </div>
 
-            {/* Custom status indicators */}
-            <div className="flex items-center justify-center gap-5 text-xs text-slate-500 dark:text-slate-400 mt-2">
-              <div className="flex items-center gap-2 font-medium">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#0b5a3e]" />
-                <span>Membros Pagos</span>
-              </div>
-              <div className="flex items-center gap-2 font-medium">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#c2c6d1]" />
-                <span>Meta</span>
-              </div>
-            </div>
+                    {/* Bar 2: Juros de Crédito Reinvestidos */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center font-bold text-slate-655 dark:text-slate-300">
+                        <span className="flex items-center gap-1.5 text-[10.5px]">
+                          <span className="w-2 h-2 rounded-full bg-violet-500 shrink-0" />
+                          Juros de Crédito (100% Sociais)
+                        </span>
+                        <span className="font-mono text-slate-700 dark:text-slate-300">{formatCurrency(interestEarned)}</span>
+                      </div>
+                      <div className="w-full bg-slate-100 dark:bg-slate-950/60 border border-slate-200/40 dark:border-slate-800/40 h-5 rounded-full overflow-hidden relative shadow-inner">
+                        <div 
+                          className="bg-gradient-to-r from-violet-500 via-purple-500 to-indigo-600 h-full rounded-full transition-all duration-500"
+                          style={{ width: `${percentInterest}%` }}
+                        />
+                        <div className="absolute inset-0 flex items-center justify-between px-3 text-[9px] font-extrabold text-white mix-blend-difference pointer-events-none">
+                          <span>{percentInterest.toFixed(1)}% Rendimento Alocado</span>
+                          <span>Exclusivo</span>
+                        </div>
+                      </div>
+                    </div>
 
-            <div className="text-center mt-3 text-[11px] font-bold text-slate-400 dark:text-slate-500">
-              Progresso: ({allContributorsForCycle.filter(c => c.paid).length}/12 membros)
-            </div>
-          </div>
-        </div>
-      </div>
+                    {/* Bar 3: Apoios Concedidos */}
+                    <div className="space-y-1">
+                      <div className="flex justify-between items-center font-bold text-slate-655 dark:text-slate-350">
+                        <span className="flex items-center gap-1.5 text-[10.5px]">
+                          <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" />
+                          Apoios Concedidos (Não Reembolsáveis)
+                        </span>
+                        <span className="font-mono text-slate-700 dark:text-slate-300">{formatCurrency(totalSocialDisbursed)}</span>
+                      </div>
+                      <div className="w-full bg-slate-100 dark:bg-slate-950/60 border border-slate-200/40 dark:border-slate-800/40 h-5 rounded-full overflow-hidden relative shadow-inner">
+                        <div 
+                          className="bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 h-full rounded-full transition-all duration-500" 
+                          style={{ width: `${percentDisbursed}%` }}
+                        />
+                        <div className="absolute inset-0 flex items-center justify-between px-3 text-[9px] font-extrabold text-white mix-blend-difference pointer-events-none">
+                          <span>{percentDisbursed.toFixed(1)}% Apoios Concedidos</span>
+                          <span>{totalSocialDisbursed > 0 ? 'Entregue' : '0,00 Kz'}</span>
+                        </div>
+                      </div>
+                    </div>
 
-      {/* 2. STATUS DO FUNDO SOCIAL */}
-      <div className="bg-white/45 dark:bg-slate-900/40 backdrop-blur-md rounded-3xl border border-slate-200/50 dark:border-slate-800/60 p-6 flex flex-col justify-between shadow-md hover:shadow-lg transition-all duration-300 hover:border-[#0d5c3a]/30 dark:hover:border-[#0d5c3a]/50">
-        <div>
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <span className="w-8 h-8 rounded-full bg-[#0d5c3a] text-white flex items-center justify-center font-black text-sm">
-                2
-              </span>
-              <h2 className="text-[13.5px] font-black tracking-tight text-slate-900 dark:text-white uppercase">
-                Status do Fundo Social ({(() => {
-                  const actualInterestPaid = loans?.reduce((acc, l) => {
-                    return acc + (l.payments || []).filter(p => p.paid).reduce((sum, p) => sum + p.interestPaid, 0);
-                  }, 0) || 0;
-                  const singularLoans = loans?.filter(l => l.borrowerType === 'singular') || [];
-                  const expectedSingularInterest = singularLoans.length > 0
-                    ? singularLoans.reduce((acc, l) => acc + l.payments.reduce((sum, p) => sum + p.interestPaid, 0), 0)
-                    : 10000;
-                  const totalPaidContributionsCount = members?.reduce((acc, m) => {
-                    return acc + Object.keys(m.contributions).filter(mk => m.contributions[Number(mk)]?.paid).length;
-                  }, 0) || 0;
-                  const baseSocialPrice = totalPaidContributionsCount * 20000;
-                  return formatCurrency(baseSocialPrice + (actualInterestPaid > 0 ? actualInterestPaid : expectedSingularInterest));
-                })()})
-              </h2>
-            </div>
-            <div className="p-1.5 bg-rose-50 dark:bg-rose-950/20 text-rose-500 rounded-md shrink-0">
-              <Heart className="w-4 h-4 fill-current" />
-            </div>
-          </div>
-
-          {/* Social Progress and Status Indicators */}
-          {(() => {
-            // Calculate actual paid interest and principal from all loans dynamically
-            const actualInterestPaid = loans?.reduce((acc, l) => {
-              return acc + (l.payments || []).filter(p => p.paid).reduce((sum, p) => sum + p.interestPaid, 0);
-            }, 0) || 0;
-
-            // Extract all singular/third-party loans
-            const singularLoans = loans?.filter(l => l.borrowerType === 'singular') || [];
-
-            // Calculate total principal of singular loans or use fallback of 40000
-            const creditToThirdParty = singularLoans.length > 0
-              ? singularLoans.reduce((acc, l) => acc + l.amountRequested, 0)
-              : 40000;
-
-            // Calculate total contracted interest of singular loans (25%) or use fallback of 10000
-            const expectedSingularInterest = singularLoans.length > 0
-              ? singularLoans.reduce((acc, l) => acc + l.payments.reduce((sum, p) => sum + p.interestPaid, 0), 0)
-              : 10000;
-
-            // Use actual paid interest if any loan has repayments, otherwise project the expected singular interest
-            const interestEarned = actualInterestPaid > 0 ? actualInterestPaid : expectedSingularInterest;
-            const totalReimbursement = creditToThirdParty + expectedSingularInterest;
-
-            // Total overall contributions made (each deposits 20,000.00 into the social fund)
-            const totalPaidContributionsCount = members?.reduce((acc, m) => {
-              const paidInMember = Object.keys(m.contributions).filter(
-                (monthKey) => m.contributions[Number(monthKey)]?.paid
-              ).length;
-              return acc + paidInMember;
-            }, 0) || 0;
-
-            const baseSocialPrice = totalPaidContributionsCount * 20000;
-            const displaySocialPrice = baseSocialPrice + (actualInterestPaid > 0 ? actualInterestPaid : interestEarned);
-
-            // Gross accumulated social fund
-            const totalSocialAccumulated = (baseSocialPrice + interestEarned) + totalSocialDisbursed;
-
-            const percentRetained = totalSocialAccumulated > 0 ? (baseSocialPrice / totalSocialAccumulated) * 100 : 100;
-            const percentInterest = totalSocialAccumulated > 0 ? (interestEarned / totalSocialAccumulated) * 100 : 0;
-            const percentDisbursed = totalSocialAccumulated > 0 ? (totalSocialDisbursed / totalSocialAccumulated) * 100 : 0;
-
-            return (
-              <div className="py-4 space-y-6 text-xs animate-fadeIn">
-                {/* Bar 1: Reserva Ativa (Quotas Sociais) */}
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center font-bold text-slate-650 dark:text-slate-300">
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                      Reserva Ativa (Quotas Sociais)
-                    </span>
-                    <span className="font-mono text-slate-900 dark:text-white">{formatCurrency(baseSocialPrice)}</span>
-                  </div>
-                  <div className="w-full bg-slate-100 dark:bg-slate-950/60 border border-slate-200/40 dark:border-slate-800/40 h-6 rounded-full overflow-hidden relative shadow-inner">
-                    <div 
-                      className="bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 h-full rounded-full transition-all duration-500 ease-out shadow-xs"
-                      style={{ width: `${percentRetained}%` }}
-                    />
-                    <div className="absolute inset-0 flex items-center justify-between px-3.5 text-[10px] font-extrabold text-white mix-blend-difference pointer-events-none">
-                      <span>{percentRetained.toFixed(1)}% Reserva Coletiva</span>
-                      <span>Disponível</span>
+                    {/* Footer Messages */}
+                    <div className="text-[10px] font-bold text-slate-450 dark:text-slate-500 pt-2 border-t border-slate-150 dark:border-slate-800 text-left flex flex-col gap-1.5">
+                      <div className="flex items-center gap-1">
+                        <span>💡</span> {totalSocialDisbursed === 0 ? 'Fundo Integral, sem desembolsos de apoio.' : 'Ocorreram desembolsos de apoio de emergência.'}
+                      </div>
+                      <div className="text-violet-650 dark:text-violet-400 font-extrabold flex items-start gap-1 bg-violet-500/5 dark:bg-violet-500/10 p-2.5 rounded-xl border border-violet-500/10 text-[9.5px] leading-relaxed">
+                        <span>🛡️</span>
+                        <p>
+                          <strong>Regra Social:</strong> O reembolso de <span className="font-mono">{formatCurrency(totalReimbursement)}</span> separa o principal de <span className="font-mono">{formatCurrency(creditToThirdParty)}</span> e os juros sociais de <span className="font-mono">{formatCurrency(interestEarned)}</span>.
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
+                );
+              })()}
+            </motion.div>
+          )}
 
-                {/* Bar 2: Juros de Crédito Reinvestidos (Alocação Exclusiva) */}
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center font-bold text-slate-650 dark:text-slate-300">
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-violet-500 shrink-0 animate-pulse" />
-                      Juros de Créditos Reinvestidos (100% Sociais)
-                    </span>
-                    <span className="font-mono text-slate-900 dark:text-white">{formatCurrency(interestEarned)}</span>
-                  </div>
-                  <div className="w-full bg-slate-100 dark:bg-slate-950/60 border border-slate-200/40 dark:border-slate-800/40 h-6 rounded-full overflow-hidden relative shadow-inner">
-                    <div 
-                      className="bg-gradient-to-r from-violet-500 via-purple-500 to-indigo-600 h-full rounded-full transition-all duration-500 ease-out shadow-xs"
-                      style={{ width: `${percentInterest}%` }}
-                    />
-                    <div className="absolute inset-0 flex items-center justify-between px-3.5 text-[10px] font-extrabold text-white mix-blend-difference pointer-events-none">
-                      <span>{percentInterest.toFixed(1)}% Rendimento Alocado ao Fundo</span>
-                      <span>Exclusivo</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Bar 3: Apoios Concedidos */}
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center font-bold text-slate-650 dark:text-slate-350">
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0" />
-                      Apoios Concedidos (Não Reembolsáveis)
-                    </span>
-                    <span className="font-mono text-slate-900 dark:text-white">{formatCurrency(totalSocialDisbursed)}</span>
-                  </div>
-                  <div className="w-full bg-slate-100 dark:bg-slate-950/60 border border-slate-200/40 dark:border-slate-800/40 h-6 rounded-full overflow-hidden relative shadow-inner">
-                    <div 
-                      className="bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 h-full rounded-full transition-all duration-500 ease-out shadow-xs" 
-                      style={{ width: `${percentDisbursed}%` }}
-                    />
-                    <div className="absolute inset-0 flex items-center justify-between px-3.5 text-[10px] font-extrabold text-white mix-blend-difference pointer-events-none">
-                      <span>{percentDisbursed.toFixed(1)}% de Apoios Concedidos</span>
-                      <span>{totalSocialDisbursed > 0 ? 'Entregue' : '0,00 Kz'}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Footer Status Message */}
-                <div className="text-[11px] font-bold text-slate-450 dark:text-slate-500 pt-1 text-left flex flex-col gap-1.5">
-                  <div className="flex items-center gap-1">
-                    <span>💡</span> {totalSocialDisbursed === 0 ? 'Fundo Integral, sem desembolsos de apoio.' : 'Ocorreram desembolsos de apoio de emergência neste ciclo.'}
-                  </div>
-                  <div className="text-violet-650 dark:text-violet-400 font-extrabold flex items-start gap-1 bg-violet-500/5 dark:bg-violet-500/10 p-2.5 rounded-xl border border-violet-500/10">
-                    <span className="text-sm mt-0.5">🛡️</span>
-                    <p className="leading-normal">
-                      <strong>Lógica de Conformidade de Lucro:</strong> O reembolso de <span className="font-mono font-bold text-slate-900 dark:text-white">{formatCurrency(totalReimbursement)}</span> separa o principal de <span className="font-mono font-bold text-slate-900 dark:text-white">{formatCurrency(creditToThirdParty)}</span> (que retorna integralmente ao Fundo Rotativo) e os juros de <span className="font-mono font-bold text-slate-900 dark:text-white">{formatCurrency(interestEarned)}</span> (alocados em tempo real como juros ao Fundo Social para reforçar apoios de interajuda).
-                    </p>
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-        </div>
-      </div>
-
-      {/* 4. STATUS DE CONTEMPLAÇÕES */}
-      <div className="bg-white/45 dark:bg-slate-900/40 backdrop-blur-md rounded-3xl border border-slate-200/50 dark:border-slate-800/60 p-6 flex flex-col justify-between shadow-md hover:shadow-lg transition-all duration-300 hover:border-amber-300/40 dark:hover:border-amber-800/50">
-        <div>
-          {/* Header */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <span className="w-8 h-8 rounded-full bg-[#0d5c3a] text-white flex items-center justify-center font-black text-sm">
-                4
-              </span>
-              <h2 className="text-[13.5px] font-black tracking-tight text-slate-900 dark:text-white uppercase">
-                Status de Contemplações - Ciclo {selectedCycle}
-              </h2>
-            </div>
-            <div className="p-1.5 bg-amber-50 dark:bg-amber-950/20 text-amber-500 rounded-lg shrink-0">
-              <Trophy className="w-5 h-5" />
-            </div>
-          </div>
-
-          {/* Dynamic Cycle / Month Switcher Selector Row */}
-          <div className="flex overflow-x-auto md:grid md:grid-cols-6 gap-1.5 mb-4 bg-slate-100 dark:bg-slate-950/40 p-1 rounded-xl border border-slate-200/30 dark:border-slate-800/40 scrollbar-none shrink-0">
-            {[1, 2, 3, 4, 5, 6].map((num) => {
-              const isActive = num === selectedCycle;
-              const isCurrent = num === currentMonth;
-              const isComp = payoutsCompleted[num] === true;
-              return (
-                <button
-                  key={num}
+          {activeLeftTab === 'cycle' && (
+            <motion.div
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-4"
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                <h3 className="text-[11px] font-black uppercase tracking-wider text-slate-900 dark:text-white">
+                  Progresso do Ciclo Selecionado ({selectedCycle}/6)
+                </h3>
+                <button 
                   onClick={() => {
-                    setSelectedCycle(num);
+                    setSelectedCycle(currentMonth);
                     setStatusFilter('paid');
                   }}
-                  className={`py-2 px-1 rounded-lg text-center cursor-pointer transition-all flex flex-col items-center justify-center gap-0.5 shrink-0 min-w-[72px] md:min-w-0 flex-1 ${
-                    isActive
-                      ? 'bg-[#0d5c3a] text-white shadow-xs font-black scale-102'
-                      : 'hover:bg-slate-200 dark:hover:bg-slate-800/60 text-slate-655 dark:text-slate-400 font-bold bg-transparent'
-                  }`}
+                  className="p-1 px-1.5 text-sky-600 hover:text-sky-700 bg-sky-100/50 dark:bg-sky-950/20 rounded-md cursor-pointer hover:scale-105 active:scale-95 transition-all text-[9.5px] font-black flex items-center gap-1"
+                  title="Restaurar para o Mês Ativo"
                 >
-                  <span className="text-[10px] tracking-tight leading-3">Mês {num}</span>
-                  <span className="text-[7.5px] scale-90 whitespace-nowrap opacity-90 font-mono">
-                    {isComp ? (
-                      <span className="text-emerald-500 dark:text-emerald-400 font-extrabold flex items-center gap-0.5">✓ Pago</span>
-                    ) : isCurrent ? (
-                      <span className="text-amber-500 font-extrabold">Ativo</span>
-                    ) : (
-                      <span className="text-slate-400 font-medium">Agend.</span>
-                    )}
-                  </span>
+                  <RefreshCw className="w-3 h-3 animate-spin-slow" /> Restaurar Mês
                 </button>
-              );
-            })}
-          </div>
-
-          {/* Search box within cycle */}
-          <div className="relative mb-4">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Pesquisar cooperante no Ciclo..."
-              className="w-full text-xs pl-9 pr-4 py-2 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-950/30 focus:border-[#0d5c3a] dark:focus:border-[#0d5c3a] focus:ring-0 transition-colors uppercase placeholder:normal-case placeholder:text-slate-450 text-slate-800 dark:text-white"
-            />
-          </div>
-
-          {/* Sub-Tabs: Quotas and Beneficiaries filtered dynamically */}
-          <div className="flex bg-slate-200/60 dark:bg-slate-900/60 rounded-xl p-1 mb-4 gap-1 overflow-x-auto">
-            <button
-              onClick={() => setStatusFilter('paid')}
-              className={`flex-1 min-w-[70px] text-[10.5px] py-1.5 font-extrabold rounded-lg transition-all cursor-pointer text-center ${
-                statusFilter === 'paid'
-                  ? 'bg-[#0d5c3a] text-white shadow-xs'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-750'
-              }`}
-            >
-              Membros Pagos ({paidContributorsCount})
-            </button>
-            <button
-              onClick={() => setStatusFilter('beneficiaries')}
-              className={`flex-1 min-w-[95px] text-[10.5px] py-1.5 font-extrabold rounded-lg transition-all cursor-pointer text-center ${
-                statusFilter === 'beneficiaries'
-                  ? 'bg-[#0d5c3a] text-white shadow-xs'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-750'
-              }`}
-            >
-              Beneficiários ({cycleBeneficiariesCount})
-            </button>
-          </div>
-
-          {/* Main Display List */}
-          <div className="space-y-2.5 max-h-[180px] overflow-y-auto pr-1">
-            {displayedItems.length === 0 ? (
-              <div className="text-center py-8 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-                Nenhum registro encontrado
               </div>
-            ) : (
-              displayedItems.map((item, idx) => {
-                // If displaying contributors
-                if (statusFilter !== 'beneficiaries') {
-                  return (
-                    <div key={item.id || idx} className="flex items-center justify-between text-xs bg-white dark:bg-slate-950/40 px-4 py-3 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-xs hover:border-slate-300 dark:hover:border-slate-700 transition-colors">
-                      <div className="flex flex-col text-left">
-                        <span className="font-extrabold text-slate-800 dark:text-slate-200">
-                          {item.name}
-                        </span>
-                        <span className="text-[10px] font-semibold text-slate-450 dark:text-slate-500">
-                          {item.paid ? `Cota regularizada: ${formatCurrency(item.amount)}` : `Quota de rotação em falta: ${formatCurrency(item.amount)}`}
-                        </span>
-                      </div>
-                      <div>
-                        {item.paid ? (
-                          <span className="text-[9.5px] font-black text-emerald-700 bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400 rounded-full py-1 px-3 uppercase tracking-wider">
-                            Pago
-                          </span>
-                        ) : (
-                          <span className="text-[9.5px] font-black text-[#ea580c] bg-[#ffedd5] dark:bg-amber-950/20 dark:text-amber-500 rounded-full py-1 px-2.5 uppercase tracking-wider border border-[#fed7aa]/30 animate-pulse">
-                            Aguardando
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                } else {
-                  // If displaying beneficiaries
-                  const isPaid = isPayoutDoneForCycle;
-                  return (
-                    <div key={item.id || idx} className="flex items-center justify-between text-xs bg-white dark:bg-slate-950/40 px-4 py-3 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-xs hover:border-emerald-500/20 dark:hover:border-emerald-500/10 transition-colors">
-                      <div className="flex flex-col text-left">
-                        <span className="font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                          🎁 {item.name}
-                        </span>
-                        <span className="text-[10px] font-bold text-[#0d5c3a] dark:text-emerald-400">
-                          Recebe Provento Rotativo: {formatCurrency(600000)}
-                        </span>
-                      </div>
-                      <div>
-                        {isPaid ? (
-                          <span className="text-[9.5px] font-black text-emerald-700 bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400 rounded-full py-1 px-3 uppercase tracking-wider">
-                            Liquidado
-                          </span>
-                        ) : (
-                          <span className="text-[9.5px] font-black text-[#ea580c] bg-[#ffedd5] dark:bg-amber-950/20 dark:text-amber-500 rounded-full py-1 px-2.5 uppercase tracking-wider border border-[#fed7aa]/30 animate-pulse">
-                            Aguardando
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                }
-              })
-            )}
-          </div>
 
-          {/* Highly detailed financial audit and summary cards at the bottom */}
-          <div className="mt-4 p-3 py-3.5 bg-gradient-to-r from-slate-100/70 to-slate-200/40 dark:from-slate-900/60 dark:to-slate-950/40 rounded-2xl border border-slate-200/40 dark:border-slate-800/80 space-y-2.5 text-[11px]">
-            <div className="flex justify-between items-center text-slate-800 dark:text-slate-200 border-b border-slate-200/50 dark:border-slate-850 pb-1.5">
-              <span className="font-extrabold text-[#0d5c3a] dark:text-emerald-400 uppercase tracking-wider text-[10px]">
-                Beneficiários do Ciclo:
-              </span>
-              <span className="font-extrabold text-slate-900 dark:text-white uppercase tracking-wider text-[10px]">
-                {cycleBeneficiaries.length === 0 ? 'Sem Alocação' : `${cycleBeneficiaries.length} Membros`}
-              </span>
-            </div>
-            
-            {/* Beneficiaries named */}
-            {cycleBeneficiaries.length > 0 ? (
-              <div className="text-left font-bold text-slate-655 dark:text-slate-350 leading-relaxed -mt-1">
-                {cycleBeneficiaries.map((b, idx) => (
-                  <span key={b.id} className="inline-block mr-2">
-                    {idx + 1}. {b.name} <span className="text-[8px] font-black text-slate-400 dark:text-slate-500">({isPayoutDoneForCycle ? 'LIQUIDADO' : 'PENDENTE'})</span>{idx < cycleBeneficiaries.length - 1 ? ' •' : ''}
-                  </span>
-                ))}
+              <div className="text-center py-3.5 bg-slate-50 dark:bg-slate-950/20 border border-slate-200/40 rounded-2xl">
+                <p className="text-[9px] font-black tracking-wider text-slate-400 uppercase">
+                  Mensal Arrecadado (Cota)
+                </p>
+                <p className="text-lg font-black font-mono text-[#0b5a3e] dark:text-emerald-450 mt-0.5">
+                  {formatCurrency(allContributorsForCycle.reduce((sum, c) => c.paid ? sum + c.amount : sum, 0))}
+                </p>
+                <p className="text-[10px] font-bold text-slate-400 mt-0.5">
+                  Meta Total do Ciclo: {formatCurrency(targetArrecadacao)}
+                </p>
               </div>
-            ) : (
-              <div className="text-left text-slate-400 dark:text-slate-600 font-medium">
-                Nenhum cooperante contemplado para recebimento neste ciclo.
-              </div>
-            )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1 text-left border-t border-slate-200/40 dark:border-slate-800/60">
-              <div>
-                <span className="block font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-[8.5px]"> Valores Arrecadados</span>
-                <span className="font-mono font-black text-slate-900 dark:text-white text-xs block mt-0.5">
-                  {formatCurrency(totalValoresPagosCycle)}
-                </span>
-                <span className="text-[9px] text-slate-455 block leading-tight">
-                  ({paidContributorsCount} de 12 cotas regularizadas)
-                </span>
-              </div>
-              <div className="border-t sm:border-t-0 sm:border-l border-slate-200/50 dark:border-slate-850 pt-3 sm:pt-0 sm:pl-4">
-                <span className="block font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-[8.5px]">Valores Pendentes</span>
-                <span className="font-mono font-black text-[#ea580c] dark:text-amber-500 text-xs block mt-0.5">
-                  {formatCurrency(totalValoresPendentesCycle)}
-                </span>
-                <span className="text-[9px] text-slate-455 block leading-tight">
-                  ({pendingContributorsCount} cooperantes em atraso)
-                </span>
-              </div>
-            </div>
-          </div>
+              <div className="py-2 px-1 text-xs">
+                <div className="flex justify-between items-center text-[10px] font-black text-slate-400 mb-1">
+                  <span>0,00 Kz</span>
+                  <span className="font-mono text-slate-600 dark:text-white">{formatCurrency(targetArrecadacao)}</span>
+                </div>
+                
+                {/* Track */}
+                <div className="relative w-full bg-slate-200/85 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden mb-4">
+                  <div 
+                    className="bg-[#0b5a3e] h-full rounded-full transition-all duration-500 ease-out"
+                    style={{ width: `${Math.min((allContributorsForCycle.reduce((sum, c) => c.paid ? sum + c.amount : sum, 0) / targetArrecadacao) * 100, 100)}%` }}
+                  />
+                  <span className="absolute left-1/3 top-0 bottom-0 w-[1px] bg-slate-300 dark:bg-slate-700 pointer-events-none" />
+                  <span className="absolute left-2/3 top-0 bottom-0 w-[1px] bg-slate-300 dark:bg-slate-700 pointer-events-none" />
+                </div>
 
-        </div>
-      </div>
-
-      {/* 5. GESTÃO DE CRÉDITO & LUCRATIVIDADE (LUCROS DE JUROS) */}
-      <div className="col-span-1 lg:col-span-2 bg-white/45 dark:bg-slate-900/40 backdrop-blur-md rounded-3xl border border-slate-200/50 dark:border-slate-800/60 p-6 shadow-md hover:shadow-lg transition-all duration-300 hover:border-violet-300/40 dark:hover:border-violet-800/50">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6 pb-4 border-b border-slate-200/40 dark:border-slate-800/60">
-          <div className="flex items-center gap-3">
-            <span className="w-8 h-8 rounded-full bg-violet-600 text-white flex items-center justify-center font-black text-sm">
-              5
-            </span>
-            <div>
-              <h2 className="text-[13.5px] font-black tracking-tight text-slate-900 dark:text-white uppercase flex items-center gap-1.5">
-                Rendimento de Crédito & Lucratividade do Fundo
-              </h2>
-              <p className="text-[10px] text-slate-400">Total emprestado e lucros gerados através de juros de amortização.</p>
-            </div>
-          </div>
-          <div className="px-3 py-1 bg-violet-100 dark:bg-violet-950/30 border border-violet-200/30 dark:border-violet-850 rounded-xl text-violet-750 dark:text-violet-300 text-xs font-bold font-mono">
-            Rendimento Ativo
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          {/* Card 1: Total Emprestado */}
-          <div className="bg-slate-50 dark:bg-slate-950/30 border border-slate-200/40 dark:border-slate-800/60 p-4 rounded-2xl">
-            <span className="block font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest text-[8.5px]">Capital Concedido</span>
-            <span className="font-mono font-black text-slate-900 dark:text-white text-xs block mt-1">
-              {formatCurrency(totalLentAmount)}
-            </span>
-            <span className="text-[9.5px] text-slate-450 block mt-0.5 font-medium">Total de principal emprestado</span>
-          </div>
-
-          {/* Card 2: Lucro Total em Juros */}
-          <div className="bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/10 p-4 rounded-2xl">
-            <span className="block font-bold text-emerald-600 dark:text-emerald-450 uppercase tracking-widest text-[8.5px] font-sans">Lucro Total de Juros (Contratado)</span>
-            <span className="font-mono font-black text-emerald-600 dark:text-emerald-450 text-xs block mt-1">
-              {formatCurrency(totalContractedInterest)}
-            </span>
-            <span className="text-[9.5px] text-emerald-600/80 dark:text-emerald-400/80 block mt-0.5 font-semibold">Rendimento bruto esperado</span>
-          </div>
-
-          {/* Card 3: Lucro Recebido */}
-          <div className="bg-sky-500/5 dark:bg-sky-500/10 border border-sky-500/10 p-4 rounded-2xl">
-            <span className="block font-bold text-sky-600 dark:text-sky-400 uppercase tracking-widest text-[8.5px]">Lucro Realizado (Juros Recebidos)</span>
-            <span className="font-mono font-black text-sky-600 dark:text-sky-400 text-xs block mt-1">
-              {formatCurrency(totalRealizedInterest)}
-            </span>
-            <span className="text-[9.5px] text-sky-550 dark:text-sky-400/80 block mt-0.5 font-semibold">Valor já arrecadado</span>
-          </div>
-
-          {/* Card 4: Lucro Pendente */}
-          <div className="bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/10 p-4 rounded-2xl">
-            <span className="block font-bold text-amber-600 dark:text-amber-450 uppercase tracking-widest text-[8.5px]">Lucro Projetado (A Receber)</span>
-            <span className="font-mono font-black text-amber-600 dark:text-amber-400 text-xs block mt-1">
-              {formatCurrency(totalProjectedInterest)}
-            </span>
-            <span className="text-[9.5px] text-amber-555 dark:text-amber-400/80 block mt-0.5 font-semibold">A receber de prestações</span>
-          </div>
-        </div>
-
-        {/* Gráfico de Rosca de Rentabilidade & Detalhamento */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-6 pt-6 border-t border-slate-200/40 dark:border-slate-800/60">
-          
-          {/* Left Column: Doughnut Chart (span 5) */}
-          <div className="lg:col-span-5 flex flex-col items-center justify-center p-5 bg-slate-50/50 dark:bg-slate-950/20 rounded-3xl border border-slate-200/50 dark:border-slate-800/60 relative animate-fadeIn min-h-[300px]">
-            <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2 text-center">
-              Rentabilidade de Empréstimos
-            </h4>
-            <p className="text-[10px] text-slate-400 dark:text-slate-500 mb-4 text-center leading-relaxed">
-              Proporção entre o Capital Concedido (Investido) e os Juros Acumulados (Rentabilidade).
-            </p>
-
-            <div className="w-[180px] h-[180px] flex items-center justify-center relative">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={creditProfitPieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={56}
-                    outerRadius={76}
-                    paddingAngle={3}
-                    dataKey="value"
-                    startAngle={90}
-                    endAngle={450}
-                    onMouseEnter={(_: any, index: number) => setHoveredCreditProfitIndex(index)}
-                    onMouseLeave={() => setHoveredCreditProfitIndex(null)}
+                {/* Pointer */}
+                <div className="relative h-2.5 mb-1">
+                  <div 
+                    className="absolute flex flex-col items-center -translate-x-1/2 transition-all duration-500"
+                    style={{ left: `${Math.min((allContributorsForCycle.reduce((sum, c) => c.paid ? sum + c.amount : sum, 0) / targetArrecadacao) * 100, 100)}%` }}
                   >
-                    {creditProfitPieData.map((entry, index) => (
-                      <Cell 
-                        key={`credit-profit-cell-${index}`} 
-                        fill={entry.color} 
-                        stroke={hoveredCreditProfitIndex === index ? entry.color : "transparent"}
-                        strokeWidth={hoveredCreditProfitIndex === index ? 3 : 0}
-                        style={{
-                          transform: hoveredCreditProfitIndex === index ? 'scale(1.03)' : 'scale(1)',
-                          transformOrigin: '50% 50%',
-                          transition: 'all 0.2s ease-in-out',
-                          cursor: 'pointer'
-                        }}
-                      />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
-              {/* Inner Center Label inside the doughnut */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-3 pointer-events-none transition-all duration-200">
-                <span 
-                  className="text-[8.5px] font-black uppercase tracking-wider leading-tight max-w-[100px] transition-colors duration-200 text-slate-400 dark:text-slate-500"
-                  style={{ color: currentCreditProfitColor }}
-                >
-                  {currentCreditProfitLabel}
-                </span>
-                <span 
-                  className="text-[11px] font-bold mt-1 font-mono whitespace-nowrap transition-colors duration-200 text-slate-900 dark:text-white"
-                  style={{ color: currentCreditProfitColor }}
-                >
-                  {formatCurrency(currentCreditProfitValue)}
-                </span>
-                <span 
-                  className="text-[9.5px] font-extrabold mt-1.5 px-2 py-0.5 rounded-full text-white font-sans scale-95 transition-all duration-200"
-                  style={{ backgroundColor: currentCreditProfitColor }}
-                >
-                  {currentCreditProfitPercent}%
-                </span>
-              </div>
-            </div>
-
-            {/* Custom Interactive Legend with Credit Highlight */}
-            <div className="mt-5 w-full space-y-1.5 text-xs font-semibold">
-              <div 
-                className={`flex items-center justify-between p-2 rounded-xl transition-all duration-200 border border-transparent cursor-pointer ${hoveredCreditProfitIndex === 0 ? 'bg-violet-500/10 border-violet-500/20 font-black' : hoveredCreditProfitIndex !== null ? 'opacity-40' : ''}`}
-                onMouseEnter={() => setHoveredCreditProfitIndex(0)}
-                onMouseLeave={() => setHoveredCreditProfitIndex(null)}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-xs bg-[#8B5CF6] shrink-0" />
-                  <span className="text-slate-600 dark:text-slate-350 text-[11px]">
-                    Capital Concedido (Crédito)
-                  </span>
+                    <span className="text-[8px] text-[#0d5c3a] leading-none">▲</span>
+                  </div>
                 </div>
-                <span className="font-mono font-black text-violet-600 dark:text-violet-400 text-[11px] bg-violet-500/10 px-1.5 py-0.5 rounded-md">
-                  {lentPercent}%
-                </span>
-              </div>
 
-              <div 
-                className={`flex items-center justify-between p-2 rounded-xl transition-all duration-200 border border-transparent cursor-pointer ${hoveredCreditProfitIndex === 1 ? 'bg-emerald-500/10 border-emerald-500/20 font-black' : hoveredCreditProfitIndex !== null ? 'opacity-40' : ''}`}
-                onMouseEnter={() => setHoveredCreditProfitIndex(1)}
-                onMouseLeave={() => setHoveredCreditProfitIndex(null)}
-              >
-                <div className="flex items-center gap-2">
-                  <span className="w-3 h-3 rounded-xs bg-[#10B981] shrink-0" />
-                  <span className="text-slate-600 dark:text-slate-350 text-[11px]">
-                    Juros Acumulados (Lucros)
-                  </span>
+                {/* Legend */}
+                <div className="flex items-center justify-center gap-4 text-[10px]">
+                  <div className="flex items-center gap-1.5 font-bold text-slate-500">
+                    <span className="w-2 h-2 rounded-full bg-[#0b5a3e]" />
+                    <span>Membros Pagos</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 font-bold text-slate-500">
+                    <span className="w-2 h-2 rounded-full bg-[#c2c6d1]" />
+                    <span>Meta de Cotas</span>
+                  </div>
                 </div>
-                <span className="font-mono font-black text-emerald-600 dark:text-emerald-450 text-[11px] bg-emerald-500/10 px-1.5 py-0.5 rounded-md">
-                  {interestPercent}%
+
+                <div className="text-center mt-3 text-[10px] font-black text-[#0b5a3e] bg-[#0b5a3e]/5 p-2 rounded-xl border border-[#0b5a3e]/10">
+                  Ciclo Atual: {allContributorsForCycle.filter(c => c.paid).length} de 12 cotas regularizadas ({Math.round(Math.min((allContributorsForCycle.reduce((sum, c) => c.paid ? sum + c.amount : sum, 0) / targetArrecadacao) * 100, 100))}% de conformidade)
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {activeLeftTab === 'contemplations' && (
+            <motion.div
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-3"
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                <span className="text-[11px] font-black uppercase tracking-wider text-slate-900 dark:text-white">
+                  Contemplações no Ciclo {selectedCycle}
+                </span>
+                <span className="p-1 bg-amber-50 dark:bg-amber-950/20 text-amber-500 rounded-md shrink-0">
+                  <Trophy className="w-4 h-4" />
                 </span>
               </div>
-            </div>
-          </div>
 
-          {/* Right Column: Detalhamento de Contratos (span 7) */}
-          <div className="lg:col-span-7 flex flex-col justify-between space-y-3">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
-              <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
-                Detalhamento de Contratos & Lucratividade por Devedor
-              </h4>
-              <span className="text-[10px] font-bold text-violet-600 dark:text-violet-400 font-mono">
-                Portfólio Ativo
-              </span>
-            </div>
-
-            {(!loans || loans.length === 0) ? (
-              <div className="flex-1 flex items-center justify-center py-12 text-center bg-slate-50/50 dark:bg-slate-950/20 border border-dashed border-slate-200 dark:border-slate-800 rounded-2xl">
-                <p className="text-xs text-slate-400 italic font-sans">Nenhum contrato de crédito ativo registrado.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[280px] overflow-y-auto pr-1">
-                {loans.map((l) => {
-                  const totalLent = l.amountRequested;
-                  const totalInterest = (l.payments || []).reduce((sum, p) => sum + p.interestPaid, 0);
-                  const paidInterest = (l.payments || []).filter(p => p.paid).reduce((sum, p) => sum + p.interestPaid, 0);
-                  const interestProgress = totalInterest > 0 ? (paidInterest / totalInterest) * 100 : 0;
-
+              {/* Selector */}
+              <div className="flex overflow-x-auto gap-1 mb-2 bg-slate-100 dark:bg-slate-950/40 p-1 rounded-xl border border-slate-200/30 dark:border-slate-800/40 scrollbar-none shrink-0">
+                {[1, 2, 3, 4, 5, 6].map((num) => {
+                  const isActive = num === selectedCycle;
                   return (
-                    <div key={l.id} className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-950/20 border border-slate-200/50 dark:border-slate-800 text-xs flex flex-col gap-2.5">
-                      <div className="flex justify-between items-center border-b border-slate-200/40 dark:border-slate-800 pb-1.5">
-                        <div className="min-w-0 flex-1">
-                          <span className="font-extrabold text-slate-800 dark:text-slate-200 truncate block">
-                            {l.borrowerName}
-                          </span>
-                          <span className="text-[9.5px] text-slate-450 font-mono block truncate">
-                            Contrato: {l.id} • {l.borrowerType === 'socio' ? 'Sócio' : 'Singular'}
-                          </span>
-                        </div>
-                        <span className={`text-[9px] px-2 py-0.5 rounded-lg font-black uppercase shrink-0 ${
-                          l.status === 'completed'
-                            ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400'
-                            : 'bg-violet-100 text-violet-800 dark:bg-violet-950/30 dark:text-violet-400 animate-pulse'
-                        }`}>
-                          {l.status === 'completed' ? 'Liquidado' : 'Ativo'}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 text-[11px]">
-                        <div>
-                          <span className="text-slate-400 block text-[9px] font-semibold uppercase font-sans">Valor Emprestado</span>
-                          <span className="font-mono font-bold text-slate-700 dark:text-slate-300 text-xs">
-                            {formatCurrency(totalLent)}
-                          </span>
-                        </div>
-                        <div className="text-right">
-                          <span className="text-slate-400 block text-[9px] font-semibold uppercase font-sans">Lucro de Juros ({l.interestRate}%)</span>
-                          <span className="font-mono font-black text-emerald-600 dark:text-emerald-450 text-xs">
-                            +{formatCurrency(totalInterest)}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Progress tracking for specific borrower interest */}
-                      <div className="space-y-1 pt-1 border-t border-slate-200/30 dark:border-slate-800/40">
-                        <div className="flex justify-between items-center text-[9px] font-bold text-slate-400">
-                          <span>Progresso do Juro (Lucro Arrecadado):</span>
-                          <span className="font-mono text-emerald-600 dark:text-emerald-450">
-                            {formatCurrency(paidInterest)} / {formatCurrency(totalInterest)} ({Math.round(interestProgress)}%)
-                          </span>
-                        </div>
-                        <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                          <div 
-                            className="bg-emerald-500 h-full rounded-full transition-all duration-300"
-                            style={{ width: `${interestProgress}%` }}
-                          />
-                        </div>
-                      </div>
-                    </div>
+                    <button
+                      key={num}
+                      onClick={() => {
+                        setSelectedCycle(num);
+                        setStatusFilter('paid');
+                      }}
+                      className={`py-1 px-0.5 rounded-lg text-center cursor-pointer transition-all flex flex-col items-center justify-center flex-1 min-w-[45px] ${
+                        isActive
+                          ? 'bg-[#0d5c3a] text-white shadow-md font-black'
+                          : 'hover:bg-slate-200 dark:hover:bg-slate-800/60 text-slate-655 dark:text-slate-400 font-bold bg-transparent'
+                      }`}
+                    >
+                      <span className="text-[9px] tracking-tight">Mês {num}</span>
+                    </button>
                   );
                 })}
               </div>
-            )}
+
+              {/* Search */}
+              <div className="relative mb-2">
+                <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Pesquisar cooperante..."
+                  className="w-full text-[11px] pl-8 pr-3 py-1 border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-950/30 focus:border-[#0d5c3a] focus:ring-0 uppercase placeholder:normal-case text-slate-800 dark:text-white"
+                />
+              </div>
+
+              {/* Switch tabs */}
+              <div className="flex bg-slate-200/60 dark:bg-slate-900/60 rounded-xl p-0.5 mb-2.5 gap-1">
+                <button
+                  onClick={() => setStatusFilter('paid')}
+                  className={`flex-1 text-[10px] py-1 font-black rounded-lg transition-all cursor-pointer text-center ${
+                    statusFilter === 'paid'
+                      ? 'bg-[#0d5c3a] text-white shadow-xs'
+                      : 'text-slate-500 hover:text-slate-750'
+                  }`}
+                >
+                  Membros Pagos ({paidContributorsCount})
+                </button>
+                <button
+                  onClick={() => setStatusFilter('beneficiaries')}
+                  className={`flex-1 text-[10px] py-1 font-black rounded-lg transition-all cursor-pointer text-center ${
+                    statusFilter === 'beneficiaries'
+                      ? 'bg-[#0d5c3a] text-white shadow-xs'
+                      : 'text-slate-500 hover:text-slate-750'
+                  }`}
+                >
+                  Beneficiários ({cycleBeneficiariesCount})
+                </button>
+              </div>
+
+              {/* List */}
+              <div className="space-y-2 max-h-[140px] overflow-y-auto pr-1">
+                {displayedItems.length === 0 ? (
+                  <div className="text-center py-6 text-xs font-bold text-slate-400 uppercase tracking-widest">
+                    Nenhum registro encontrado
+                  </div>
+                ) : (
+                  displayedItems.map((item, idx) => {
+                    if (statusFilter !== 'beneficiaries') {
+                      return (
+                        <div key={item.id || idx} className="flex items-center justify-between text-[11px] bg-white dark:bg-slate-950/40 px-3 py-2.5 rounded-xl border border-slate-100 dark:border-slate-800 shadow-xs">
+                          <div className="flex flex-col text-left">
+                            <span className="font-extrabold text-slate-800 dark:text-slate-200">
+                              {item.name}
+                            </span>
+                            <span className="text-[9.5px] font-semibold text-slate-450">
+                              {item.paid ? `Cota regularizada` : `Quota em falta`}
+                            </span>
+                          </div>
+                          <div>
+                            {item.paid ? (
+                              <span className="text-[8.5px] font-black text-emerald-700 bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400 rounded-full py-0.5 px-2 uppercase tracking-wider">
+                                Pago
+                              </span>
+                            ) : (
+                              <span className="text-[8.5px] font-black text-[#ea580c] bg-[#ffedd5] dark:bg-amber-950/20 dark:text-amber-500 rounded-full py-0.5 px-2 uppercase tracking-wider border border-[#fed7aa]/30 animate-pulse">
+                                Aguardando
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    } else {
+                      const isPaid = isPayoutDoneForCycle;
+                      return (
+                        <div key={item.id || idx} className="flex items-center justify-between text-[11px] bg-white dark:bg-slate-950/40 px-3 py-2.5 rounded-xl border border-slate-100 dark:border-slate-800 shadow-xs">
+                          <div className="flex flex-col text-left">
+                            <span className="font-extrabold text-slate-800 dark:text-slate-200 flex items-center gap-1">
+                              🎁 {item.name}
+                            </span>
+                            <span className="text-[9.5px] font-bold text-[#0d5c3a]">
+                              Provento Rotativo: {formatCurrency(600000)}
+                            </span>
+                          </div>
+                          <div>
+                            {isPaid ? (
+                              <span className="text-[8.5px] font-black text-emerald-700 bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400 rounded-full py-0.5 px-2 uppercase tracking-wider">
+                                Liquidado
+                              </span>
+                            ) : (
+                              <span className="text-[8.5px] font-black text-[#ea580c] bg-[#ffedd5] dark:bg-amber-950/20 dark:text-amber-500 rounded-full py-0.5 px-2 uppercase tracking-wider border border-[#fed7aa]/30 animate-pulse">
+                                Aguardando
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
+                  })
+                )}
+              </div>
+
+              {/* Financial summary card */}
+              <div className="mt-2 p-2.5 bg-slate-50 dark:bg-slate-950/40 rounded-xl border border-slate-200/45 dark:border-slate-800/80 space-y-1.5 text-[10px]">
+                <div className="flex justify-between items-center text-slate-800 dark:text-slate-200 pb-1 border-b border-slate-200/40 dark:border-slate-800/40">
+                  <span className="font-bold text-[#0d5c3a] dark:text-emerald-400 uppercase tracking-wider text-[9px]">
+                    Beneficiários:
+                  </span>
+                  <span className="font-bold font-mono">
+                    {cycleBeneficiaries.length === 0 ? 'Sem Alocação' : `${cycleBeneficiaries.length} Membros`}
+                  </span>
+                </div>
+                
+                {cycleBeneficiaries.length > 0 && (
+                  <div className="text-left font-semibold text-slate-500 max-h-[35px] overflow-y-auto leading-relaxed">
+                    {cycleBeneficiaries.map((b, idx) => (
+                      <span key={b.id} className="inline-block mr-1.5">
+                        {idx + 1}. {b.name} <span className="text-[8px] font-bold">({isPayoutDoneForCycle ? 'LIQ.' : 'PEND.'})</span>{idx < cycleBeneficiaries.length - 1 ? ' •' : ''}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-2 pt-1.5 border-t border-slate-200/40 dark:border-slate-800/40 text-left">
+                  <div>
+                    <span className="block text-slate-400 font-bold uppercase tracking-wider text-[8px]">Valores Arrecadados</span>
+                    <span className="font-mono font-bold text-slate-800 dark:text-slate-200 text-[10.5px]">
+                      {formatCurrency(totalValoresPagosCycle)}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="block text-slate-400 font-bold uppercase tracking-wider text-[8px]">Valores Pendentes</span>
+                    <span className="font-mono font-bold text-rose-500 text-[10.5px]">
+                      {formatCurrency(totalValoresPendentesCycle)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </div>
+      </div>
+
+      {/* CARD 2: GESTÃO DE CRÉDITO & LUCRATIVIDADE (LUCROS DE JUROS) */}
+      <div className="bg-white/45 dark:bg-slate-900/40 backdrop-blur-md rounded-3xl border border-slate-200/50 dark:border-slate-800/60 p-6 flex flex-col justify-between shadow-md hover:shadow-lg transition-all duration-300 hover:border-violet-300/40 dark:hover:border-violet-800/50 min-h-[640px]">
+        <div>
+          <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-3">
+              <span className="w-7 h-7 rounded-lg bg-violet-600 text-white flex items-center justify-center font-black text-xs">
+                📈
+              </span>
+              <div>
+                <h2 className="text-[13px] font-black tracking-tight text-slate-900 dark:text-white uppercase flex items-center gap-1.5">
+                  Rendimento & Rentabilidade de Crédito
+                </h2>
+                <p className="text-[9px] text-slate-400">Total emprestado e rendimentos gerados por juros.</p>
+              </div>
+            </div>
+            <div className="px-2.5 py-0.5 bg-violet-100 dark:bg-violet-950/30 border border-violet-200/30 rounded-lg text-violet-700 dark:text-violet-300 text-[10px] font-bold font-mono">
+              Rendimento Ativo
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 mb-5">
+            {/* Card 1: Total Emprestado */}
+            <div className="bg-slate-50/50 dark:bg-slate-950/30 border border-slate-200/40 dark:border-slate-800/60 p-3 rounded-xl flex flex-col justify-between">
+              <span className="block font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider text-[8px]">Capital Concedido</span>
+              <span className="font-mono font-black text-slate-900 dark:text-white text-xs block mt-0.5">
+                {formatCurrency(totalLentAmount)}
+              </span>
+              <span className="text-[8.5px] text-slate-450 block mt-0.5 font-medium truncate">Principal emprestado</span>
+            </div>
+
+            {/* Card 2: Lucro Total em Juros */}
+            <div className="bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/10 p-3 rounded-xl flex flex-col justify-between">
+              <span className="block font-bold text-emerald-600 dark:text-emerald-450 uppercase tracking-wider text-[8px] font-sans">Lucro Juros (Contratado)</span>
+              <span className="font-mono font-black text-emerald-600 dark:text-emerald-450 text-xs block mt-0.5">
+                {formatCurrency(totalContractedInterest)}
+              </span>
+              <span className="text-[8.5px] text-emerald-600/80 dark:text-emerald-400/80 block mt-0.5 font-semibold truncate">Rendimento bruto esperado</span>
+            </div>
+
+            {/* Card 3: Lucro Recebido */}
+            <div className="bg-sky-500/5 dark:bg-sky-500/10 border border-sky-500/10 p-3 rounded-xl flex flex-col justify-between">
+              <span className="block font-bold text-sky-600 dark:text-sky-450 uppercase tracking-wider text-[8px]">Lucro Juros Realizado</span>
+              <span className="font-mono font-black text-sky-600 dark:text-sky-400 text-xs block mt-0.5">
+                {formatCurrency(totalRealizedInterest)}
+              </span>
+              <span className="text-[8.5px] text-sky-550 dark:text-sky-400/80 block mt-0.5 font-semibold truncate">Valor já arrecadado</span>
+            </div>
+
+            {/* Card 4: Lucro Pendente */}
+            <div className="bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/10 p-3 rounded-xl flex flex-col justify-between">
+              <span className="block font-bold text-amber-600 dark:text-amber-450 uppercase tracking-wider text-[8px]">Lucro Juros Projetado</span>
+              <span className="font-mono font-black text-amber-600 dark:text-amber-400 text-xs block mt-0.5">
+                {formatCurrency(totalProjectedInterest)}
+              </span>
+              <span className="text-[8.5px] text-amber-555 dark:text-amber-400/80 block mt-0.5 font-semibold truncate">A receber de prestações</span>
+            </div>
+          </div>
+
+          {/* Gráfico de Rosca de Rentabilidade & Detalhamento */}
+          <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+            
+            {/* Left Column: Doughnut Chart (span 5) */}
+            <div className="xl:col-span-5 flex flex-col items-center justify-center p-3 bg-slate-50/50 dark:bg-slate-950/20 rounded-2xl border border-slate-200/50 dark:border-slate-800/60 relative animate-fadeIn min-h-[220px]">
+              <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1 text-center">
+                Proporção de Rentabilidade
+              </h4>
+
+              <div className="w-[120px] h-[120px] flex items-center justify-center relative mt-1">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={creditProfitPieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={38}
+                      outerRadius={52}
+                      paddingAngle={3}
+                      dataKey="value"
+                      startAngle={90}
+                      endAngle={450}
+                      onMouseEnter={(_: any, index: number) => setHoveredCreditProfitIndex(index)}
+                      onMouseLeave={() => setHoveredCreditProfitIndex(null)}
+                    >
+                      {creditProfitPieData.map((entry, index) => (
+                        <Cell 
+                          key={`credit-profit-cell-${index}`} 
+                          fill={entry.color} 
+                          stroke={hoveredCreditProfitIndex === index ? entry.color : "transparent"}
+                          strokeWidth={hoveredCreditProfitIndex === index ? 2 : 0}
+                          style={{
+                            transform: hoveredCreditProfitIndex === index ? 'scale(1.03)' : 'scale(1)',
+                            transformOrigin: '50% 50%',
+                            transition: 'all 0.2s ease-in-out',
+                            cursor: 'pointer'
+                          }}
+                        />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+                {/* Inner Center Label inside the doughnut */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-1 pointer-events-none transition-all duration-200">
+                  <span 
+                    className="text-[7.5px] font-black uppercase tracking-wider leading-tight max-w-[65px] truncate transition-colors duration-200 text-slate-400"
+                    style={{ color: currentCreditProfitColor }}
+                  >
+                    {currentCreditProfitLabel === 'Capital Concedido (Investido)' ? 'Capital' : 'Juros'}
+                  </span>
+                  <span 
+                    className="text-[9.5px] font-black mt-0.5 font-mono whitespace-nowrap transition-colors duration-200 text-slate-900 dark:text-white"
+                    style={{ color: currentCreditProfitColor }}
+                  >
+                    {formatCurrency(currentCreditProfitValue)}
+                  </span>
+                  <span 
+                    className="text-[8px] font-bold mt-0.5 px-1 py-0.2 rounded-full text-white scale-90 transition-all duration-200"
+                    style={{ backgroundColor: currentCreditProfitColor }}
+                  >
+                    {currentCreditProfitPercent}%
+                  </span>
+                </div>
+              </div>
+
+              {/* Custom Legend */}
+              <div className="mt-3 w-full space-y-1 text-[10px] font-semibold">
+                <div 
+                  className={`flex items-center justify-between p-1 rounded-lg transition-all duration-200 cursor-pointer ${hoveredCreditProfitIndex === 0 ? 'bg-violet-500/10 font-bold' : hoveredCreditProfitIndex !== null ? 'opacity-40' : ''}`}
+                  onMouseEnter={() => setHoveredCreditProfitIndex(0)}
+                  onMouseLeave={() => setHoveredCreditProfitIndex(null)}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-xs bg-[#8B5CF6] shrink-0" />
+                    <span className="text-slate-500 text-[10px]">Capital Concedido</span>
+                  </div>
+                  <span className="font-mono text-violet-600 dark:text-violet-400">{lentPercent}%</span>
+                </div>
+
+                <div 
+                  className={`flex items-center justify-between p-1 rounded-lg transition-all duration-200 cursor-pointer ${hoveredCreditProfitIndex === 1 ? 'bg-emerald-500/10 font-bold' : hoveredCreditProfitIndex !== null ? 'opacity-40' : ''}`}
+                  onMouseEnter={() => setHoveredCreditProfitIndex(1)}
+                  onMouseLeave={() => setHoveredCreditProfitIndex(null)}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-xs bg-[#10B981] shrink-0" />
+                    <span className="text-slate-500 text-[10px]">Juros Acumulados</span>
+                  </div>
+                  <span className="font-mono text-emerald-600 dark:text-emerald-450">{interestPercent}%</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column: Detalhamento de Contratos (span 7) */}
+            <div className="xl:col-span-7 flex flex-col justify-between space-y-2">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800/80 pb-1.5">
+                <h4 className="text-[9px] font-extrabold uppercase tracking-wider text-slate-400">
+                  Lucratividade por Contrato
+                </h4>
+                <span className="text-[9px] font-bold text-violet-600 dark:text-violet-400 font-mono">
+                  Portfólio Ativo
+                </span>
+              </div>
+
+              {(!loans || loans.length === 0) ? (
+                <div className="flex-1 flex items-center justify-center py-6 text-center bg-slate-50/50 dark:bg-slate-950/20 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
+                  <p className="text-[10px] text-slate-400 italic font-sans">Nenhum contrato ativo registrado.</p>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-[195px] overflow-y-auto pr-1">
+                  {loans.map((l) => {
+                    const totalLent = l.amountRequested;
+                    const totalInterest = (l.payments || []).reduce((sum, p) => sum + p.interestPaid, 0);
+                    const paidInterest = (l.payments || []).filter(p => p.paid).reduce((sum, p) => sum + p.interestPaid, 0);
+                    const interestProgress = totalInterest > 0 ? (paidInterest / totalInterest) * 100 : 0;
+
+                    return (
+                      <div key={l.id} className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/20 border border-slate-200/50 dark:border-slate-800 text-[10.5px] flex flex-col gap-1.5">
+                        <div className="flex justify-between items-center border-b border-slate-200/40 dark:border-slate-800/40 pb-1">
+                          <div className="min-w-0 flex-1">
+                            <span className="font-extrabold text-slate-800 dark:text-slate-200 truncate block">
+                              {l.borrowerName}
+                            </span>
+                            <span className="text-[8.5px] text-slate-450 font-mono block truncate">
+                              ID: {l.id} • {l.borrowerType === 'socio' ? 'Sócio' : 'Singular'}
+                            </span>
+                          </div>
+                          <span className={`text-[8.5px] px-1.5 py-0.2 rounded font-black uppercase shrink-0 ${
+                            l.status === 'completed'
+                              ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400'
+                              : 'bg-violet-100 text-violet-800 dark:bg-violet-950/30 dark:text-violet-400'
+                          }`}>
+                            {l.status === 'completed' ? 'Liquidado' : 'Ativo'}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-1 text-[10px]">
+                          <div>
+                            <span className="text-slate-400 block text-[8px] font-bold uppercase">Principal</span>
+                            <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
+                              {formatCurrency(totalLent)}
+                            </span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-slate-400 block text-[8px] font-bold uppercase">Rendimento (+{l.interestRate}%)</span>
+                            <span className="font-mono font-black text-emerald-600 dark:text-emerald-450">
+                              +{formatCurrency(totalInterest)}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-0.5 pt-1 border-t border-slate-200/20 dark:border-slate-800/20">
+                          <div className="flex justify-between items-center text-[8.5px] text-slate-400">
+                            <span>Progresso do Juro Amortizado:</span>
+                            <span className="font-mono text-emerald-600 dark:text-emerald-450 font-bold">
+                              {Math.round(interestProgress)}%
+                            </span>
+                          </div>
+                          <div className="w-full bg-slate-200 dark:bg-slate-800 h-1 rounded-full overflow-hidden">
+                            <div 
+                              className="bg-emerald-500 h-full rounded-full transition-all duration-300"
+                              style={{ width: `${interestProgress}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
