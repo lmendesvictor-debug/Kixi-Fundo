@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Calendar, Check, CircleDot, ArrowRight, UserCheck, X, Users, AlertCircle } from 'lucide-react';
-import { Member } from '../types';
+import { Member, getFullMonthLabel } from '../types';
 
 interface SchedulesGridProps {
   currentMonth: number;
@@ -23,23 +23,24 @@ export default function SchedulesGrid({
   const [editingMonth, setEditingMonth] = useState<number | null>(null);
   const [selectedMemberIds, setSelectedMemberIds] = useState<number[]>([]);
 
-  // Group members by their assignedMonth (1 to 6)
-  const months = Array.from({ length: 6 }, (_, i) => i + 1);
+  const initialLeva = Math.ceil(currentMonth / 6) || 1;
+  const [selectedLeva, setSelectedLeva] = useState<number>(initialLeva);
+
+  useEffect(() => {
+    const currentLevaNum = Math.ceil(currentMonth / 6) || 1;
+    setSelectedLeva(currentLevaNum);
+  }, [currentMonth]);
+
+  // Group members by their assignedMonth (current leva's 6 months)
+  const startMonthOfLeva = (selectedLeva - 1) * 6 + 1;
+  const months = Array.from({ length: 6 }, (_, i) => startMonthOfLeva + i);
 
   const getBeneficiariesForMonth = (mNum: number) => {
     return members.filter((m) => m.assignedMonth === mNum);
   };
 
   const getMonthName = (mNum: number) => {
-    const monthNames = [
-      'Mês 1 (Ciclo Inicial - Março)',
-      'Mês 2 (Ciclo Secundário - Abril)',
-      'Mês 3 (Ciclo Corrente - Maio)',
-      'Mês 4 (Ciclo Médio - Junho)',
-      'Mês 5 (Ciclo Avançado - Julho)',
-      'Mês 6 (Ciclo Encerramento - Agosto)',
-    ];
-    return monthNames[mNum - 1];
+    return getFullMonthLabel(mNum);
   };
 
   // Open modal pre-filling existing assigned members
@@ -85,11 +86,11 @@ export default function SchedulesGrid({
 
   return (
     <div className="bg-white dark:bg-slate-900/60 rounded-2xl border border-slate-100 dark:border-slate-800/80 p-6 shadow-custom">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-5">
         <div>
           <h2 className="text-lg font-bold font-display text-slate-800 dark:text-white flex items-center gap-2">
             <Calendar className="w-5 h-5 text-teal-600 dark:text-teal-400" />
-            Plano de Escalonamento e Rotação (Ciclo de 6 Meses)
+            Plano de Escalonamento e Rotação (Ciclos de 6 Meses)
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
             {isAdmin 
@@ -101,6 +102,32 @@ export default function SchedulesGrid({
           <CircleDot className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400 animate-pulse" />
           <span>Foco Ativo: Mês {currentMonth}</span>
         </div>
+      </div>
+
+      {/* Leva / Batch Switcher Controls */}
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-100 dark:border-slate-800/60">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setSelectedLeva(prev => Math.max(1, prev - 1))}
+            disabled={selectedLeva === 1}
+            className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-850 disabled:opacity-40 disabled:hover:bg-transparent text-slate-700 dark:text-slate-300 text-xs font-black transition-all cursor-pointer disabled:cursor-not-allowed"
+          >
+            ← Leva Anterior
+          </button>
+          <span className="text-xs font-black bg-teal-500/10 text-teal-700 dark:text-teal-350 px-3 py-1.5 rounded-lg border border-teal-500/10">
+            Leva {selectedLeva} de 6 Ciclos
+          </span>
+          <button
+            onClick={() => setSelectedLeva(prev => prev + 1)}
+            className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-850 text-slate-700 dark:text-slate-300 text-xs font-black transition-all cursor-pointer"
+          >
+            Próxima Leva →
+          </button>
+        </div>
+        
+        <span className="text-[11px] text-slate-400 font-semibold italic">
+          Cada leva compreende 6 meses de distribuição rotativa, começando em Março de 2026.
+        </span>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">

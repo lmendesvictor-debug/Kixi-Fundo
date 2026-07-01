@@ -16,7 +16,7 @@ import {
   FileSpreadsheet, 
   RefreshCw 
 } from 'lucide-react';
-import { Member, KixLog } from '../types';
+import { Member, KixLog, getFullMonthLabel } from '../types';
 import PrintConfigModal, { PrintConfig } from './PrintConfigModal';
 
 interface PaymentsLedgerProps {
@@ -77,15 +77,8 @@ export default function PaymentsLedger({
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [deletingRow, setDeletingRow] = useState<any | null>(null);
 
-  const monthNamesPortuguese = [
-    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-  ];
-
   const getMonthName = (monthNum: number) => {
-    // 1 to 6 represent months, we can map with +2 offset to start in March
-    const index = (monthNum - 1 + 2) % 12;
-    return monthNamesPortuguese[index];
+    return getFullMonthLabel(monthNum);
   };
 
   // Extract all payment/non-payment entries from member contributions
@@ -825,11 +818,16 @@ export default function PaymentsLedger({
                     onChange={(e) => setFormMonth(Number(e.target.value))}
                     className="w-full p-2.5 text-xs bg-slate-50 dark:bg-slate-950 border border-slate-250 dark:border-slate-800 rounded-lg text-slate-800 dark:text-white focus:outline-none focus:border-sky-500 font-semibold"
                   >
-                    {[1, 2, 3, 4, 5, 6].map((m) => (
-                      <option key={m} value={m}>
-                        Mês {m} - {getMonthName(m)}
-                      </option>
-                    ))}
+                    {(() => {
+                      const activeLevaNum = Math.ceil(currentMonth / 6) || 1;
+                      const startMonthOfLeva = (activeLevaNum - 1) * 6 + 1;
+                      const optionsList = Array.from({ length: 6 }, (_, idx) => startMonthOfLeva + idx);
+                      return optionsList.map((m) => (
+                        <option key={m} value={m}>
+                          {getFullMonthLabel(m)}
+                        </option>
+                      ));
+                    })()}
                   </select>
                 </div>
 

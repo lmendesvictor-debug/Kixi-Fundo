@@ -13,7 +13,7 @@ import {
   Layers,
   FileText
 } from 'lucide-react';
-import { Member, KixLog, Loan } from '../types';
+import { Member, KixLog, Loan, getFullMonthLabel, getMonthSimpleLabel } from '../types';
 
 interface BankingReportProps {
   currentMonth: number;
@@ -73,8 +73,12 @@ export default function BankingReport({
   // Real available cash in Bank account
   const bankBalance = totalGrossCollected - totalBenefitsPaid - totalSocialDisbursed;
 
-  // Compute timeline data monthly (1 to 6)
-  const monthlyTimeline = [1, 2, 3, 4, 5, 6].map((m) => {
+  // Compute timeline data monthly based on active Leva
+  const activeLevaNum = Math.ceil(currentMonth / 6) || 1;
+  const startMonthOfLeva = (activeLevaNum - 1) * 6 + 1;
+  const currentLevaMonths = Array.from({ length: 6 }, (_, i) => startMonthOfLeva + i);
+
+  const monthlyTimeline = currentLevaMonths.map((m) => {
     // contributions paid in month m
     const paidInMonth = members.filter((member) => member.contributions[m]?.paid).length;
     const accumulatedSocial = paidInMonth * 20000;
@@ -271,10 +275,10 @@ export default function BankingReport({
 
           <div className="relative pl-6 border-l border-slate-200 space-y-5 my-2">
             {monthlyTimeline.map((item, index) => {
-              const monthTitle = `Mês ${item.month}`;
+              const monthTitle = getFullMonthLabel(item.month);
               // Calc accumulated social pool at that point assuming full compliance of previous months
               let cumulativePool = 0;
-              for (let i = 1; i <= item.month; i++) {
+              for (let i = startMonthOfLeva; i <= item.month; i++) {
                 const checkedMonth = monthlyTimeline.find(t => t.month === i);
                 if (checkedMonth) {
                   cumulativePool += checkedMonth.accumulatedSocial - checkedMonth.aidsInMonth;

@@ -24,7 +24,7 @@ import {
   MessageSquare,
   Search
 } from 'lucide-react';
-import { Member, KixLog, getMemberIdCode, getMemberDisplayCode, Loan } from '../types';
+import { Member, KixLog, getMemberIdCode, getMemberDisplayCode, Loan, getFullMonthLabel } from '../types';
 import { saveReceiptToFirestore } from '../firebaseSync';
 
 interface MemberProfileWorkspaceProps {
@@ -61,7 +61,10 @@ export default function MemberProfileWorkspace({
 
   // Unpaid months selection for uploading comprovativo
   const [targetPaymentMonth, setTargetPaymentMonth] = useState<number>(() => {
-    const unpaidMonths = [1, 2, 3, 4, 5, 6].filter((mNum) => !member.contributions[mNum]?.paid);
+    const activeLevaNum = Math.ceil(currentMonth / 6) || 1;
+    const startMonthOfLeva = (activeLevaNum - 1) * 6 + 1;
+    const currentLevaMonths = Array.from({ length: 6 }, (_, i) => startMonthOfLeva + i);
+    const unpaidMonths = currentLevaMonths.filter((mNum) => !member.contributions[mNum]?.paid);
     if (unpaidMonths.includes(currentMonth)) return currentMonth;
     return unpaidMonths.length > 0 ? unpaidMonths[0] : currentMonth;
   });
@@ -364,10 +367,14 @@ export default function MemberProfileWorkspace({
   const alertsList: PaymentAlert[] = [];
 
   // Generate Quota Alerts
-  [1, 2, 3, 4, 5, 6].forEach((mNum) => {
+  const activeLevaNumForAlerts = Math.ceil(currentMonth / 6) || 1;
+  const startMonthOfLevaForAlerts = (activeLevaNumForAlerts - 1) * 6 + 1;
+  const currentLevaMonthsForAlerts = Array.from({ length: 6 }, (_, i) => startMonthOfLevaForAlerts + i);
+
+  currentLevaMonthsForAlerts.forEach((mNum) => {
     const hasPaid = member.contributions[mNum]?.paid;
     if (!hasPaid) {
-      const dueDateStr = `15/${String(5 + mNum).padStart(2, '0')}/2026`;
+      const dueDateStr = `15/${String(((mNum - 1) % 12) + 1).padStart(2, '0')}/2026`;
       const dateObj = parsePtDate(dueDateStr);
       if (dateObj) {
         const diffTime = dateObj.getTime() - todayMidnight.getTime();
@@ -383,10 +390,10 @@ export default function MemberProfileWorkspace({
             id: `quota-${mNum}`,
             type: 'quota',
             monthNum: mNum,
-            title: `Quota de Poupança - Mês 0${mNum}`,
+            title: `Quota de Poupança - ${getFullMonthLabel(mNum)}`,
             description: diffDays < 0 
-              ? `A sua contribuição social para o Mês 0${mNum} está vencida há ${Math.abs(diffDays)} ${Math.abs(diffDays) === 1 ? 'dia' : 'dias'}.` 
-              : `A quota regulamentar do Mês 0${mNum} vencerá em ${diffDays} ${diffDays === 1 ? 'dia' : 'dias'}.`,
+              ? `A sua contribuição social para o ${getFullMonthLabel(mNum)} está vencida há ${Math.abs(diffDays)} ${Math.abs(diffDays) === 1 ? 'dia' : 'dias'}.` 
+              : `A quota regulamentar do ${getFullMonthLabel(mNum)} vencerá em ${diffDays} ${diffDays === 1 ? 'dia' : 'dias'}.`,
             dueDateStr,
             amount: 120000,
             diffDays,
@@ -1132,26 +1139,30 @@ export default function MemberProfileWorkspace({
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5 pt-2">
-            {[1, 2, 3, 4, 5, 6].map((mNum) => {
-              const hasPaid = member.contributions[mNum]?.paid;
-              const isCurrent = mNum === currentMonth;
-              const isSelectedForPayment = mNum === targetPaymentMonth;
+            {(() => {
+              const activeLevaNum = Math.ceil(currentMonth / 6) || 1;
+              const startMonthOfLeva = (activeLevaNum - 1) * 6 + 1;
+              const monthsList = Array.from({ length: 6 }, (_, idx) => startMonthOfLeva + idx);
+              return monthsList.map((mNum) => {
+                const hasPaid = member.contributions[mNum]?.paid;
+                const isCurrent = mNum === currentMonth;
+                const isSelectedForPayment = mNum === targetPaymentMonth;
 
-              return (
-                <div 
-                  key={mNum}
-                  onClick={() => setTargetPaymentMonth(mNum)}
-                  className={`border rounded-xl p-3.5 space-y-2 text-center transition-all cursor-pointer ${
-                    isSelectedForPayment
-                      ? 'border-emerald-500 bg-emerald-50/10 dark:bg-emerald-950/10 shadow-sm ring-2 ring-emerald-500/30'
-                      : isCurrent 
-                      ? 'border-emerald-300 bg-emerald-50/10 dark:bg-emerald-950/10 shadow-sm ring-1 ring-emerald-300/40' 
-                      : 'border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 hover:bg-slate-50/80 hover:border-slate-300 dark:hover:border-slate-700'
-                  }`}
-                >
-                  <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 block uppercase tracking-wider">
-                    Mês 0{mNum} {isCurrent && '(Corrente)'}
-                  </span>
+                return (
+                  <div 
+                    key={mNum}
+                    onClick={() => setTargetPaymentMonth(mNum)}
+                    className={`border rounded-xl p-3.5 space-y-2 text-center transition-all cursor-pointer ${
+                      isSelectedForPayment
+                        ? 'border-emerald-500 bg-emerald-50/10 dark:bg-emerald-950/10 shadow-sm ring-2 ring-emerald-500/30'
+                        : isCurrent 
+                        ? 'border-emerald-300 bg-emerald-50/10 dark:bg-emerald-950/10 shadow-sm ring-1 ring-emerald-300/40' 
+                        : 'border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 hover:bg-slate-50/80 hover:border-slate-300 dark:hover:border-slate-700'
+                    }`}
+                  >
+                    <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 block uppercase tracking-wider">
+                      {getFullMonthLabel(mNum)} {isCurrent && '(Corrente)'}
+                    </span>
                   
                   <p className="text-[11px] font-mono font-bold text-slate-700 dark:text-slate-200">120.000,00 Kz</p>
 
@@ -1170,7 +1181,8 @@ export default function MemberProfileWorkspace({
                   </div>
                 </div>
               );
-            })}
+            });
+          })()}
           </div>
         </div>
 

@@ -36,7 +36,7 @@ import {
   LineChart,
   Line
 } from 'recharts';
-import { Member, KixLog, Loan } from '../types';
+import { Member, KixLog, Loan, getFullMonthLabel, getMonthSimpleLabel } from '../types';
 
 interface ReportsSectionProps {
   currentMonth: number;
@@ -113,8 +113,12 @@ export default function ReportsSection({
   const totalBenefitsPaid = completedMonthsOfPayout * 1200000;
   const bankBalance = totalGrossCollected - totalBenefitsPaid - totalSocialDisbursed;
 
-  // Compile monthly bank details
-  const monthlyData = [1, 2, 3, 4, 5, 6].map((m) => {
+  // Compile monthly bank details based on active Leva
+  const activeLevaNum = Math.ceil(currentMonth / 6) || 1;
+  const startMonthOfLeva = (activeLevaNum - 1) * 6 + 1;
+  const currentLevaMonths = Array.from({ length: 6 }, (_, i) => startMonthOfLeva + i);
+
+  const monthlyData = currentLevaMonths.map((m) => {
     const paidInMonth = members.filter((member) => member.contributions[m]?.paid).length;
     const grossCollected = members.reduce((sum, member) => {
       const contr = member.contributions[m];
@@ -143,7 +147,7 @@ export default function ReportsSection({
   });
 
   const chartData = monthlyData.map((d) => ({
-    name: `Mês ${d.month}`,
+    name: getMonthSimpleLabel(d.month),
     "Contribuições Totais": d.grossCollected,
     "Fundo Social": d.socialRetained,
     "Apoios Sociais": d.aidsInMonth,
@@ -291,9 +295,9 @@ export default function ReportsSection({
     return null;
   };
 
-  // Cálculo de crescimento acumulado do Fundo de Interajuda (Social Retained: 20k/quota + Loan Interests - Social Aids)
+  // Cálculo de crescimento acumulado do Fundo de Interajuda com base na Leva Ativa
   let runningSocialSum = 0;
-  const socialGrowthData = [1, 2, 3, 4, 5, 6].map((m) => {
+  const socialGrowthData = currentLevaMonths.map((m) => {
     const paidInMonth = members.filter((member) => member.contributions[m]?.paid).length;
     const socialRetained = paidInMonth * 20000;
     
@@ -311,7 +315,7 @@ export default function ReportsSection({
     runningSocialSum = runningSocialSum + totalMonthRetained - aidsInMonth;
     
     return {
-      name: `Mês ${m}`,
+      name: getMonthSimpleLabel(m),
       "Receita Mensal": totalMonthRetained,
       "Despesa Mensal": aidsInMonth,
       "Saldo Acumulado": runningSocialSum,
@@ -1461,7 +1465,9 @@ export default function ReportsSection({
     doc.text('ESTADO DE LIQUIDA\u00C7\u00C3O DO PR\u00C9MIO', 140, y + 4.5);
     y += 7;
 
-    const rotationMonths = [1, 2, 3, 4, 5, 6];
+    const activeLevaNumPDF = Math.ceil(currentMonth / 6) || 1;
+    const startMonthOfLevaPDF = (activeLevaNumPDF - 1) * 6 + 1;
+    const rotationMonths = Array.from({ length: 6 }, (_, i) => startMonthOfLevaPDF + i);
     rotationMonths.forEach((mNum) => {
       addPageIfNeeded(7.5);
       
@@ -1478,7 +1484,7 @@ export default function ReportsSection({
       doc.setFont('helvetica', 'bold');
       doc.setFontSize(7.5);
       doc.setTextColor(15, 23, 42);
-      doc.text(`Ciclo M\u00EAs 0${mNum}`, 18, y + 4.5);
+      doc.text(getFullMonthLabel(mNum).toUpperCase(), 18, y + 4.5);
 
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(51, 65, 85);
@@ -1915,12 +1921,11 @@ export default function ReportsSection({
                       <th className="bg-slate-50 dark:bg-slate-950/60 p-3.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Cooperante</th>
                       <th className="bg-slate-50 dark:bg-slate-950/60 p-3.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center">Nº</th>
                       <th className="bg-slate-50 dark:bg-slate-950/60 p-3.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center">Mês Sort.</th>
-                      <th className="bg-slate-50 dark:bg-slate-950/60 p-3.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center">Mês 1</th>
-                      <th className="bg-slate-50 dark:bg-slate-950/60 p-3.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center">Mês 2</th>
-                      <th className="bg-slate-50 dark:bg-slate-950/60 p-3.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center">Mês 3</th>
-                      <th className="bg-slate-50 dark:bg-slate-950/60 p-3.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center">Mês 4</th>
-                      <th className="bg-slate-50 dark:bg-slate-950/60 p-3.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center">Mês 5</th>
-                      <th className="bg-slate-50 dark:bg-slate-950/60 p-3.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center">Mês 6</th>
+                      {currentLevaMonths.map((mNum) => (
+                        <th key={mNum} className="bg-slate-50 dark:bg-slate-950/60 p-3.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center">
+                          {getMonthSimpleLabel(mNum)}
+                        </th>
+                      ))}
                       <th className="bg-slate-50 dark:bg-slate-950/60 p-3.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Auxílios Receb.</th>
                     </tr>
                   </thead>
@@ -1933,11 +1938,11 @@ export default function ReportsSection({
                         </td>
                         <td className="p-3.5 text-xs text-center font-mono text-slate-500 dark:text-slate-400">#{m.id}</td>
                         <td className="p-3.5 text-xs text-center">
-                          <span className="font-bold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/40 px-2.5 py-0.5 rounded-full border border-sky-100 dark:border-sky-900/50">
-                            Mês {m.assignedMonth}
+                          <span className="font-bold text-sky-600 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/40 px-2.5 py-0.5 rounded-full border border-sky-100 dark:border-sky-900/50" title={`Mês de Contemplação: ${getFullMonthLabel(m.assignedMonth)}`}>
+                            {getMonthSimpleLabel(m.assignedMonth)}
                           </span>
                         </td>
-                        {[1, 2, 3, 4, 5, 6].map((monthNum) => {
+                        {currentLevaMonths.map((monthNum) => {
                           const isPaid = m.contributions[monthNum]?.paid;
                           return (
                             <td key={monthNum} className="p-3.5 text-center text-xs">

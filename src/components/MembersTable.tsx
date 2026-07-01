@@ -16,7 +16,7 @@ import {
   X,
   Eye
 } from 'lucide-react';
-import { Member, getMemberIdCode, getMemberDisplayCode } from '../types';
+import { Member, getMemberIdCode, getMemberDisplayCode, getFullMonthLabel } from '../types';
 import { saveReceiptToFirestore } from '../firebaseSync';
 
 interface MembersTableProps {
@@ -701,12 +701,18 @@ export default function MembersTable({
             className="w-full px-2.5 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-white font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-500"
           >
             <option value="all">Mês Contemplação: Todos</option>
-            <option value="1">Mês 01 (Março)</option>
-            <option value="2">Mês 02 (Abril)</option>
-            <option value="3">Mês 03 (Maio)</option>
-            <option value="4">Mês 04 (Junho)</option>
-            <option value="5">Mês 05 (Julho)</option>
-            <option value="6">Mês 06 (Agosto)</option>
+            {(() => {
+              const activeLevaNum = Math.ceil(currentMonth / 6) || 1;
+              const startMonthOfLeva = (activeLevaNum - 1) * 6 + 1;
+              return Array.from({ length: 6 }, (_, i) => {
+                const mNum = startMonthOfLeva + i;
+                return (
+                  <option key={mNum} value={String(mNum)}>
+                    {getFullMonthLabel(mNum)}
+                  </option>
+                );
+              });
+            })()}
           </select>
         </div>
       </div>
@@ -836,7 +842,7 @@ export default function MembersTable({
                       <div className="flex flex-col gap-1.5 items-start">
                         <div className="flex items-center gap-1.5">
                           <span className="text-xs font-black text-slate-900 dark:text-white font-mono">
-                            📅 Mês 0{m.assignedMonth}
+                            📅 {getFullMonthLabel(m.assignedMonth)}
                           </span>
                         </div>
                         {m.assignedMonth < currentMonth ? (
@@ -867,22 +873,28 @@ export default function MembersTable({
                         
                         {/* Perfect Circles 1 to 6 - Conforming directly with Image 5 */}
                         <div className="flex gap-1.5 mt-2">
-                          {[1, 2, 3, 4, 5, 6].map((mIdx) => {
-                            const isPaid = m.contributions[mIdx]?.paid;
-                            return (
-                              <span 
-                                key={mIdx} 
-                                className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black tracking-tight border shadow-xs transition-all ${
-                                  isPaid 
-                                    ? 'bg-[#0b5a3e] text-white border-[#0d5c3a]' 
-                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200/60 dark:border-slate-700'
-                                }`}
-                                title={`Mês 0${mIdx}: ${isPaid ? 'Pago' : 'Pendente'}`}
-                              >
-                                {mIdx}
-                              </span>
-                            );
-                          })}
+                          {(() => {
+                            const activeLevaNum = Math.ceil(currentMonth / 6) || 1;
+                            const startMonthOfLeva = (activeLevaNum - 1) * 6 + 1;
+                            const monthsList = Array.from({ length: 6 }, (_, idx) => startMonthOfLeva + idx);
+                            return monthsList.map((mIdx) => {
+                              const isPaid = m.contributions[mIdx]?.paid;
+                              const relIdx = ((mIdx - 1) % 6) + 1;
+                              return (
+                                <span 
+                                  key={mIdx} 
+                                  className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black tracking-tight border shadow-xs transition-all ${
+                                    isPaid 
+                                      ? 'bg-[#0b5a3e] text-white border-[#0d5c3a]' 
+                                      : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-200/60 dark:border-slate-700'
+                                  }`}
+                                  title={`${getFullMonthLabel(mIdx)}: ${isPaid ? 'Pago' : 'Pendente'}`}
+                                >
+                                  {relIdx}
+                                </span>
+                              );
+                            });
+                          })()}
                         </div>
                       </div>
                     </td>
@@ -1208,11 +1220,20 @@ export default function MembersTable({
                           onChange={(e) => setAssignedMonth(Number(e.target.value))}
                           className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2.5 focus:outline-none font-medium"
                         >
-                          {[1, 2, 3, 4, 5, 6].map((num) => (
-                            <option key={num} value={num}>
-                              Mês 0{num} (Prémio de 600.000,00 KZs)
-                            </option>
-                          ))}
+                          {(() => {
+                            const activeLevaNum = Math.ceil(currentMonth / 6) || 1;
+                            const startMonthOfLeva = (activeLevaNum - 1) * 6 + 1;
+                            const optionsList = Array.from({ length: 6 }, (_, idx) => startMonthOfLeva + idx);
+                            if (assignedMonth && !optionsList.includes(assignedMonth)) {
+                              optionsList.push(assignedMonth);
+                              optionsList.sort((a, b) => a - b);
+                            }
+                            return optionsList.map((num) => (
+                              <option key={num} value={num}>
+                                {getFullMonthLabel(num)} (Prémio de 600.000,00 KZs)
+                              </option>
+                            ));
+                          })()}
                         </select>
                       </div>
                       

@@ -19,7 +19,7 @@ import {
   Layers,
   Sparkles
 } from 'lucide-react';
-import { Member, KixLog } from '../types';
+import { Member, KixLog, getFullMonthLabel, getMonthSimpleLabel } from '../types';
 
 interface InteractiveChartsProps {
   currentMonth: number;
@@ -164,7 +164,10 @@ export default function InteractiveCharts({
     };
   };
 
-  const monthsStats = [1, 2, 3, 4, 5, 6].map(getMonthStats);
+  const activeLevaNum = Math.ceil(currentMonth / 6) || 1;
+  const startMonthOfLeva = (activeLevaNum - 1) * 6 + 1;
+  const currentLevaMonths = Array.from({ length: 6 }, (_, i) => startMonthOfLeva + i);
+  const monthsStats = currentLevaMonths.map(getMonthStats);
 
   // Asset Allocations
   const totalPaidContributionsCount = members.reduce(
@@ -439,21 +442,11 @@ export default function InteractiveCharts({
                     </g>
                   ))}
 
-                  {/* Monthly bars for 12 months */}
-                  {[
-                    { id: 1, name: 'Jan' },
-                    { id: 2, name: 'Fev' },
-                    { id: 3, name: 'Mar' },
-                    { id: 4, name: 'Abr' },
-                    { id: 5, name: 'Mai' },
-                    { id: 6, name: 'Jun' },
-                    { id: 7, name: 'Jul' },
-                    { id: 8, name: 'Ago' },
-                    { id: 9, name: 'Set' },
-                    { id: 10, name: 'Out' },
-                    { id: 11, name: 'Nov' },
-                    { id: 12, name: 'Dez' }
-                  ].map((m, i) => {
+                  {/* Monthly bars for 12 months based on March 2026 start */}
+                  {Array.from({ length: 12 }, (_, idx) => {
+                    const mNum = idx + 1;
+                    return { id: mNum, name: getMonthSimpleLabel(mNum) };
+                  }).map((m, i) => {
                     // Filter members who paid in month m.id
                     const paidCount = members.filter((member) => member.contributions[m.id]?.paid).length;
                     const collectedKz = members.reduce((sum, member) => {

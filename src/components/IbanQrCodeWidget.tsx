@@ -12,7 +12,9 @@ import {
   CheckCircle2,
   HelpCircle,
   TrendingUp,
-  Printer
+  Printer,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 
 interface IbanQrCodeWidgetProps {
@@ -31,6 +33,7 @@ export default function IbanQrCodeWidget({
   const [copied, setCopied] = useState(false);
   const [copiedText, setCopiedText] = useState(false);
   const [qrFormat, setQrFormat] = useState<'raw' | 'formatted'>('raw');
+  const [isExpanded, setIsExpanded] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Clean the IBAN for raw copy or scanning
@@ -187,192 +190,251 @@ export default function IbanQrCodeWidget({
   };
 
   return (
-    <div id="iban-qr-widget" className={`p-6 sm:p-8 rounded-[2rem] border transition-all duration-300 shadow-md backdrop-blur-md ${
+    <div id="iban-qr-widget" className={`rounded-[2rem] border transition-all duration-300 shadow-md backdrop-blur-md overflow-hidden ${
       theme === 'dark' 
         ? 'bg-[#151c2c]/50 border-slate-800/60 text-slate-100' 
         : 'bg-white/45 border-slate-200/50 text-slate-800'
     }`}>
       
-      {/* Widget Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100 dark:border-slate-800/80">
+      {/* Clickable Header Widget */}
+      <div 
+        onClick={() => setIsExpanded(!isExpanded)}
+        className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer select-none transition-all duration-300 hover:bg-slate-50/10 dark:hover:bg-slate-900/10 ${
+          isExpanded ? 'p-6 sm:p-8 pb-5 sm:pb-6' : 'p-5 sm:p-6'
+        }`}
+      >
         <div className="flex items-center gap-3">
-          <div className="p-3 bg-red-500/10 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 rounded-2xl">
-            <QrCode className="w-6 h-6 animate-pulse" />
+          <div className="p-2.5 bg-red-500/10 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 rounded-xl shrink-0">
+            <QrCode className="w-5 h-5 animate-pulse" />
           </div>
-          <div>
-            <h3 className="text-lg font-black tracking-tight">QR Code IBAN de Depósito</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Escaneie ou copie os dados oficiais para transferências das suas quotas
+          <div className="min-w-0">
+            <h3 className="text-sm sm:text-base font-black tracking-tight flex flex-wrap items-center gap-2">
+              <span>QR Code IBAN de Depósito</span>
+              <span className="inline-flex items-center gap-0.5 text-[9px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-extrabold uppercase px-1.5 py-0.5 rounded-full border border-emerald-500/10">
+                <CheckCircle2 className="w-2.5 h-2.5" />
+                Auditada
+              </span>
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate max-w-[280px] sm:max-w-md md:max-w-xl">
+              {isExpanded 
+                ? 'Escaneie ou copie os dados oficiais para transferências das suas quotas' 
+                : `${bankName} • ${accountOwner} • ${bankIban}`}
             </p>
           </div>
         </div>
 
-        {/* Format Selector Tab */}
-        <div className="flex bg-slate-100 dark:bg-slate-900/60 p-1 rounded-xl self-start sm:self-center">
-          <button 
-            type="button"
-            onClick={() => setQrFormat('raw')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              qrFormat === 'raw' 
-                ? 'bg-white dark:bg-slate-800 text-slate-950 dark:text-white shadow-sm' 
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-          >
-            Apenas IBAN
-          </button>
-          <button 
-            type="button"
-            onClick={() => setQrFormat('formatted')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-              qrFormat === 'formatted' 
-                ? 'bg-white dark:bg-slate-800 text-slate-950 dark:text-white shadow-sm' 
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
-            }`}
-          >
-            Ficha Completa
-          </button>
+        {/* Right Side Options & Toggle */}
+        <div className="flex items-center gap-3 self-end sm:self-auto shrink-0">
+          {!isExpanded && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCopyIban();
+              }}
+              className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-[10px] font-extrabold rounded-xl flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer border border-slate-200/50 dark:border-slate-700/50"
+              title="Copiar IBAN rápido"
+            >
+              {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+              <span>{copied ? 'Copiado!' : 'Copiar IBAN'}</span>
+            </button>
+          )}
+
+          {isExpanded && (
+            /* Format Selector Tab */
+            <div 
+              onClick={(e) => e.stopPropagation()}
+              className="flex bg-slate-100 dark:bg-slate-900/60 p-1 rounded-xl"
+            >
+              <button 
+                type="button"
+                onClick={() => setQrFormat('raw')}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                  qrFormat === 'raw' 
+                    ? 'bg-white dark:bg-slate-800 text-slate-950 dark:text-white shadow-sm' 
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                Apenas IBAN
+              </button>
+              <button 
+                type="button"
+                onClick={() => setQrFormat('formatted')}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                  qrFormat === 'formatted' 
+                    ? 'bg-white dark:bg-slate-800 text-slate-950 dark:text-white shadow-sm' 
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                Ficha Completa
+              </button>
+            </div>
+          )}
+
+          <div className="p-1.5 rounded-full bg-slate-100 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors">
+            {isExpanded ? (
+              <ChevronUp className="w-4 h-4" />
+            ) : (
+              <ChevronDown className="w-4 h-4" />
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Main Layout containing QR and Text information */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center mt-6">
-        
-        {/* Left Side: Dynamic QR Code Presentation */}
-        <div className="lg:col-span-5 flex flex-col items-center justify-center p-6 rounded-2xl bg-slate-50/50 dark:bg-slate-900/30 border border-slate-100 dark:border-slate-850">
-          <div className="relative p-3 bg-white dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-md">
-            {/* Corner styling accents for QR scanner viewport view */}
-            <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-red-500 rounded-tl-lg" />
-            <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-red-500 rounded-tr-lg" />
-            <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-red-500 rounded-bl-lg" />
-            <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-red-500 rounded-br-lg" />
-            
-            <canvas ref={canvasRef} className="rounded-lg max-w-[180px] max-h-[180px]" />
-          </div>
+      {/* Expandable Body */}
+      <motion.div
+        initial={false}
+        animate={{ 
+          height: isExpanded ? 'auto' : 0,
+          opacity: isExpanded ? 1 : 0
+        }}
+        transition={{ duration: 0.3, ease: 'easeInOut' }}
+        className="overflow-hidden"
+      >
+        <div className="px-6 sm:px-8 pb-6 sm:pb-8 pt-4 border-t border-slate-100 dark:border-slate-800/80">
           
-          <div className="flex flex-wrap gap-2 mt-4 justify-center">
-            <button
-              onClick={handleDownloadQr}
-              type="button"
-              className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-extrabold rounded-xl flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer border border-slate-200/50 dark:border-slate-700/50"
-              title="Descarregar imagem do código QR"
-            >
-              <Download className="w-3.5 h-3.5" />
-              Download
-            </button>
-            <button
-              type="button"
-              onClick={handleCopyIban}
-              className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-[11px] font-extrabold rounded-xl flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer shadow-sm shadow-red-500/25"
-              title="Copiar IBAN Coletivo"
-            >
-              <Copy className="w-3.5 h-3.5" />
-              {copied ? 'Copiado!' : 'Copiar IBAN'}
-            </button>
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white text-[11px] font-extrabold rounded-xl flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer shadow-sm shadow-sky-500/25"
-              title="Imprimir folha de afixação oficial"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              Imprimir
-            </button>
-          </div>
-
-          <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-3 text-center leading-relaxed">
-            {qrFormat === 'raw' 
-              ? '💡 Código optimizado para os leitores de IBAN dos aplicativos de Mobile Banking.' 
-              : '📋 Código completo contendo dados do Banco, Titular e IBAN.'}
-          </p>
-        </div>
-
-        {/* Right Side: Banking details sheet & Scan guidelines */}
-        <div className="lg:col-span-7 space-y-6">
-          <div className="space-y-4">
-            <h4 className="text-stone-400 dark:text-slate-400 font-extrabold uppercase tracking-widest text-[10px]">
-              Ficha de Coordenadas Bancárias
-            </h4>
+          {/* Main Layout containing QR and Text information */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Bank Name Field */}
-              <div className="p-4 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-100 dark:border-slate-850">
-                <span className="text-[10px] text-slate-400 dark:text-slate-500 block uppercase font-bold">Banco do Consórcio</span>
-                <span className="text-sm font-extrabold text-slate-800 dark:text-slate-200 mt-1 block">{bankName}</span>
-              </div>
-
-              {/* Account Owner Field */}
-              <div className="p-4 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-100 dark:border-slate-850">
-                <span className="text-[10px] text-slate-400 dark:text-slate-550 block uppercase font-bold">Titular da Conta Coletiva</span>
-                <span className="text-sm font-extrabold text-slate-850 dark:text-slate-200 mt-1 block">{accountOwner}</span>
-              </div>
-            </div>
-
-            {/* Interactive IBAN Box */}
-            <div className="p-4 bg-red-500/5 dark:bg-rose-950/20 rounded-xl border border-red-500/20">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-slate-400 dark:text-rose-300 font-bold uppercase">IBAN Internacional Oficial</span>
-                <span className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-extrabold uppercase">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  Conta Ativa e Auditada
-                </span>
+            {/* Left Side: Dynamic QR Code Presentation */}
+            <div className="lg:col-span-5 flex flex-col items-center justify-center p-6 rounded-2xl bg-slate-50/50 dark:bg-slate-900/30 border border-slate-100 dark:border-slate-850">
+              <div className="relative p-3 bg-white dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-md">
+                {/* Corner styling accents for QR scanner viewport view */}
+                <div className="absolute top-0 left-0 w-4 h-4 border-t-2 border-l-2 border-red-500 rounded-tl-lg" />
+                <div className="absolute top-0 right-0 w-4 h-4 border-t-2 border-r-2 border-red-500 rounded-tr-lg" />
+                <div className="absolute bottom-0 left-0 w-4 h-4 border-b-2 border-l-2 border-red-500 rounded-bl-lg" />
+                <div className="absolute bottom-0 right-0 w-4 h-4 border-b-2 border-r-2 border-red-500 rounded-br-lg" />
+                
+                <canvas ref={canvasRef} className="rounded-lg max-w-[180px] max-h-[180px]" />
               </div>
               
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between mt-2 gap-3">
-                <div className="font-mono text-base font-black text-rose-700 dark:text-red-300 tracking-wider">
-                  {bankIban}
+              <div className="flex flex-wrap gap-2 mt-4 justify-center">
+                <button
+                  onClick={handleDownloadQr}
+                  type="button"
+                  className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-[11px] font-extrabold rounded-xl flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer border border-slate-200/50 dark:border-slate-700/50"
+                  title="Descarregar imagem do código QR"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Download
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCopyIban}
+                  className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-[11px] font-extrabold rounded-xl flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer shadow-sm shadow-red-500/25"
+                  title="Copiar IBAN Coletivo"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  {copied ? 'Copiado!' : 'Copiar IBAN'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePrint}
+                  className="px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white text-[11px] font-extrabold rounded-xl flex items-center gap-1.5 active:scale-95 transition-all cursor-pointer shadow-sm shadow-sky-500/25"
+                  title="Imprimir folha de afixação oficial"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  Imprimir
+                </button>
+              </div>
+
+              <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-3 text-center leading-relaxed">
+                {qrFormat === 'raw' 
+                  ? '💡 Código optimizado para os leitores de IBAN dos aplicativos de Mobile Banking.' 
+                  : '📋 Código completo contendo dados do Banco, Titular e IBAN.'}
+              </p>
+            </div>
+
+            {/* Right Side: Banking details sheet & Scan guidelines */}
+            <div className="lg:col-span-7 space-y-6">
+              <div className="space-y-4">
+                <h4 className="text-stone-400 dark:text-slate-400 font-extrabold uppercase tracking-widest text-[10px]">
+                  Ficha de Coordenadas Bancárias
+                </h4>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Bank Name Field */}
+                  <div className="p-4 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-100 dark:border-slate-850">
+                    <span className="text-[10px] text-slate-400 dark:text-slate-550 block uppercase font-bold">Banco do Consórcio</span>
+                    <span className="text-sm font-extrabold text-slate-850 mt-1 block">{bankName}</span>
+                  </div>
+
+                  {/* Account Owner Field */}
+                  <div className="p-4 bg-slate-50 dark:bg-slate-900/40 rounded-xl border border-slate-100 dark:border-slate-850">
+                    <span className="text-[10px] text-slate-400 dark:text-slate-550 block uppercase font-bold">Titular da Conta Coletiva</span>
+                    <span className="text-sm font-extrabold text-slate-850 mt-1 block">{accountOwner}</span>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleCopyIban}
-                    type="button"
-                    className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-350 rounded-lg transition-colors cursor-pointer"
-                    title="Copiar IBAN rápido"
-                  >
-                    {copied ? <Check className="w-5 h-5 text-emerald-500" /> : <Copy className="w-5 h-5" />}
-                  </button>
-                  <button
-                    onClick={handleCopyPayload}
-                    type="button"
-                    className="px-2 py-1 text-[11px] font-bold text-slate-500 dark:text-slate-350 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
-                    title="Copiar todos os dados para transferência"
-                  >
-                    {copiedText ? 'Copiado!' : 'Copiar Texto'}
-                  </button>
+
+                {/* Interactive IBAN Box */}
+                <div className="p-4 bg-red-500/5 dark:bg-rose-950/20 rounded-xl border border-red-500/20">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-slate-400 dark:text-rose-300 font-bold uppercase">IBAN Internacional Oficial</span>
+                    <span className="flex items-center gap-1 text-[10px] text-emerald-600 dark:text-emerald-400 font-extrabold uppercase">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      Conta Ativa e Auditada
+                    </span>
+                  </div>
+                  
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between mt-2 gap-3">
+                    <div className="font-mono text-sm sm:text-base font-black text-rose-700 dark:text-red-300 tracking-wider">
+                      {bankIban}
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleCopyIban}
+                        type="button"
+                        className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 dark:text-slate-350 rounded-lg transition-colors cursor-pointer"
+                        title="Copiar IBAN rápido"
+                      >
+                        {copied ? <Check className="w-5 h-5 text-emerald-500" /> : <Copy className="w-5 h-5" />}
+                      </button>
+                      <button
+                        onClick={handleCopyPayload}
+                        type="button"
+                        className="px-2 py-1 text-[11px] font-bold text-slate-500 dark:text-slate-350 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                        title="Copiar todos os dados para transferência"
+                      >
+                        {copiedText ? 'Copiado!' : 'Copiar Texto'}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
+
+              {/* Quick Transfer Scanning Steps */}
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-800/80 space-y-3">
+                <h5 className="text-xs font-extrabold text-sky-600 dark:text-sky-400 flex items-center gap-1.5 uppercase tracking-wider">
+                  <Smartphone className="w-4 h-4" />
+                  Como efectuar o depósito por QR Code?
+                </h5>
+                
+                <ol className="text-xs font-semibold space-y-2 text-slate-500 dark:text-slate-300">
+                  <li className="flex gap-2">
+                    <span className="flex items-center justify-center w-5 h-5 bg-sky-100 dark:bg-sky-955 text-sky-700 dark:text-sky-300 font-black rounded-md text-[10px] shrink-0">1</span>
+                    <span>Abra o aplicativo da sua instituição bancária no telemóvel (multicaixa express, BAI Directo, BFA App, BIC Net, etc.).</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="flex items-center justify-center w-5 h-5 bg-sky-100 dark:bg-sky-955 text-sky-700 dark:text-sky-300 font-black rounded-md text-[10px] shrink-0">2</span>
+                    <span>Aceda à secção de <strong>Transferências</strong> e escolha a opção de ler QR Code ou ler IBAN por câmara.</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="flex items-center justify-center w-5 h-5 bg-sky-100 dark:bg-sky-955 text-sky-700 dark:text-sky-300 font-black rounded-md text-[10px] shrink-0">3</span>
+                    <span>Aponte a câmara do telemóvel para o QR Code à esquerda. O IBAN será detectado e preenchido instantaneamente.</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="flex items-center justify-center w-5 h-5 bg-sky-100 dark:bg-sky-955 text-sky-700 dark:text-sky-300 font-black rounded-md text-[10px] shrink-0">4</span>
+                    <span>Confirme o titular <strong>KIXI-FUNDO</strong>, insira o montante da sua quota (ex: 120.000,00 KZs) e finalize o seu depósito seguro.</span>
+                  </li>
+                </ol>
+              </div>
+
             </div>
-          </div>
 
-          {/* Quick Transfer Scanning Steps */}
-          <div className="pt-4 border-t border-slate-100 dark:border-slate-800/80 space-y-3">
-            <h5 className="text-xs font-extrabold text-sky-600 dark:text-sky-400 flex items-center gap-1.5 uppercase tracking-wider">
-              <Smartphone className="w-4 h-4" />
-              Como efectuar o depósito por QR Code?
-            </h5>
-            
-            <ol className="text-xs font-semibold space-y-2 text-slate-500 dark:text-slate-300">
-              <li className="flex gap-2">
-                <span className="flex items-center justify-center w-5 h-5 bg-sky-100 dark:bg-sky-955 text-sky-700 dark:text-sky-300 font-black rounded-md text-[10px] shrink-0">1</span>
-                <span>Abra o aplicativo da sua instituição bancária no telemóvel (multicaixa express, BAI Directo, BFA App, BIC Net, etc.).</span>
-              </li>
-              <li className="flex gap-2">
-                <span className="flex items-center justify-center w-5 h-5 bg-sky-100 dark:bg-sky-955 text-sky-700 dark:text-sky-300 font-black rounded-md text-[10px] shrink-0">2</span>
-                <span>Aceda à secção de <strong>Transferências</strong> e escolha a opção de ler QR Code ou ler IBAN por câmara.</span>
-              </li>
-              <li className="flex gap-2">
-                <span className="flex items-center justify-center w-5 h-5 bg-sky-100 dark:bg-sky-955 text-sky-700 dark:text-sky-300 font-black rounded-md text-[10px] shrink-0">3</span>
-                <span>Aponte a câmara do telemóvel para o QR Code à esquerda. O IBAN será detectado e preenchido instantaneamente.</span>
-              </li>
-              <li className="flex gap-2">
-                <span className="flex items-center justify-center w-5 h-5 bg-sky-100 dark:bg-sky-955 text-sky-700 dark:text-sky-300 font-black rounded-md text-[10px] shrink-0">4</span>
-                <span>Confirme o titular <strong>KIXI-FUNDO</strong>, insira o montante da sua quota (ex: 120.000,00 KZs) e finalize o seu depósito seguro.</span>
-              </li>
-            </ol>
           </div>
-
+          
         </div>
-
-      </div>
+      </motion.div>
 
     </div>
   );

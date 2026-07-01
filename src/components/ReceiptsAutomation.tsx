@@ -22,7 +22,7 @@ import {
   CheckSquare,
   XCircle
 } from 'lucide-react';
-import { Member, KixLog } from '../types';
+import { Member, KixLog, getFullMonthLabel, getMonthSimpleLabel } from '../types';
 import { saveReceiptToFirestore, loadReceiptsFromFirestore, deleteReceiptFromFirestore } from '../firebaseSync';
 import PrintConfigModal, { PrintConfig } from './PrintConfigModal';
 
@@ -1165,11 +1165,16 @@ export default function ReceiptsAutomation({
                   onChange={(e) => setTargetMonth(Number(e.target.value))}
                   className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 hover:border-slate-300 rounded-lg p-2.5 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-slate-800"
                 >
-                  {[1, 2, 3, 4, 5, 6].map((mNum) => (
-                    <option key={mNum} value={mNum}>
-                      Mês {mNum} {mNum === currentMonth ? '(Mês de Operação Corrente)' : ''}
-                    </option>
-                  ))}
+                  {(() => {
+                    const activeLevaNum = Math.ceil(currentMonth / 6) || 1;
+                    const startMonthOfLeva = (activeLevaNum - 1) * 6 + 1;
+                    const optionsList = Array.from({ length: 6 }, (_, idx) => startMonthOfLeva + idx);
+                    return optionsList.map((mNum) => (
+                      <option key={mNum} value={mNum}>
+                        {getFullMonthLabel(mNum)} {mNum === currentMonth ? '(Mês de Operação Corrente)' : ''}
+                      </option>
+                    ));
+                  })()}
                 </select>
               </div>
 
@@ -1235,10 +1240,15 @@ export default function ReceiptsAutomation({
                         onChange={(e) => setSimulatedPdfMonth(Number(e.target.value))}
                         className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-2 rounded-lg text-[11px] font-semibold text-slate-900 dark:text-white focus:outline-none"
                       >
-                        <option value={targetMonth}>Mês {targetMonth} (Correto)</option>
-                        {[1, 2, 3, 4, 5, 6].filter(m => m !== targetMonth).map(m => (
-                          <option key={m} value={m}>Mês {m} (Divergente)</option>
-                        ))}
+                        <option value={targetMonth}>{getFullMonthLabel(targetMonth)} (Correto)</option>
+                        {(() => {
+                          const activeLevaNum = Math.ceil(currentMonth / 6) || 1;
+                          const startMonthOfLeva = (activeLevaNum - 1) * 6 + 1;
+                          const optionsList = Array.from({ length: 6 }, (_, idx) => startMonthOfLeva + idx);
+                          return optionsList.filter(m => m !== targetMonth).map(m => (
+                            <option key={m} value={m}>{getFullMonthLabel(m)} (Divergente)</option>
+                          ));
+                        })()}
                         <option value={0}>Nenhum mês (Inválido)</option>
                       </select>
                     </div>
@@ -1246,7 +1256,7 @@ export default function ReceiptsAutomation({
                   <div className="text-[9px] flex items-start gap-1 text-slate-400 pt-1 border-t border-slate-200/50 dark:border-slate-800/50">
                     <Info className="w-3.5 h-3.5 shrink-0 text-slate-500 mt-0.5" />
                     <span>
-                      Regra de Auditoria: O depósito só é considerado VÁLIDO e a quota LIQUIDADA se o valor extraído for exatamente 120.000,00 KZs e o Mês for o Mês {targetMonth}.
+                      Regra de Auditoria: O depósito só é considerado VÁLIDO e a quota LIQUIDADA se o valor extraído for exatamente 120.000,00 KZs e o Mês for o {getFullMonthLabel(targetMonth)}.
                     </span>
                   </div>
                 </div>

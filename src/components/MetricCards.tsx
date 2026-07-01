@@ -20,7 +20,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
-import { Member, Loan } from '../types';
+import { Member, Loan, getFullMonthLabel, getMonthSimpleLabel } from '../types';
 
 interface MetricCardsProps {
   currentMonth: number;
@@ -61,7 +61,8 @@ export default function MetricCards({
 }: MetricCardsProps) {
   // Determine default value / last paid cycle (where payoutsCompleted is true)
   const getLastPaidCycle = () => {
-    return [6, 5, 4, 3, 2, 1].find(num => payoutsCompleted[num] === true) || currentMonth || 1;
+    const keys = Object.keys(payoutsCompleted).map(Number).filter(n => payoutsCompleted[n]).sort((a, b) => b - a);
+    return keys[0] || currentMonth || 1;
   };
 
   const [selectedCycle, setSelectedCycle] = useState<number>(getLastPaidCycle);
@@ -208,11 +209,11 @@ export default function MetricCards({
   const socialPercent = combinedTotal > 0 ? ((socialPrice / combinedTotal) * 100).toFixed(1) : '0.0';
 
   const pieData = combinedTotal > 0 ? [
-    { name: 'Disponível p/ Rotação (Líquido)', value: liquidRotation, color: '#0284C7', percent: rotationPercent },
-    { name: 'Crédito Ativo (Emprestado)', value: activeLoansOutstanding, color: '#8B5CF6', percent: creditPercent },
-    { name: 'Fundo Social (Reservado)', value: socialPrice, color: '#10B981', percent: socialPercent }
+    { name: 'Disponível p/ Rotação (Líquido)', value: liquidRotation, color: '#0284C7', percent: rotationPercent, hoverBg: 'bg-[#0284C7]/10', hoverBorder: 'border-[#0284C7]/20', textColor: 'text-sky-600 dark:text-sky-450', badgeBg: 'bg-sky-500/10' },
+    ...(activeLoansOutstanding > 0 ? [{ name: 'Crédito Ativo (Emprestado)', value: activeLoansOutstanding, color: '#8B5CF6', percent: creditPercent, hoverBg: 'bg-violet-500/10', hoverBorder: 'border-violet-500/20', textColor: 'text-violet-600 dark:text-violet-400', badgeBg: 'bg-violet-500/10' }] : []),
+    { name: 'Fundo Social (Reservado)', value: socialPrice, color: '#10B981', percent: socialPercent, hoverBg: 'bg-[#10B981]/10', hoverBorder: 'border-[#10B981]/20', textColor: 'text-emerald-600 dark:text-emerald-450', badgeBg: 'bg-emerald-500/10' }
   ] : [
-    { name: 'Sem Informações (Cadastro Vazio)', value: 1, color: '#94A3B8', percent: '0.0' }
+    { name: 'Sem Informações (Cadastro Vazio)', value: 1, color: '#94A3B8', percent: '0.0', hoverBg: 'bg-slate-500/10', hoverBorder: 'border-slate-500/20', textColor: 'text-slate-600 dark:text-slate-400', badgeBg: 'bg-slate-500/10' }
   ];
 
   const isHovered = hoveredIndex !== null && pieData[hoveredIndex] !== undefined;
@@ -400,53 +401,31 @@ export default function MetricCards({
 
                 {/* Legend */}
                 <div className="mt-5 flex flex-col gap-1.5 w-full text-xs font-semibold">
-                  <div 
-                    className={`flex items-center justify-between p-2 rounded-xl border border-transparent transition-all duration-200 cursor-pointer ${hoveredIndex === 0 ? 'bg-sky-500/10 border-sky-500/20 font-black' : hoveredIndex !== null ? 'opacity-40' : ''}`}
-                    onMouseEnter={() => setHoveredIndex(0)}
-                    onMouseLeave={() => setHoveredIndex(null)}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="w-3 h-3 rounded-xs bg-[#0284C7] shrink-0" />
-                      <span className="text-slate-600 dark:text-slate-350 text-[11px]">
-                        Líquido Rotação
-                      </span>
-                    </div>
-                    <span className="font-mono text-[11px] font-black text-sky-600 dark:text-sky-450 bg-sky-500/10 px-1.5 py-0.5 rounded-md">
-                      {rotationPercent}% ({formatCurrency(liquidRotation)})
-                    </span>
-                  </div>
+                  {pieData.map((item, index) => {
+                    const isHoveredItem = hoveredIndex === index;
+                    const hoverClass = isHoveredItem 
+                      ? `${item.hoverBg} ${item.hoverBorder} font-black` 
+                      : hoveredIndex !== null ? 'opacity-40' : '';
 
-                  <div 
-                    className={`flex items-center justify-between p-2 rounded-xl border border-transparent transition-all duration-200 cursor-pointer ${hoveredIndex === 1 ? 'bg-violet-500/10 border-violet-500/20 font-black' : hoveredIndex !== null ? 'opacity-40' : ''}`}
-                    onMouseEnter={() => setHoveredIndex(1)}
-                    onMouseLeave={() => setHoveredIndex(null)}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="w-3 h-3 rounded-xs bg-[#8B5CF6] shrink-0" />
-                      <span className="text-slate-600 dark:text-slate-350 text-[11px]">
-                        Crédito Ativo (Emprestado)
-                      </span>
-                    </div>
-                    <span className="font-mono text-[11px] font-black text-violet-600 dark:text-violet-400 bg-violet-500/10 px-1.5 py-0.5 rounded-md">
-                      {creditPercent}% ({formatCurrency(activeLoansOutstanding)})
-                    </span>
-                  </div>
-
-                  <div 
-                    className={`flex items-center justify-between p-2 rounded-xl border border-transparent transition-all duration-200 cursor-pointer ${hoveredIndex === 2 ? 'bg-[#10B981]/10 border-[#10B981]/20 font-black' : hoveredIndex !== null ? 'opacity-40' : ''}`}
-                    onMouseEnter={() => setHoveredIndex(2)}
-                    onMouseLeave={() => setHoveredIndex(null)}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="w-3 h-3 rounded-xs bg-[#10B981] shrink-0" />
-                      <span className="text-slate-600 dark:text-slate-350 text-[11px]">
-                        Fundo Social (Reservado)
-                      </span>
-                    </div>
-                    <span className="font-mono text-[11px] font-black text-emerald-600 dark:text-emerald-450 bg-emerald-500/10 px-1.5 py-0.5 rounded-md">
-                      {socialPercent}% ({formatCurrency(socialPrice)})
-                    </span>
-                  </div>
+                    return (
+                      <div 
+                        key={item.name}
+                        className={`flex items-center justify-between p-2 rounded-xl border border-transparent transition-all duration-200 cursor-pointer ${hoverClass}`}
+                        onMouseEnter={() => setHoveredIndex(index)}
+                        onMouseLeave={() => setHoveredIndex(null)}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="w-3 h-3 rounded-xs shrink-0" style={{ backgroundColor: item.color }} />
+                          <span className="text-slate-600 dark:text-slate-350 text-[11px]">
+                            {item.name}
+                          </span>
+                        </div>
+                        <span className={`font-mono text-[11px] font-black ${item.textColor} ${item.badgeBg} px-1.5 py-0.5 rounded-md`}>
+                          {item.percent}% ({formatCurrency(item.value)})
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {/* Solvency Rule Card */}
@@ -668,7 +647,7 @@ export default function MetricCards({
             >
               <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
                 <span className="text-[11px] font-black uppercase tracking-wider text-slate-900 dark:text-white">
-                  Contemplações no Ciclo {selectedCycle}
+                  Contemplações em: {getMonthSimpleLabel(selectedCycle)}
                 </span>
                 <span className="p-1 bg-amber-50 dark:bg-amber-950/20 text-amber-500 rounded-md shrink-0">
                   <Trophy className="w-4 h-4" />
@@ -677,25 +656,36 @@ export default function MetricCards({
 
               {/* Selector */}
               <div className="flex overflow-x-auto gap-1 mb-2 bg-slate-100 dark:bg-slate-950/40 p-1 rounded-xl border border-slate-200/30 dark:border-slate-800/40 scrollbar-none shrink-0">
-                {[1, 2, 3, 4, 5, 6].map((num) => {
-                  const isActive = num === selectedCycle;
-                  return (
-                    <button
-                      key={num}
-                      onClick={() => {
-                        setSelectedCycle(num);
-                        setStatusFilter('paid');
-                      }}
-                      className={`py-1 px-0.5 rounded-lg text-center cursor-pointer transition-all flex flex-col items-center justify-center flex-1 min-w-[45px] ${
-                        isActive
-                          ? 'bg-[#0d5c3a] text-white shadow-md font-black'
-                          : 'hover:bg-slate-200 dark:hover:bg-slate-800/60 text-slate-655 dark:text-slate-400 font-bold bg-transparent'
-                      }`}
-                    >
-                      <span className="text-[9px] tracking-tight">Mês {num}</span>
-                    </button>
-                  );
-                })}
+                {(() => {
+                  const activeLevaNum = Math.ceil(currentMonth / 6) || 1;
+                  const startMonthOfLeva = (activeLevaNum - 1) * 6 + 1;
+                  const monthsList = Array.from({ length: 6 }, (_, idx) => startMonthOfLeva + idx);
+                  if (selectedCycle && !monthsList.includes(selectedCycle)) {
+                    monthsList.push(selectedCycle);
+                    monthsList.sort((a, b) => a - b);
+                  }
+                  return monthsList.map((num) => {
+                    const isActive = num === selectedCycle;
+                    const relNum = ((num - 1) % 6) + 1;
+                    return (
+                      <button
+                        key={num}
+                        onClick={() => {
+                          setSelectedCycle(num);
+                          setStatusFilter('paid');
+                        }}
+                        className={`py-1 px-0.5 rounded-lg text-center cursor-pointer transition-all flex flex-col items-center justify-center flex-1 min-w-[45px] ${
+                          isActive
+                            ? 'bg-[#0d5c3a] text-white shadow-md font-black'
+                            : 'hover:bg-slate-200 dark:hover:bg-slate-800/60 text-slate-655 dark:text-slate-400 font-bold bg-transparent'
+                        }`}
+                        title={getFullMonthLabel(num)}
+                      >
+                        <span className="text-[9px] tracking-tight">Mês {relNum}</span>
+                      </button>
+                    );
+                  });
+                })()}
               </div>
 
               {/* Search */}

@@ -208,3 +208,22 @@ export interface AppConfig {
   lastAutoBackupGDrive?: string;
   rolePermissions?: RolePermissions;
 }
+
+export const monthNamesPortuguese = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+];
+
+export function getFullMonthLabel(mNum: number): string {
+  const relNum = ((mNum - 1) % 6) + 1;
+  const calIndex = (mNum - 1 + 2) % 12; // March offset
+  const calYear = 2026 + Math.floor((mNum - 1 + 2) / 12);
+  const levaNum = Math.ceil(mNum / 6);
+  return `Leva ${levaNum} - Mês ${relNum} (${monthNamesPortuguese[calIndex]} de ${calYear})`;
+}
+
+export function getMonthSimpleLabel(mNum: number): string {
+  const calIndex = (mNum - 1 + 2) % 12;
+  const calYear = 2026 + Math.floor((mNum - 1 + 2) / 12);
+  return `${monthNamesPortuguese[calIndex]} de ${calYear}`;
+}

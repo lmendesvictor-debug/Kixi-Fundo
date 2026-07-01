@@ -20,7 +20,7 @@ import {
   Info,
   AlertCircle
 } from 'lucide-react';
-import { Member, getMemberIdCode, getMemberDisplayCode } from '../types';
+import { Member, getMemberIdCode, getMemberDisplayCode, getFullMonthLabel } from '../types';
 
 interface UserManagementProps {
   members: Member[];
@@ -33,6 +33,7 @@ interface UserManagementProps {
   appConfig: any;
   setAppConfig: React.Dispatch<React.SetStateAction<any>>;
   onRegisterSecurityAttempt?: (userId: string) => void;
+  currentMonth?: number;
 }
 
 export default function UserManagement({
@@ -45,7 +46,8 @@ export default function UserManagement({
   theme = 'light',
   appConfig,
   setAppConfig,
-  onRegisterSecurityAttempt
+  onRegisterSecurityAttempt,
+  currentMonth = 1
 }: UserManagementProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [roleFilter, setRoleFilter] = useState<string>('all');
@@ -59,7 +61,7 @@ export default function UserManagement({
     email: '',
     phone: '',
     bankIban: '',
-    assignedMonth: '3',
+    assignedMonth: String(currentMonth),
     role: 'membro' as 'admin' | 'membro',
     tempPassword: 'membro123',
     allowFinancialReports: true,
@@ -250,7 +252,7 @@ export default function UserManagement({
       email: '',
       phone: '',
       bankIban: '',
-      assignedMonth: '3',
+      assignedMonth: String(currentMonth),
       role: 'membro',
       tempPassword: 'membro123',
       allowFinancialReports: true,
@@ -710,7 +712,7 @@ export default function UserManagement({
 
                     {/* Assigned cycle */}
                     <td className="py-3 px-5 font-mono text-xs font-bold">
-                      Mês 0{m.assignedMonth}
+                      {getFullMonthLabel(m.assignedMonth)}
                     </td>
 
                     {/* Current credential key */}
@@ -1343,12 +1345,21 @@ export default function UserManagement({
                           : 'bg-slate-50 border-slate-200'
                       }`}
                     >
-                      <option value="1">Mês 01 (Março)</option>
-                      <option value="2">Mês 02 (Abril)</option>
-                      <option value="3">Mês 03 (Maio)</option>
-                      <option value="4">Mês 04 (Junho)</option>
-                      <option value="5">Mês 05 (Julho)</option>
-                      <option value="6">Mês 06 (Agosto)</option>
+                      {(() => {
+                        const activeLevaNum = Math.ceil(currentMonth / 6) || 1;
+                        const startMonthOfLeva = (activeLevaNum - 1) * 6 + 1;
+                        const optionsList = Array.from({ length: 6 }, (_, idx) => startMonthOfLeva + idx);
+                        const currentAssignedNum = Number(formData.assignedMonth);
+                        if (currentAssignedNum && !optionsList.includes(currentAssignedNum)) {
+                          optionsList.push(currentAssignedNum);
+                          optionsList.sort((a, b) => a - b);
+                        }
+                        return optionsList.map((mNum) => (
+                          <option key={mNum} value={String(mNum)}>
+                            {getFullMonthLabel(mNum)}
+                          </option>
+                        ));
+                      })()}
                     </select>
                   </div>
                 </div>
