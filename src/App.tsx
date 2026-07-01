@@ -386,6 +386,7 @@ export default function App() {
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const isRemoteUpdateActiveRef = useRef<boolean>(false);
   const lastSavedStateRef = useRef<any>(null);
+  const hasFetchedRemoteRef = useRef<boolean>(false);
 
   const [activeTab, setActiveTab] = useState<string>('inicio');
   const [isDbSyncing, setIsDbSyncing] = useState<boolean>(false);
@@ -399,16 +400,10 @@ export default function App() {
         // Reset after 24 hours (daily quota cycle) to try syncing again, otherwise maintain true
         if (diff < 24 * 60 * 60 * 1000) {
           isFirestoreQuotaExceededRef.current = true;
-          try {
-            disableNetwork(db).catch(() => {});
-          } catch (e) {}
           return true;
         }
       } else {
         isFirestoreQuotaExceededRef.current = true;
-        try {
-          disableNetwork(db).catch(() => {});
-        } catch (e) {}
         return true;
       }
     }
@@ -845,6 +840,10 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
   useEffect(() => {
     localStorage.setItem('kix_app_config', JSON.stringify(appConfig));
     if (!isInitialLoadCompleted || isLoadingDb) return;
+    if (!hasFetchedRemoteRef.current) {
+      console.log("[Autosave] Aguardando sincronização com a nuvem antes de autorizar gravações.");
+      return;
+    }
     
     // Initialize lastSavedStateRef on first ready load to prevent false differential queue logging
     if (!lastSavedStateRef.current) {
@@ -1312,6 +1311,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
         unsubscribe = onSnapshot(docRef, (docSnap) => {
           if (!active) return;
           setIsDbSyncing(false);
+          hasFetchedRemoteRef.current = true;
 
           let resolvedMembers: Member[] = [];
           let resolvedLogs: KixLog[] = [];
@@ -1574,6 +1574,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
           }
         }, (err) => {
           console.warn("Sincronização em tempo real falhou ou operando offline:", err);
+          hasFetchedRemoteRef.current = true;
           const errString = String(err);
           if (errString.includes('resource-exhausted') || errString.includes('quota') || errString.includes('Quota')) {
             console.warn("Firestore Quota Limit exceeded on delayed mount snapshot!");
@@ -1592,6 +1593,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
         }
       }).catch(e => {
         console.warn("Firestore connection check failed after delay:", e);
+        hasFetchedRemoteRef.current = true;
         const errString = String(e);
         if (errString.includes('resource-exhausted') || errString.includes('quota') || errString.includes('Quota')) {
           console.warn("Firestore Quota Limit Detected on delayed init connection check!");
@@ -1599,7 +1601,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
         }
         setIsDbSyncing(false);
       });
-    }, 10000);
+    }, 1000);
 
     return () => {
       active = false;

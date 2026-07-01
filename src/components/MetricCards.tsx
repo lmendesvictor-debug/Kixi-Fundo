@@ -100,10 +100,22 @@ export default function MetricCards({
 
   // 1. Quotas (monthly contribution stats of all members for the selectedMonth)
   const allContributorsForCycle = membersList.map(m => {
-    const contr = m.contributions[selectedCycle];
+    if (!m) {
+      return {
+        id: '',
+        name: 'Membro inválido',
+        phone: '',
+        email: '',
+        paid: false,
+        amount: 120000,
+        paidAt: undefined,
+        isBeneficiary: false
+      };
+    }
+    const contr = m.contributions ? m.contributions[selectedCycle] : undefined;
     return {
-      id: m.id,
-      name: m.name,
+      id: m.id || '',
+      name: m.name || 'Sem nome',
       phone: m.phone || '',
       email: m.email || '',
       paid: contr?.paid || false,
@@ -115,19 +127,19 @@ export default function MetricCards({
 
   // Filter these contributors based on Search Query
   const searchedContributors = allContributorsForCycle.filter(c => 
-    c.name.toLowerCase().includes(searchQuery.toLowerCase())
+    c && c.name && c.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const paidContributors = searchedContributors.filter(c => c.paid);
-  const pendingContributors = searchedContributors.filter(c => !c.paid);
+  const paidContributors = searchedContributors.filter(c => c && c.paid);
+  const pendingContributors = searchedContributors.filter(c => c && !c.paid);
 
   // Beneficiaries of the selected cycle
-  const cycleBeneficiaries = membersList.filter(m => m.assignedMonth === selectedCycle);
+  const cycleBeneficiaries = membersList.filter(m => m && m.assignedMonth === selectedCycle);
   const isPayoutDoneForCycle = payoutsCompleted[selectedCycle] === true;
 
   // Searched beneficiaries
   const searchedBeneficiaries = cycleBeneficiaries.filter(b => 
-    b.name.toLowerCase().includes(searchQuery.toLowerCase())
+    b && b.name && b.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   // Counts for the active indicators (all contributors, paid contributors, pending contributors, beneficiaries)
@@ -203,7 +215,7 @@ export default function MetricCards({
     { name: 'Sem Informações (Cadastro Vazio)', value: 1, color: '#94A3B8', percent: '0.0' }
   ];
 
-  const isHovered = hoveredIndex !== null;
+  const isHovered = hoveredIndex !== null && pieData[hoveredIndex] !== undefined;
   const currentDisplayLabel = isHovered ? pieData[hoveredIndex!].name : 'Patrimônio Coletivo Total';
   const currentDisplayValue = combinedTotal > 0 ? (isHovered ? pieData[hoveredIndex!].value : combinedTotal) : 0;
   const currentDisplayColor = isHovered ? pieData[hoveredIndex!].color : undefined;
@@ -232,7 +244,7 @@ export default function MetricCards({
     { name: 'Sem Créditos Ativos (Cadastro Vazio)', value: 1, color: '#94A3B8', percent: '0.0' }
   ];
 
-  const isCreditProfitHovered = hoveredCreditProfitIndex !== null;
+  const isCreditProfitHovered = hoveredCreditProfitIndex !== null && creditProfitPieData[hoveredCreditProfitIndex] !== undefined;
   const currentCreditProfitLabel = isCreditProfitHovered 
     ? creditProfitPieData[hoveredCreditProfitIndex!].name 
     : 'Crédito Ativo (Investido)';
