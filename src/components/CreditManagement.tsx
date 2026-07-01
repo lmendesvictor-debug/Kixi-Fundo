@@ -1694,6 +1694,13 @@ export default function CreditManagement({
                 {/* Plan calculation header list of monthly installments */}
                 <h5 className="text-[10px] font-black uppercase tracking-wider text-slate-400">Plano de Amortização de Contrato</h5>
                 
+                <div className="bg-sky-50 dark:bg-sky-950/25 border border-sky-100 dark:border-sky-900/30 p-2.5 rounded-xl text-[10px] text-sky-700 dark:text-sky-300 leading-normal flex items-start gap-2">
+                  <HelpCircle className="w-3.5 h-3.5 shrink-0 text-sky-500 mt-0.5" />
+                  <span>
+                    <strong>Instrução:</strong> Para lançar as amortizações de crédito (reembolso de parcelas), clique no botão <strong className="text-emerald-600 dark:text-emerald-400">"Amortizar"</strong> correspondente à mensalidade ativa. O sistema registará o capital recuperado e juros ganhos.
+                  </span>
+                </div>
+
                 <div className="space-y-2 max-h-[290px] overflow-y-auto pr-1">
                   {selectedLoan.payments.map((p) => {
                     return (
@@ -1727,9 +1734,9 @@ export default function CreditManagement({
                               <button
                                 type="button"
                                 onClick={() => onPayInstallment(selectedLoan.id, p.month)}
-                                className="px-2 py-1 text-[9px] font-black text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg cursor-pointer hover:shadow hover:shadow-emerald-500/10 active:scale-95 text-center leading-none"
+                                className="px-2.5 py-1 text-[9px] font-black text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg cursor-pointer hover:shadow hover:shadow-emerald-500/10 active:scale-95 text-center leading-none"
                               >
-                                Baixar
+                                Amortizar
                               </button>
                               <button
                                 type="button"

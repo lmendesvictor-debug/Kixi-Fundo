@@ -127,6 +127,8 @@ export default function MemberProfileWorkspace({
   };
 
   // Math totals for this specific member
+  const isExemptFromQuotas = member.email && member.email.toLowerCase().trim() === 'lmendesvictor@gmail.com';
+
   const paidMonths = Object.keys(member.contributions).filter(
     (monthKey) => member.contributions[Number(monthKey)]?.paid
   ).map(Number);
@@ -138,8 +140,8 @@ export default function MemberProfileWorkspace({
     }
     return sum;
   }, 0);
-  const individualSocialRetained = paidMonths.length * 20000;
-  const individualRotationDeposited = totalPaidAmount - individualSocialRetained;
+  const individualSocialRetained = isExemptFromQuotas ? 0 : paidMonths.length * 20000;
+  const individualRotationDeposited = isExemptFromQuotas ? 0 : totalPaidAmount - individualSocialRetained;
 
   // New Inbox states for dynamic member notifications & communications
   const [inboxFilter, setInboxFilter] = useState<'all' | 'email' | 'whatsapp' | 'in_app'>('all');
@@ -160,45 +162,47 @@ export default function MemberProfileWorkspace({
     }> = [];
 
     // 1. Quotas Pagas (Recebimentos de Ciclo)
-    [1, 2, 3, 4, 5, 6].forEach((mNum) => {
-      const contrib = member.contributions[mNum];
-      if (contrib && contrib.paid) {
-        const dateStr = contrib.paidAt || `15/${String(5 + mNum).padStart(2, '0')}/2026`;
-        
-        msgs.push({
-          id: `msg-quota-inapp-${mNum}`,
-          timestamp: dateStr,
-          type: 'cycle_receipt',
-          channel: 'in_app',
-          channelLabel: 'Mensagem do Portal',
-          title: `Quota de Poupança Validada - Mês 0${mNum}`,
-          body: `Olá, ${member.name}! O seu depósito de 120.000,00 Kz para o Mês de Referência 0${mNum} foi recebido e validado com sucesso no Banco BIC.\n\nFundo Coletivo: 100.000,00 Kz\nRetenção de Solidariedade Social: 20.000,00 Kz.\n\nObrigado pela sua contribuição assídua para o crescimento do nosso fundo cooperativo!`,
-          read: true
-        });
+    if (!isExemptFromQuotas) {
+      [1, 2, 3, 4, 5, 6].forEach((mNum) => {
+        const contrib = member.contributions[mNum];
+        if (contrib && contrib.paid) {
+          const dateStr = contrib.paidAt || `15/${String(5 + mNum).padStart(2, '0')}/2026`;
+          
+          msgs.push({
+            id: `msg-quota-inapp-${mNum}`,
+            timestamp: dateStr,
+            type: 'cycle_receipt',
+            channel: 'in_app',
+            channelLabel: 'Mensagem do Portal',
+            title: `Quota de Poupança Validada - Mês 0${mNum}`,
+            body: `Olá, ${member.name}! O seu depósito de 120.000,00 Kz para o Mês de Referência 0${mNum} foi recebido e validado com sucesso no Banco BIC.\n\nFundo Coletivo: 100.000,00 Kz\nRetenção de Solidariedade Social: 20.000,00 Kz.\n\nObrigado pela sua contribuição assídua para o crescimento do nosso fundo cooperativo!`,
+            read: true
+          });
 
-        msgs.push({
-          id: `msg-quota-whatsapp-${mNum}`,
-          timestamp: dateStr,
-          type: 'cycle_receipt',
-          channel: 'whatsapp',
-          channelLabel: 'Telemóvel / SMS',
-          title: `Comprovativo de Recebimento de Quota (Mês 0${mNum})`,
-          body: `Olá, *${member.name}*! A Direção do Kixi-Fundo confirma o recebimento da sua quota do *Mês 0${mNum}*. \n\n💵 *Valor Pago:* 120.000,00 KZs\n🛡 *Retenção p/ Fundo de Apoio Social:* 20.000,00 KZs\n🏦 *Canal:* Banco BIC Angola (IBAN AO06...10149)\n\nPode consultar o seu comprovativo oficial em pdf no portal da associação: https://kixi-fundo.ao/recibos/m${mNum}/#id-${member.id}`,
-          read: true
-        });
+          msgs.push({
+            id: `msg-quota-whatsapp-${mNum}`,
+            timestamp: dateStr,
+            type: 'cycle_receipt',
+            channel: 'whatsapp',
+            channelLabel: 'Telemóvel / SMS',
+            title: `Comprovativo de Recebimento de Quota (Mês 0${mNum})`,
+            body: `Olá, *${member.name}*! A Direção do Kixi-Fundo confirma o recebimento da sua quota do *Mês 0${mNum}*. \n\n💵 *Valor Pago:* 120.000,00 KZs\n🛡 *Retenção p/ Fundo de Apoio Social:* 20.000,00 KZs\n🏦 *Canal:* Banco BIC Angola (IBAN AO06...10149)\n\nPode consultar o seu comprovativo oficial em pdf no portal da associação: https://kixi-fundo.ao/recibos/m${mNum}/#id-${member.id}`,
+            read: true
+          });
 
-        msgs.push({
-          id: `msg-quota-email-${mNum}`,
-          timestamp: dateStr,
-          type: 'cycle_receipt',
-          channel: 'email',
-          channelLabel: 'E-mail Oficial',
-          title: `Confirmado: Recibo Digital de Quota Regularizada (Mês 0${mNum})`,
-          body: `Prezado(a) ${member.name},\n\nConfirmamos a liquidação e reconciliação bancária da sua quota mensal regulamentar referente ao Mês 0${mNum}.\n\nDetalhamento da Operação:\n- Valor Liquidado: 120.000,00 Kz\n- Fundo Coletivo Comum: 100.000,00 Kz\n- Fundo de Apoio Social: 20.000,00 Kz\n\nEm anexo encontra-se o seu Comprovativo em PDF assinado digitalmente.\n\nAtenciosamente,\nDireção Financeira do Kixi-Fundo Angola`,
-          read: true
-        });
-      }
-    });
+          msgs.push({
+            id: `msg-quota-email-${mNum}`,
+            timestamp: dateStr,
+            type: 'cycle_receipt',
+            channel: 'email',
+            channelLabel: 'E-mail Oficial',
+            title: `Confirmado: Recibo Digital de Quota Regularizada (Mês 0${mNum})`,
+            body: `Prezado(a) ${member.name},\n\nConfirmamos a liquidação e reconciliação bancária da sua quota mensal regulamentar referente ao Mês 0${mNum}.\n\nDetalhamento da Operação:\n- Valor Liquidado: 120.000,00 Kz\n- Fundo Coletivo Comum: 100.000,00 Kz\n- Fundo de Apoio Social: 20.000,00 Kz\n\nEm anexo encontra-se o seu Comprovativo em PDF assinado digitalmente.\n\nAtenciosamente,\nDireção Financeira do Kixi-Fundo Angola`,
+            read: true
+          });
+        }
+      });
+    }
 
     // 2. Benefício de Rotação Pago (Pagamento do Ciclo)
     const isPayoutCompleted = payoutsCompleted && payoutsCompleted[member.assignedMonth];
@@ -371,38 +375,40 @@ export default function MemberProfileWorkspace({
   const startMonthOfLevaForAlerts = (activeLevaNumForAlerts - 1) * 6 + 1;
   const currentLevaMonthsForAlerts = Array.from({ length: 6 }, (_, i) => startMonthOfLevaForAlerts + i);
 
-  currentLevaMonthsForAlerts.forEach((mNum) => {
-    const hasPaid = member.contributions[mNum]?.paid;
-    if (!hasPaid) {
-      const dueDateStr = `15/${String(((mNum - 1) % 12) + 1).padStart(2, '0')}/2026`;
-      const dateObj = parsePtDate(dueDateStr);
-      if (dateObj) {
-        const diffTime = dateObj.getTime() - todayMidnight.getTime();
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        
-        let urgency: 'high' | 'medium' | 'info' = 'info';
-        if (diffDays < 0) urgency = 'high';
-        else if (diffDays <= 30) urgency = 'medium';
+  if (!isExemptFromQuotas) {
+    currentLevaMonthsForAlerts.forEach((mNum) => {
+      const hasPaid = member.contributions[mNum]?.paid;
+      if (!hasPaid) {
+        const dueDateStr = `15/${String(((mNum - 1) % 12) + 1).padStart(2, '0')}/2026`;
+        const dateObj = parsePtDate(dueDateStr);
+        if (dateObj) {
+          const diffTime = dateObj.getTime() - todayMidnight.getTime();
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          
+          let urgency: 'high' | 'medium' | 'info' = 'info';
+          if (diffDays < 0) urgency = 'high';
+          else if (diffDays <= 30) urgency = 'medium';
 
-        // Add to alert list if overdue or upcoming (due soon under 30 days)
-        if (diffDays < 0 || diffDays <= 30) {
-          alertsList.push({
-            id: `quota-${mNum}`,
-            type: 'quota',
-            monthNum: mNum,
-            title: `Quota de Poupança - ${getFullMonthLabel(mNum)}`,
-            description: diffDays < 0 
-              ? `A sua contribuição social para o ${getFullMonthLabel(mNum)} está vencida há ${Math.abs(diffDays)} ${Math.abs(diffDays) === 1 ? 'dia' : 'dias'}.` 
-              : `A quota regulamentar do ${getFullMonthLabel(mNum)} vencerá em ${diffDays} ${diffDays === 1 ? 'dia' : 'dias'}.`,
-            dueDateStr,
-            amount: 120000,
-            diffDays,
-            urgency,
-          });
+          // Add to alert list if overdue or upcoming (due soon under 30 days)
+          if (diffDays < 0 || diffDays <= 30) {
+            alertsList.push({
+              id: `quota-${mNum}`,
+              type: 'quota',
+              monthNum: mNum,
+              title: `Quota de Poupança - ${getFullMonthLabel(mNum)}`,
+              description: diffDays < 0 
+                ? `A sua contribuição social para o ${getFullMonthLabel(mNum)} está vencida há ${Math.abs(diffDays)} ${Math.abs(diffDays) === 1 ? 'dia' : 'dias'}.` 
+                : `A quota regulamentar do ${getFullMonthLabel(mNum)} vencerá em ${diffDays} ${diffDays === 1 ? 'dia' : 'dias'}.`,
+              dueDateStr,
+              amount: 120000,
+              diffDays,
+              urgency,
+            });
+          }
         }
       }
-    }
-  });
+    });
+  }
 
   // Generate Credit / Loan Payment Alerts
   const myActiveLoans = (loans || []).filter((l) => {
@@ -791,9 +797,11 @@ export default function MemberProfileWorkspace({
           <span className="text-[10px] font-bold text-slate-400 dark:text-slate-550 uppercase tracking-wider block">
             Suas Contribuições Totais
           </span>
-          <p className="text-2xl font-black font-mono text-slate-800 dark:text-white">{formatCurrency(totalPaidAmount)}</p>
+          <p className="text-2xl font-black font-mono text-slate-800 dark:text-white">
+            {isExemptFromQuotas ? 'Isento' : formatCurrency(totalPaidAmount)}
+          </p>
           <span className="text-[10px] text-slate-550 dark:text-slate-455 block">
-            {paidMonths.length} parcelas mensais liquidadas
+            {isExemptFromQuotas ? 'Membro Administrativo' : `${paidMonths.length} parcelas mensais liquidadas`}
           </span>
         </div>
 
@@ -802,9 +810,11 @@ export default function MemberProfileWorkspace({
           <span className="text-[10px] font-bold text-slate-400 dark:text-slate-555 uppercase tracking-wider block">
             Retido p/ Poupança Interajuda
           </span>
-          <p className="text-2xl font-black font-mono text-emerald-700 dark:text-emerald-400">{formatCurrency(individualSocialRetained)}</p>
-          <span className="text-[10px] text-slate-500 dark:text-slate-455 block">
-            Sua contribuição individual ao fundo social
+          <p className="text-2xl font-black font-mono text-emerald-700 dark:text-emerald-400">
+            {isExemptFromQuotas ? 'Isento' : formatCurrency(individualSocialRetained)}
+          </p>
+          <span className="text-[10px] text-slate-555 dark:text-slate-455 block">
+            {isExemptFromQuotas ? 'Fundo Social Geral' : 'Sua contribuição individual ao fundo social'}
           </span>
         </div>
 
@@ -813,7 +823,12 @@ export default function MemberProfileWorkspace({
           <span className="text-[10px] font-bold text-indigo-700 dark:text-indigo-400 uppercase tracking-wider block">
             Seu Status de Rotação
           </span>
-          {member.assignedMonth < currentMonth ? (
+          {isExemptFromQuotas ? (
+            <div>
+              <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400">ADMINISTRADOR</p>
+              <span className="text-[10px] text-slate-555 dark:text-slate-400">Isento de Quotas e Contribuições Rotativas</span>
+            </div>
+          ) : member.assignedMonth < currentMonth ? (
             <div>
               <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">LIQUIDADO</p>
               <span className="text-[10px] text-slate-555 dark:text-slate-400">600.000,00 KZs recebidos no Mês {member.assignedMonth}</span>
