@@ -241,17 +241,23 @@ export default function ContractsTab({
           ${stylesHtml}
           <style>
             @page {
-              size: A4;
-              margin: 15mm;
+              size: A4 portrait;
+              margin: 12mm;
+            }
+            *, *::before, *::after {
+              box-sizing: border-box !important;
             }
             body {
               background: white !important;
               color: black !important;
               margin: 0 !important;
-              padding: 20px !important;
+              padding: 0 !important;
+              width: 100% !important;
+              max-width: 100% !important;
+              overflow-x: hidden !important;
               font-family: 'EB Garamond', Georgia, serif !important;
               font-size: 11.5px !important;
-              line-height: 1.6 !important;
+              line-height: 1.5 !important;
             }
             #print-document-targetId {
               border: none !important;
@@ -421,17 +427,23 @@ export default function ContractsTab({
         <title>Contrato_${currentLoan.id}</title>
         <style>
           @page {
-            size: A4;
-            margin: 20mm;
+            size: A4 portrait;
+            margin: 12mm;
+          }
+          *, *::before, *::after {
+            box-sizing: border-box !important;
           }
           body {
             font-family: 'EB Garamond', 'Georgia', serif;
             color: #000;
             background-color: #fff;
-            line-height: 1.6;
+            line-height: 1.5;
             padding: 0;
             margin: 0;
-            font-size: 12px;
+            width: 100%;
+            max-width: 100%;
+            overflow-x: hidden;
+            font-size: 11.5px;
           }
           .header {
             border-bottom: 2px solid #000;

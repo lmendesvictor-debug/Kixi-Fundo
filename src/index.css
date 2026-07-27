@@ -149,13 +149,13 @@ html.dark {
 }
 
 /* ==========================================================
-   DYNAMIC 15-INCH MONITOR RESPONSIVENESS OVERRIDES
-   Ensures perfect fit and prevents overlaps of menus & elements
+   DYNAMIC RESPONSIVENESS & READABILITY ENHANCEMENTS
+   Ensures crystal clear visualization, larger icons, and comfortable text sizing
    ========================================================== */
 
 @media (min-width: 1024px) and (max-width: 1600px) {
   :root, html {
-    font-size: 13.5px !important; /* Dynamically scale down rem values globally for 15-inch displays */
+    font-size: 15px !important; /* Boosted base font size for 14-15" displays for superior readability */
   }
 
   /* Compact top navbar container and heights */
@@ -166,65 +166,72 @@ html.dark {
   }
 
   nav .h-20 {
-    height: 4.5rem !important; /* Slightly more compact header bar */
+    height: 4.75rem !important;
   }
 
   nav .h-20.gap-4 {
-    gap: 0.375rem !important; /* Reduce gap between brand, nav-row and status-row */
+    gap: 0.5rem !important;
   }
 
-  /* Compact desktop navigation row gap & maximum width boundaries */
+  /* Navigation row gap & spacing */
   #kix-desktop-nav-row {
-    gap: 2px !important;
+    gap: 0.35rem !important;
     max-width: none !important;
-    padding: 0px !important;
+    padding: 2px !important;
     margin: 0px !important;
     flex-wrap: nowrap !important;
+    align-items: center !important;
   }
 
-  /* Navigation button resizing */
+  /* Navigation button resizing - comfortably readable font and icon sizes */
   .kix-nav-btn {
-    padding-left: 0.35rem !important;
-    padding-right: 0.35rem !important;
-    padding-top: 0.25rem !important;
-    padding-bottom: 0.25rem !important;
-    font-size: 9px !important;
-    gap: 0.15rem !important;
-    border-radius: 0.375rem !important;
+    padding-left: 0.55rem !important;
+    padding-right: 0.55rem !important;
+    padding-top: 0.4rem !important;
+    padding-bottom: 0.4rem !important;
+    font-size: 11.5px !important;
+    gap: 0.35rem !important;
+    border-radius: 0.6rem !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
   }
 
   .kix-nav-btn span {
-    font-size: 8.5px !important;
+    font-size: 11.5px !important;
     white-space: nowrap !important;
   }
 
   .kix-nav-btn svg {
-    width: 11px !important;
-    height: 11px !important;
+    width: 15px !important;
+    height: 15px !important;
+    flex-shrink: 0 !important;
   }
 
-  /* Compact status badges and action buttons on the right side */
+  /* Status badges and action buttons on the right side */
   #kix-desktop-status-row {
-    gap: 4px !important;
+    gap: 6px !important;
+    align-items: center !important;
+    flex-shrink: 0 !important;
+    margin-left: auto !important;
   }
 
-  #kix-desktop-status-row button,
-  #kix-desktop-status-row div {
-    padding-left: 0.4rem !important;
-    padding-right: 0.4rem !important;
-    padding-top: 0.35rem !important;
-    padding-bottom: 0.35rem !important;
-    font-size: 8.5px !important;
+  .kix-status-badge,
+  .kix-status-btn {
+    padding: 0.35rem 0.5rem !important;
+    font-size: 10.5px !important;
     border-radius: 0.5rem !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
   }
 
   #kix-desktop-status-row svg {
-    width: 11px !important;
-    height: 11px !important;
+    width: 14px !important;
+    height: 14px !important;
+    flex-shrink: 0 !important;
   }
 
   #kix-desktop-status-row span {
-    font-size: 8px !important;
+    font-size: 10.5px !important;
   }
 }
 
@@ -269,6 +276,73 @@ html.dark {
   }
   .max-w-7xl {
     max-width: 2400px !important; /* Maximize data visibility on huge screens */
+  }
+}
+
+/* ==========================================================
+   A4 PRINT MEDIA RULES & MARGIN CONSTRAINTS
+   Ensures all printed documents strictly fit within A4 print margins
+   ========================================================== */
+
+@page {
+  size: A4 portrait;
+  margin: 10mm 10mm 10mm 10mm;
+}
+
+@media print {
+  *, *::before, *::after {
+    box-sizing: border-box !important;
+  }
+
+  html, body {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    color: black !important;
+    font-size: 10pt !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    overflow: visible !important;
+  }
+
+  /* Hide interactive web UI controls when printing directly */
+  nav, header, footer, button, .kix-nav-btn, #kix-desktop-nav-row, #kix-desktop-status-row, .no-print {
+    display: none !important;
+  }
+
+  /* Table and card boundary enforcement */
+  table {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-collapse: collapse !important;
+    table-layout: auto !important;
+    word-break: break-word !important;
+    overflow-wrap: break-word !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+  }
+
+  th, td {
+    word-break: break-word !important;
+    overflow-wrap: break-word !important;
+  }
+
+  img, svg, canvas {
+    max-width: 100% !important;
+    height: auto !important;
+  }
+
+  .printable-document-frame, .print-container, #print-document-targetId {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
   }
 }
 

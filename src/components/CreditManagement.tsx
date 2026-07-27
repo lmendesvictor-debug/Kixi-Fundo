@@ -15,7 +15,8 @@ import {
   TrendingUp, Plus, ShieldCheck, FileText, Check, AlertTriangle, 
   Scale, Calendar, HelpCircle, CreditCard, ArrowUpRight, 
   User, Building, Search, DollarSign, Landmark, Phone, MessageSquare, Briefcase,
-  Printer, X, Edit, Settings, FileText as FileIcon, Sparkles, CheckSquare
+  Printer, X, Edit, Settings, FileText as FileIcon, Sparkles, CheckSquare, Pencil, Trash2,
+  Download, FileSpreadsheet, FileJson, RotateCcw
 } from 'lucide-react';
 import { Loan, Member, KixLog, LoanPayment } from '../types';
 import ContractsTab from './ContractsTab';
@@ -136,6 +137,141 @@ export default function CreditManagement({
     isActive: false
   });
 
+  // Admin Credit Edit States
+  const [editingLoan, setEditingLoan] = useState<Loan | null>(null);
+  const [showEditLoanModal, setShowEditLoanModal] = useState(false);
+
+  const [editBorrowerName, setEditBorrowerName] = useState('');
+  const [editBorrowerType, setEditBorrowerType] = useState<'socio' | 'singular'>('socio');
+  const [editBorrowerId, setEditBorrowerId] = useState<number>(0);
+  const [editDocumentId, setEditDocumentId] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editAmountRequested, setEditAmountRequested] = useState<number>(0);
+  const [editInterestRate, setEditInterestRate] = useState<number>(0);
+  const [editInstallmentsCount, setEditInstallmentsCount] = useState<number>(0);
+  const [editGuarantees, setEditGuarantees] = useState('');
+  const [editPurpose, setEditPurpose] = useState('');
+  const [editGuarantorName, setEditGuarantorName] = useState('');
+  const [editStatus, setEditStatus] = useState<'active' | 'completed' | 'overdue'>('active');
+  const [recalculateSchedule, setRecalculateSchedule] = useState(false);
+
+  const handleOpenEditModal = (loan: Loan) => {
+    setEditingLoan(loan);
+    setEditBorrowerName(loan.borrowerName || '');
+    setEditBorrowerType(loan.borrowerType || 'socio');
+    setEditBorrowerId(loan.borrowerId || loan.memberId || 0);
+    setEditDocumentId(loan.documentId || '');
+    setEditPhone(loan.phone || '');
+    setEditAmountRequested(loan.amountRequested || 0);
+    setEditInterestRate(loan.interestRate || 0);
+    setEditInstallmentsCount(loan.installmentsCount || loan.durationMonths || 1);
+    setEditGuarantees(loan.guarantees || '');
+    setEditPurpose(loan.purpose || '');
+    setEditGuarantorName(loan.guarantorName || '');
+    setEditStatus(loan.status || 'active');
+    setRecalculateSchedule(false);
+    setShowEditLoanModal(true);
+  };
+
+  const handleSaveLoanEdits = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingLoan) return;
+
+    let updatedPayments = [...editingLoan.payments];
+
+    if (
+      recalculateSchedule ||
+      editAmountRequested !== editingLoan.amountRequested ||
+      editInterestRate !== editingLoan.interestRate ||
+      editInstallmentsCount !== editingLoan.installmentsCount
+    ) {
+      const count = editInstallmentsCount || 1;
+      const principalPerMonth = editAmountRequested / count;
+      const interestPerMonth = editAmountRequested * ((editInterestRate || 0) / 100);
+      const monthlyTotal = principalPerMonth + interestPerMonth;
+
+      updatedPayments = Array.from({ length: count }, (_, index) => {
+        const monthNum = index + 1;
+        const existing = editingLoan.payments.find(p => p.month === monthNum);
+
+        const d = new Date();
+        d.setMonth(d.getMonth() + index + 1);
+
+        return {
+          month: monthNum,
+          principalPaid: Math.round(principalPerMonth),
+          interestPaid: Math.round(interestPerMonth),
+          amount: Math.round(monthlyTotal),
+          paid: existing ? existing.paid : false,
+          paidAt: existing ? existing.paidAt : undefined,
+          dueDate: existing ? existing.dueDate : d.toLocaleDateString('pt-PT'),
+          notes: existing ? existing.notes : undefined,
+        };
+      });
+    }
+
+    const updatedLoan: Loan = {
+      ...editingLoan,
+      borrowerName: editBorrowerName.trim() || editingLoan.borrowerName,
+      borrowerType: editBorrowerType,
+      borrowerId: editBorrowerType === 'socio' ? editBorrowerId : undefined,
+      documentId: editDocumentId.trim() || editingLoan.documentId,
+      phone: editPhone.trim() || editingLoan.phone,
+      amountRequested: Number(editAmountRequested),
+      interestRate: Number(editInterestRate),
+      installmentsCount: Number(editInstallmentsCount),
+      guarantees: editGuarantees,
+      purpose: editPurpose,
+      guarantorName: editGuarantorName,
+      status: editStatus,
+      payments: updatedPayments,
+    };
+
+    const updatedLoans = loans.map(l => (l.id === editingLoan.id ? updatedLoan : l));
+
+    const newLog: KixLog = {
+      id: `log-editloan-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      type: 'policy_change',
+      amount: Number(editAmountRequested),
+      description: `RETIFICAÇÃO DE CRÉDITO (ADMINISTRADOR): O Administrador ${currentUser?.name || 'Administrador'} alterou dados do contrato ${editingLoan.id} (${editBorrowerName}). Alterações salvas na carteira de crédito.`,
+      month: currentMonth,
+    };
+
+    const updatedLogs = [newLog, ...(logs || [])];
+
+    saveState(members, updatedLogs, undefined, undefined, updatedLoans);
+    setShowEditLoanModal(false);
+    setEditingLoan(null);
+  };
+
+  const handleDeleteLoanContract = (loanId: string) => {
+    if (!window.confirm(`Tem a certeza absoluta de que deseja eliminar o contrato ${loanId}? Esta operação cancelará o registo de crédito e atualizará o saldo de caixa.`)) {
+      return;
+    }
+
+    const targetLoan = loans.find(l => l.id === loanId);
+    const updatedLoans = loans.filter(l => l.id !== loanId);
+
+    const newLog: KixLog = {
+      id: `log-deleteloan-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      type: 'policy_change',
+      amount: targetLoan?.amountRequested || 0,
+      description: `CANCELAMENTO DE CRÉDITO (ADMINISTRADOR): O contrato ${loanId} (${targetLoan?.borrowerName || ''}) foi removido da carteira pelo Administrador.`,
+      month: currentMonth,
+    };
+
+    const updatedLogs = [newLog, ...(logs || [])];
+    saveState(members, updatedLogs, undefined, undefined, updatedLoans);
+
+    if (selectedLoanId === loanId) {
+      setSelectedLoanId(null);
+    }
+    setShowEditLoanModal(false);
+    setEditingLoan(null);
+  };
+
   const addDaysToPtDate = (dateStr: string, days: number): string => {
     try {
       const parts = dateStr.split('/');
@@ -223,17 +359,23 @@ export default function CreditManagement({
           ${stylesHtml}
           <style>
             @page {
-              size: A4;
-              margin: 15mm;
+              size: A4 portrait;
+              margin: 12mm;
+            }
+            *, *::before, *::after {
+              box-sizing: border-box !important;
             }
             body {
               background: white !important;
               color: black !important;
               margin: 0 !important;
-              padding: 20px !important;
+              padding: 0 !important;
+              width: 100% !important;
+              max-width: 100% !important;
+              overflow-x: hidden !important;
               font-family: ${printFontFamily === 'serif' ? "'EB Garamond', 'Georgia', serif" : printFontFamily === 'mono' ? "monospace" : "sans-serif"} !important;
               font-size: ${printFontSize === 'compact' ? '11px' : printFontSize === 'elegant' ? '13px' : '12px'} !important;
-              line-height: 1.6 !important;
+              line-height: 1.5 !important;
             }
             .printable-document-frame {
               width: 100% !important;
@@ -680,11 +822,188 @@ export default function CreditManagement({
     }
   };
 
+  const handleExportCSV = () => {
+    if (!loans || loans.length === 0) {
+      alert("Nenhum contrato de crédito disponível para exportar.");
+      return;
+    }
+
+    const headers = [
+      "Código Contrato",
+      "Nome Beneficiário",
+      "Tipo Beneficiário",
+      "BI / NIF",
+      "Telefone",
+      "Email",
+      "Montante Concedido (KZs)",
+      "Taxa Juros Mensal (%)",
+      "Nº Parcelas",
+      "Data Contrato",
+      "Representante Legal",
+      "Garantias",
+      "Finalidade",
+      "Status Contrato",
+      "Principal Reembolsado (KZs)",
+      "Juros Pagos (KZs)",
+      "Saldo Devedor Principal (KZs)",
+      "Total Parcelas",
+      "Parcelas Pagas",
+      "Histórico de Pagamentos"
+    ];
+
+    const rows = loans.map(loan => {
+      const principalPaid = (loan.payments || []).filter(p => p.paid).reduce((sum, p) => sum + p.principalPaid, 0);
+      const interestPaid = (loan.payments || []).filter(p => p.paid).reduce((sum, p) => sum + p.interestPaid, 0);
+      const outstandingPrincipal = loan.amountRequested - principalPaid;
+      const paidInstallmentsCount = (loan.payments || []).filter(p => p.paid).length;
+      
+      const paymentHistoryText = (loan.payments || []).map(p => 
+        `P${p.month} (${p.dueDate}): ${p.amount} KZs [Princ: ${p.principalPaid}, Jur: ${p.interestPaid}] -> ${p.paid ? 'PAGO' : 'PENDENTE'}`
+      ).join(' | ');
+
+      return [
+        `"${loan.id}"`,
+        `"${(loan.borrowerName || '').replace(/"/g, '""')}"`,
+        `"${loan.borrowerType === 'socio' ? 'Sócio Cooperante' : 'Pessoa Singular'}"`,
+        `"${(loan.documentId || '').replace(/"/g, '""')}"`,
+        `"${(loan.phone || '').replace(/"/g, '""')}"`,
+        `"${(loan.email || '').replace(/"/g, '""')}"`,
+        loan.amountRequested,
+        loan.interestRate,
+        loan.installmentsCount || loan.durationMonths || 1,
+        `"${loan.contractDate || ''}"`,
+        `"${(loan.representativeName || '').replace(/"/g, '""')}"`,
+        `"${(loan.guarantees || '').replace(/"/g, '""')}"`,
+        `"${(loan.purpose || '').replace(/"/g, '""')}"`,
+        `"${loan.status === 'completed' ? 'Liquidado' : loan.status === 'overdue' ? 'Vencido' : 'Ativo'}"`,
+        principalPaid,
+        interestPaid,
+        outstandingPrincipal,
+        loan.payments ? loan.payments.length : 0,
+        paidInstallmentsCount,
+        `"${paymentHistoryText.replace(/"/g, '""')}"`
+      ].join(',');
+    });
+
+    const csvContent = "\uFEFF" + [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `relatorio_contratos_credito_kixfundo_${new Date().toISOString().slice(0,10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleExportJSON = () => {
+    if (!loans || loans.length === 0) {
+      alert("Nenhum contrato de crédito disponível para exportar.");
+      return;
+    }
+
+    const exportData = {
+      entidade: "KIXI-FUNDO - Associação Cooperativa de Poupança e Crédito",
+      relatorio: "Relatório Auditável de Contratos Celebrados, Histórico de Pagamentos e Saldo Devedor por Beneficiário",
+      dataEmissao: new Date().toISOString(),
+      resumoGeral: {
+        totalContratosCelebrados: loans.length,
+        volumeTotalConcedidoKZs: loans.reduce((acc, l) => acc + l.amountRequested, 0),
+        volumeTotalPrincipalReembolsadoKZs: loans.reduce((acc, l) => acc + (l.payments || []).filter(p => p.paid).reduce((s, p) => s + p.principalPaid, 0), 0),
+        volumeTotalJurosArrecadadosKZs: loans.reduce((acc, l) => acc + (l.payments || []).filter(p => p.paid).reduce((s, p) => s + p.interestPaid, 0), 0),
+        saldoDevedorGlobalAtivoKZs: loans.reduce((acc, l) => {
+          const pPaid = (l.payments || []).filter(p => p.paid).reduce((s, p) => s + p.principalPaid, 0);
+          return acc + (l.amountRequested - pPaid);
+        }, 0)
+      },
+      contratos: loans.map(loan => {
+        const principalPaid = (loan.payments || []).filter(p => p.paid).reduce((sum, p) => sum + p.principalPaid, 0);
+        const interestPaid = (loan.payments || []).filter(p => p.paid).reduce((sum, p) => sum + p.interestPaid, 0);
+        const outstandingPrincipal = loan.amountRequested - principalPaid;
+
+        return {
+          idContrato: loan.id,
+          beneficiario: {
+            nome: loan.borrowerName,
+            tipo: loan.borrowerType === 'socio' ? 'Sócio Cooperante' : 'Pessoa Singular (Cliente Externo)',
+            documentoIdentificacao: loan.documentId,
+            telefone: loan.phone,
+            email: loan.email
+          },
+          condicoesContratuais: {
+            montanteConcedidoKZs: loan.amountRequested,
+            taxaJurosMensalPct: loan.interestRate,
+            duracaoMeses: loan.durationMonths || loan.installmentsCount,
+            dataCelebracao: loan.contractDate,
+            representanteLegal: loan.representativeName,
+            garantias: loan.guarantees,
+            finalidade: loan.purpose,
+            status: loan.status
+          },
+          posicaoFinanceiraAtual: {
+            principalReembolsadoKZs: principalPaid,
+            jurosPagosKZs: interestPaid,
+            saldoDevedorPrincipalKZs: outstandingPrincipal,
+            totalParcelas: loan.payments ? loan.payments.length : 0,
+            parcelasLiquidadas: (loan.payments || []).filter(p => p.paid).length
+          },
+          historicoPagamentos: (loan.payments || []).map(p => ({
+            numeroParcela: p.month,
+            dataVencimento: p.dueDate,
+            valorTotalParcelaKZs: p.amount,
+            componentePrincipalKZs: p.principalPaid,
+            componenteJurosKZs: p.interestPaid,
+            status: p.paid ? 'Pago' : 'Pendente'
+          }))
+        };
+      })
+    };
+
+    const jsonStr = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `relatorio_contratos_credito_kixfundo_${new Date().toISOString().slice(0,10)}.json`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleResetAllLoanPaymentsToUnpaid = () => {
+    if (!window.confirm("Confirmar a reposição de TODOS os reembolsos de crédito para o estado PENDENTE?\n\nEsta operação zerará os ganhos de juros realizados e colocará 100% do principal concedido sob amortização em aberto.")) {
+      return;
+    }
+
+    const updatedLoans = loans.map((loan) => ({
+      ...loan,
+      status: 'active' as const,
+      payments: loan.payments.map((p) => ({
+        ...p,
+        paid: false,
+        paidAt: undefined,
+      })),
+    }));
+
+    const newLog: KixLog = {
+      id: `log-resetloans-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      type: 'policy_change',
+      amount: 0,
+      description: `REPOSIÇÃO DE CARTEIRA (ADMINISTRADOR): Todos os reembolsos de crédito foram definidos como PENDENTES (0,00 KZs reembolsados até à data).`,
+      month: currentMonth,
+    };
+
+    const updatedLogs = [newLog, ...(logs || [])];
+    saveState(members, updatedLogs, undefined, undefined, updatedLoans);
+    alert("Operação concluída com sucesso! Todos os reembolsos foram reposicionados como PENDENTES. Saldo sob Amortização em Aberto: " + formatCurrency(totalPrincipalDisbursed) + " | Juros Realizados: 0,00 KZs.");
+  };
+
   return (
     <div id="credit-system-workspace" className="space-y-6">
       
       {/* Header and top navigation row */}
-      <div className="border-b border-slate-100 dark:border-slate-800 pb-5">
+      <div className="border-b border-slate-100 dark:border-slate-800 pb-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <span className="bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-305 text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border border-sky-100 dark:border-sky-900/40">
             Escalar & Rentabilidade
@@ -695,6 +1014,39 @@ export default function CreditManagement({
           <p className="text-xs text-slate-400 mt-1">
             Geração de renda coletiva através da rentabilização de poupanças ativas com empréstimos de confiança assegurados para Sócios e Clientes Singulares.
           </p>
+        </div>
+
+        {/* Top Export Relatório Buttons */}
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          {isAdmin && (
+            <button
+              type="button"
+              onClick={handleResetAllLoanPaymentsToUnpaid}
+              title="Redefinir todos os reembolsos de crédito para o estado PENDENTE (0,00 KZs reembolsados)"
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/40 border border-amber-200 dark:border-amber-800/60 text-amber-800 dark:text-amber-300 rounded-xl shadow-sm transition-all cursor-pointer"
+            >
+              <RotateCcw className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+              <span>Zerar Reembolsos (Pendentes)</span>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleExportCSV}
+            title="Exportar dados de todos os contratos celebrados em formato CSV (Excel)"
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold bg-white dark:bg-[#151c2c] border border-slate-200 dark:border-slate-800 hover:border-sky-400 dark:hover:border-sky-500 rounded-xl text-slate-700 dark:text-slate-200 shadow-sm transition-all cursor-pointer"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-sky-500" />
+            <span>Exportar CSV</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleExportJSON}
+            title="Exportar estrutura completa auditável de todos os contratos em JSON"
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold bg-white dark:bg-[#151c2c] border border-slate-200 dark:border-slate-800 hover:border-emerald-400 dark:hover:border-emerald-500 rounded-xl text-slate-700 dark:text-slate-200 shadow-sm transition-all cursor-pointer"
+          >
+            <FileJson className="w-4 h-4 text-emerald-500" />
+            <span>Exportar JSON</span>
+          </button>
         </div>
       </div>
 
@@ -1310,8 +1662,8 @@ export default function CreditManagement({
                   </label>
                   <input
                     type="number"
-                    value={amountRequested}
-                    onChange={(e) => setAmountRequested(Number(e.target.value))}
+                    value={isNaN(amountRequested) ? '' : amountRequested}
+                    onChange={(e) => setAmountRequested(isNaN(Number(e.target.value)) ? 0 : Number(e.target.value))}
                     max={borrowerType === 'socio' ? limitSocio : limitSingular}
                     step={50000}
                     className="w-full px-3 py-1.8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-lg text-xs font-bold text-slate-900 dark:text-white font-mono"
@@ -1366,7 +1718,7 @@ export default function CreditManagement({
                   </label>
                   <input
                     type="number"
-                    value={interestRate}
+                    value={isNaN(interestRate) ? '' : interestRate}
                     disabled
                     className="w-full px-3 py-1.8 bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-lg text-xs font-bold text-slate-500 dark:text-slate-400 font-mono cursor-not-allowed"
                   />
@@ -1574,6 +1926,25 @@ export default function CreditManagement({
                   <option value="overdue">Vencidos/Mora</option>
                   <option value="completed">Liquidados</option>
                 </select>
+
+                <button
+                  type="button"
+                  onClick={handleExportCSV}
+                  title="Exportar Relatório CSV"
+                  className="px-2 py-1 text-[11px] font-bold bg-slate-50 dark:bg-[#0e1320] border border-slate-200/80 dark:border-slate-800 hover:border-sky-500 rounded-lg text-slate-700 dark:text-slate-300 hover:text-sky-500 flex items-center gap-1 transition-colors cursor-pointer"
+                >
+                  <FileSpreadsheet className="w-3 h-3 text-sky-500" />
+                  <span>CSV</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleExportJSON}
+                  title="Exportar Relatório JSON"
+                  className="px-2 py-1 text-[11px] font-bold bg-slate-50 dark:bg-[#0e1320] border border-slate-200/80 dark:border-slate-800 hover:border-emerald-500 rounded-lg text-slate-700 dark:text-slate-300 hover:text-emerald-500 flex items-center gap-1 transition-colors cursor-pointer"
+                >
+                  <FileJson className="w-3 h-3 text-emerald-500" />
+                  <span>JSON</span>
+                </button>
               </div>
             </div>
 
@@ -1588,12 +1959,13 @@ export default function CreditManagement({
                     <th>Disbursamente</th>
                     <th>Parcelas</th>
                     <th>Estado</th>
+                    {isAdmin && <th className="text-right pr-2">Ações</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-50 dark:divide-slate-850">
                   {filteredLoans.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="text-center py-12 text-slate-400 dark:text-slate-600 font-extrabold uppercase">
+                      <td colSpan={isAdmin ? 7 : 6} className="text-center py-12 text-slate-400 dark:text-slate-600 font-extrabold uppercase">
                         Nenhum contrato ativo corresponde aos filtros selecionados
                       </td>
                     </tr>
@@ -1645,6 +2017,34 @@ export default function CreditManagement({
                               </span>
                             )}
                           </td>
+                          {isAdmin && (
+                            <td className="py-2.5 text-right pr-2">
+                              <div className="flex items-center justify-end gap-1">
+                                <button
+                                  type="button"
+                                  title="Editar / Retificar Contrato"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenEditModal(l);
+                                  }}
+                                  className="p-1 rounded text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-950/40 transition-colors"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  title="Eliminar Contrato (Registo Erróneo)"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteLoanContract(l.id);
+                                  }}
+                                  className="p-1 rounded text-rose-600 hover:bg-rose-100 dark:hover:bg-rose-950/40 transition-colors"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          )}
                         </tr>
                       );
                     })
@@ -1674,7 +2074,7 @@ export default function CreditManagement({
                     <div>🏡 Garantia: <span className="text-slate-650 dark:text-slate-300 italic">{selectedLoan.guarantees}</span></div>
                   </div>
                   
-                  <div className="pt-2.5">
+                  <div className="pt-2.5 space-y-2">
                     <button
                       type="button"
                       onClick={() => {
@@ -1688,6 +2088,17 @@ export default function CreditManagement({
                       <Printer className="w-3.5 h-3.5" />
                       Ver Contrato Legal (Imprimir)
                     </button>
+
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEditModal(selectedLoan)}
+                        className="w-full py-2 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/40 text-amber-700 dark:text-amber-300 text-xs font-black rounded-lg border border-amber-200 dark:border-amber-900/30 flex items-center justify-center gap-1.5 transition-all cursor-pointer hover:scale-[1.01]"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                        Retificar / Editar Dados do Contrato (Admin)
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -2370,6 +2781,272 @@ export default function CreditManagement({
                 Averbar Moratória
               </button>
             </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Admin Retification & Edit Loan Modal */}
+      {showEditLoanModal && editingLoan && (
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[110] flex items-center justify-center p-4 overflow-y-auto">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-5 my-8"
+          >
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-xl border border-amber-200/50">
+                  <Pencil className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                      Retificar Contrato de Crédito
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300/40">
+                      Primazia de Administrador
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 font-mono font-medium">
+                    Código do Contrato: <strong className="text-sky-600">{editingLoan.id}</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowEditLoanModal(false);
+                  setEditingLoan(null);
+                }}
+                className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveLoanEdits} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                
+                {/* Borrower Name */}
+                <div className="sm:col-span-2">
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">
+                    Nome do Titular / Devedor <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editBorrowerName}
+                    onChange={(e) => setEditBorrowerName(e.target.value)}
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 outline-none"
+                  />
+                </div>
+
+                {/* Borrower Type */}
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">
+                    Tipo de Beneficiário
+                  </label>
+                  <select
+                    value={editBorrowerType}
+                    onChange={(e) => setEditBorrowerType(e.target.value as 'socio' | 'singular')}
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-bold text-slate-900 dark:text-white"
+                  >
+                    <option value="socio">Sócio da Cooperativa</option>
+                    <option value="singular">Pessoa Singular Externa</option>
+                  </select>
+                </div>
+
+                {/* Member Dropdown if Socio */}
+                {editBorrowerType === 'socio' && (
+                  <div>
+                    <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">
+                      Associação ao Membro
+                    </label>
+                    <select
+                      value={editBorrowerId}
+                      onChange={(e) => {
+                        const mId = Number(e.target.value);
+                        setEditBorrowerId(mId);
+                        const selectedM = members.find(m => m.id === mId);
+                        if (selectedM) {
+                          setEditBorrowerName(selectedM.name);
+                          setEditPhone(selectedM.phone || editPhone);
+                        }
+                      }}
+                      className="w-full px-3 py-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-bold text-slate-900 dark:text-white"
+                    >
+                      {members.map(m => (
+                        <option key={m.id} value={m.id}>
+                          #{m.id} - {m.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Document ID */}
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">
+                    Documento de Identificação (BI / NIF)
+                  </label>
+                  <input
+                    type="text"
+                    value={editDocumentId}
+                    onChange={(e) => setEditDocumentId(e.target.value)}
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-bold text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                {/* Phone */}
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">
+                    Contacto Telefónico
+                  </label>
+                  <input
+                    type="text"
+                    value={editPhone}
+                    onChange={(e) => setEditPhone(e.target.value)}
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-bold text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                {/* Amount Requested */}
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">
+                    Montante Solicitado / Principal (KZ)
+                  </label>
+                  <input
+                    type="number"
+                    min={1000}
+                    step={1000}
+                    value={isNaN(editAmountRequested) ? '' : editAmountRequested}
+                    onChange={(e) => setEditAmountRequested(isNaN(Number(e.target.value)) ? 0 : Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-mono font-bold text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                {/* Interest Rate */}
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">
+                    Taxa de Juro Mensal (%)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.5}
+                    value={isNaN(editInterestRate) ? '' : editInterestRate}
+                    onChange={(e) => setEditInterestRate(isNaN(Number(e.target.value)) ? 0 : Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-mono font-bold text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                {/* Installments Count */}
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">
+                    Número de Parcelas / Prazo (Meses)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={36}
+                    value={isNaN(editInstallmentsCount) || !editInstallmentsCount ? '' : editInstallmentsCount}
+                    onChange={(e) => setEditInstallmentsCount(isNaN(Number(e.target.value)) ? 0 : Number(e.target.value))}
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-mono font-bold text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                {/* Status */}
+                <div>
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">
+                    Estado Jurídico do Contrato
+                  </label>
+                  <select
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value as 'active' | 'completed' | 'overdue')}
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-bold text-slate-900 dark:text-white"
+                  >
+                    <option value="active">Ativo (Em Reembolso)</option>
+                    <option value="overdue">Em Mora (Inadimplente)</option>
+                    <option value="completed">Liquidado / Concluído</option>
+                  </select>
+                </div>
+
+                {/* Guarantees */}
+                <div className="sm:col-span-2">
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">
+                    Garantias e Colaterais em Penhor
+                  </label>
+                  <input
+                    type="text"
+                    value={editGuarantees}
+                    onChange={(e) => setEditGuarantees(e.target.value)}
+                    placeholder="Ex: Viatura Hilux LD-01-23, Ficha técnica do gerador..."
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-semibold text-slate-900 dark:text-white"
+                  />
+                </div>
+
+                {/* Guarantor Name */}
+                <div className="sm:col-span-2">
+                  <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">
+                    Fiador / Avalista Coletivo
+                  </label>
+                  <input
+                    type="text"
+                    value={editGuarantorName}
+                    onChange={(e) => setEditGuarantorName(e.target.value)}
+                    placeholder="Nome do fiador responsável"
+                    className="w-full px-3 py-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-semibold text-slate-900 dark:text-white"
+                  />
+                </div>
+              </div>
+
+              {/* Checkbox Recalculate */}
+              <div className="p-3 bg-slate-50 dark:bg-slate-950/60 rounded-xl border border-slate-200/80 dark:border-slate-800 flex items-center gap-2.5 text-xs text-slate-700 dark:text-slate-300">
+                <input
+                  type="checkbox"
+                  id="recalculateScheduleCheck"
+                  checked={recalculateSchedule}
+                  onChange={(e) => setRecalculateSchedule(e.target.checked)}
+                  className="rounded text-amber-600 focus:ring-amber-500 w-4 h-4 cursor-pointer"
+                />
+                <label htmlFor="recalculateScheduleCheck" className="cursor-pointer font-bold">
+                  Recalcular novo plano de mensalidades e juros com base nos novos valores/prazos
+                </label>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => handleDeleteLoanContract(editingLoan.id)}
+                  className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 text-xs font-black rounded-xl border border-rose-200 dark:border-rose-900/40 flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Eliminar Contrato Erróneo
+                </button>
+
+                <div className="flex items-center gap-2 ml-auto">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEditLoanModal(false);
+                      setEditingLoan(null);
+                    }}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-black rounded-xl shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
+                  >
+                    Salvar Retificações
+                  </button>
+                </div>
+              </div>
+            </form>
           </motion.div>
         </div>
       )}

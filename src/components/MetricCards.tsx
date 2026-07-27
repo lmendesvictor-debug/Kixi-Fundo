@@ -197,12 +197,12 @@ export default function MetricCards({
   }, 0) || 0;
   const activeLoansOutstanding = Math.max(0, totalPrincipalDisbursed - totalPrincipalRepaid);
 
-  const rotationPrice = totalBeneficiaryDestined;
-  const socialPrice = totalSocialRetained;
+  const rotationPrice = Math.max(0, totalBeneficiaryDestined - totalBeneficiaryPaid);
+  const socialPrice = socialBalance;
   
-  // Deduct active loans from rotation fund to find the liquid amount
+  // Deduct active loans from rotation fund to find the liquid amount available in cash
   const liquidRotation = Math.max(0, rotationPrice - activeLoansOutstanding);
-  const combinedTotal = rotationPrice + socialPrice;
+  const combinedTotal = liquidRotation + activeLoansOutstanding + socialPrice;
 
   const rotationPercent = combinedTotal > 0 ? ((liquidRotation / combinedTotal) * 100).toFixed(1) : '0.0';
   const creditPercent = combinedTotal > 0 ? ((activeLoansOutstanding / combinedTotal) * 100).toFixed(1) : '0.0';
@@ -550,7 +550,7 @@ export default function MetricCards({
                       <div className="text-violet-650 dark:text-violet-400 font-extrabold flex items-start gap-1 bg-violet-500/5 dark:bg-violet-500/10 p-2.5 rounded-xl border border-violet-500/10 text-[9.5px] leading-relaxed">
                         <span>🛡️</span>
                         <p>
-                          <strong>Regra Social:</strong> O reembolso de <span className="font-mono">{formatCurrency(totalReimbursement)}</span> separa o principal de <span className="font-mono">{formatCurrency(creditToThirdParty)}</span> e os juros sociais de <span className="font-mono">{formatCurrency(interestEarned)}</span>.
+                          <strong>Regra Social:</strong> O reembolso contratado de <span className="font-mono">{formatCurrency(totalReimbursement)}</span> separa o principal de <span className="font-mono">{formatCurrency(creditToThirdParty)}</span> e os juros sociais realizados de <span className="font-mono">{formatCurrency(interestEarned)}</span> (de <span className="font-mono">{formatCurrency(expectedSingularInterestFull)}</span> previstos em carteira).
                         </p>
                       </div>
                     </div>

@@ -838,14 +838,15 @@ export default function ReceiptsAutomation({
         <head>
           <title>Kixi-Fundo - Controlo de Comprovativos</title>
           <style>
-            @page { size: ${config.orientation}; margin: 15mm; }
-            body { font-family: ${fontStack}; padding: 10px; color: black; background-color: white; line-height: 1.3; font-size: ${bodySize}; }
+            @page { size: ${config.orientation}; margin: 10mm; }
+            *, *::before, *::after { box-sizing: border-box !important; }
+            body { font-family: ${fontStack}; margin: 0; padding: 0; width: 100%; max-width: 100%; overflow-x: hidden; color: black; background-color: white; line-height: 1.3; font-size: ${bodySize}; }
             .header-simple { border-bottom: 2px solid black; padding-bottom: 10px; margin-bottom: 20px; }
             .header-simple h1 { font-size: 16px; margin: 0 0 5px 0; text-transform: uppercase; font-weight: bold; }
             .header-simple p { font-size: 10px; margin: 2px 0; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-            th { border-bottom: 2px solid black; padding: 8px; font-size: 10px; font-weight: bold; text-align: left; text-transform: uppercase; color: black; }
-            td { border-bottom: 1px solid #ccc; }
+            table { width: 100% !important; max-width: 100% !important; border-collapse: collapse; margin-bottom: 20px; table-layout: auto; word-break: break-word; }
+            th { border-bottom: 2px solid black; padding: 8px; font-size: 10px; font-weight: bold; text-align: left; text-transform: uppercase; color: black; word-break: break-word; }
+            td { border-bottom: 1px solid #ccc; word-break: break-word; }
           </style>
         </head>
         <body>
@@ -883,19 +884,21 @@ export default function ReceiptsAutomation({
         <head>
           <title>Kixi-Fundo - Controlo de Comprovativos</title>
           <style>
-            @page { size: ${config.orientation}; margin: 20mm; }
-            body { font-family: ${fontStack}; padding: 30px; color: #1e293b; background-color: white; line-height: 1.4; font-size: ${bodySize}; }
-            .header { text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 20px; margin-bottom: 30px; }
+            @page { size: ${config.orientation}; margin: 10mm; }
+            *, *::before, *::after { box-sizing: border-box !important; }
+            body { font-family: ${fontStack}; margin: 0; padding: 0; width: 100%; max-width: 100%; overflow-x: hidden; color: #1e293b; background-color: white; line-height: 1.4; font-size: ${bodySize}; }
+            .header { text-align: center; border-bottom: 2px solid #0f172a; padding-bottom: 15px; margin-bottom: 20px; }
             .header h1 { font-size: 20px; color: #0f172a; margin: 0 0 5px 0; text-transform: uppercase; letter-spacing: 1px; font-weight: 850; }
             .header h2 { font-size: 12px; color: #475569; margin: 0; font-weight: normal; letter-spacing: 2px; text-transform: uppercase; }
             .meta { font-size: 10px; color: #64748b; margin-top: 10px; display: flex; justify-content: space-between; }
             .grid-stats { display: grid; grid-template-cols: repeat(3, 1fr); gap: 15px; margin-bottom: 25px; }
-            .stat-card { border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 8px; padding: 15px; text-align: center; }
+            .stat-card { border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 8px; padding: 12px; text-align: center; }
             .stat-val { font-size: 18px; font-weight: bold; color: #0f172a; margin-top: 4px; }
             .stat-label { font-size: 9px; color: #64748b; text-transform: uppercase; font-weight: bold; letter-spacing: 0.5px; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
-            th { background-color: #f1f5f9; color: #475569; padding: 10px; font-size: 10px; font-weight: bold; text-align: left; border-bottom: 2px solid #cbd5e1; text-transform: uppercase; }
-            .footer { border-top: 1px solid #e2e8f0; margin-top: 50px; padding-top: 15px; text-align: center; font-size: 10px; color: #64748b; }
+            table { width: 100% !important; max-width: 100% !important; border-collapse: collapse; margin-bottom: 20px; table-layout: auto; word-break: break-word; }
+            th { background-color: #f1f5f9; color: #475569; padding: 10px; font-size: 10px; font-weight: bold; text-align: left; border-bottom: 2px solid #cbd5e1; text-transform: uppercase; word-break: break-word; }
+            td { word-break: break-word; }
+            .footer { border-top: 1px solid #e2e8f0; margin-top: 30px; padding-top: 15px; text-align: center; font-size: 10px; color: #64748b; }
           </style>
         </head>
         <body>

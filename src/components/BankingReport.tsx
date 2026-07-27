@@ -70,8 +70,15 @@ export default function BankingReport({
   ).length;
   const totalBenefitsPaid = completedMonthsOfPayout * 1200000;
 
-  // Real available cash in Bank account
-  const bankBalance = totalGrossCollected - totalBenefitsPaid - totalSocialDisbursed;
+  // Calculate total loans principal disbursed vs repaid to derive active outstanding credit
+  const totalPrincipalDisbursed = loans.reduce((acc, l) => acc + l.amountRequested, 0);
+  const totalPrincipalRepaid = loans.reduce((acc, l) => {
+    return acc + (l.payments || []).filter(p => p.paid).reduce((sum, p) => sum + p.principalPaid, 0);
+  }, 0);
+  const activeLoansOutstanding = Math.max(0, totalPrincipalDisbursed - totalPrincipalRepaid);
+
+  // Real available liquid cash in Bank account (after deducting active loans outstanding)
+  const bankBalance = Math.max(0, totalGrossCollected - totalBenefitsPaid - totalSocialDisbursed - activeLoansOutstanding);
 
   // Compute timeline data monthly based on active Leva
   const activeLevaNum = Math.ceil(currentMonth / 6) || 1;
@@ -251,6 +258,16 @@ export default function BankingReport({
               </div>
               <div className="text-[10px] text-slate-400 mt-0.5">
                 Auxílios emergenciais pagos aos membros do consórcio
+              </div>
+            </div>
+
+            <div className="p-3 bg-slate-50 rounded-lg border border-slate-100 font-mono text-xs">
+              <div className="flex justify-between text-slate-500">
+                <span>(-) Créditos Ativos Concedidos:</span>
+                <span className="text-violet-600 dark:text-violet-400 font-semibold">-{formatCurrency(activeLoansOutstanding)}</span>
+              </div>
+              <div className="text-[10px] text-slate-400 mt-0.5">
+                Valores retirados para empréstimos. As amortizações pagas reduzem este montante e devolvem liquidez ao caixa.
               </div>
             </div>
 

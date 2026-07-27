@@ -19,7 +19,7 @@ import {
   Layers,
   Sparkles
 } from 'lucide-react';
-import { Member, KixLog, getFullMonthLabel, getMonthSimpleLabel } from '../types';
+import { Member, KixLog, Loan, getFullMonthLabel, getMonthSimpleLabel } from '../types';
 
 interface InteractiveChartsProps {
   currentMonth: number;
@@ -28,6 +28,7 @@ interface InteractiveChartsProps {
   socialBalance: number;
   theme: 'light' | 'dark';
   payoutsCompleted: { [month: number]: boolean };
+  loans?: Loan[];
   onToggleContribution?: (id: number) => void;
   appConfig?: {
     bankName: string;
@@ -49,6 +50,7 @@ export default function InteractiveCharts({
   socialBalance,
   theme,
   payoutsCompleted,
+  loans = [],
   onToggleContribution,
   appConfig,
 }: InteractiveChartsProps) {
@@ -180,10 +182,17 @@ export default function InteractiveCharts({
   const totalPoupancaRetida = totalPaidContributionsCount * 20000; // 20k per payment
   const totalDisbursedBenefits = Object.keys(payoutsCompleted).filter(k => payoutsCompleted[Number(k)]).length * 1200000;
   
-  // Current active liquid fund in normal rotation pool
-  const activeRotationCapitalLiquid = totalArrecadadoTotal - totalDisbursedBenefits - totalPoupancaRetida;
+  // Calculate active loans outstanding deducted from available cash
+  const totalPrincipalDisbursed = (loans || []).reduce((acc, l) => acc + l.amountRequested, 0);
+  const totalPrincipalRepaid = (loans || []).reduce((acc, l) => {
+    return acc + (l.payments || []).filter(p => p.paid).reduce((sum, p) => sum + p.principalPaid, 0);
+  }, 0);
+  const activeLoansOutstanding = Math.max(0, totalPrincipalDisbursed - totalPrincipalRepaid);
 
-  const totalAllocatedCalculated = totalDisbursedBenefits + socialBalance + Math.max(0, activeRotationCapitalLiquid);
+  // Current active liquid fund in normal rotation pool (after deducting active loans)
+  const activeRotationCapitalLiquid = Math.max(0, totalArrecadadoTotal - totalDisbursedBenefits - totalPoupancaRetida - activeLoansOutstanding);
+
+  const totalAllocatedCalculated = totalDisbursedBenefits + socialBalance + activeRotationCapitalLiquid + activeLoansOutstanding;
 
   // Slices for Doughnut / Asset Pie
   const slices = [
@@ -208,12 +217,21 @@ export default function InteractiveCharts({
     {
       id: 'liquid',
       label: 'Capital Líquido em Caixa',
-      value: Math.max(0, activeRotationCapitalLiquid),
+      value: activeRotationCapitalLiquid,
       color: themeColors.donutColor3,
       fill: themeColors.donutFill3,
-      percent: totalAllocatedCalculated > 0 ? (Math.max(0, activeRotationCapitalLiquid) / totalAllocatedCalculated) * 100 : 0,
-      details: 'Capital de giro ativo que garante a liquidez imediata da próxima contemplação.'
-    }
+      percent: totalAllocatedCalculated > 0 ? (activeRotationCapitalLiquid / totalAllocatedCalculated) * 100 : 0,
+      details: 'Capital de giro ativo que garante a liquidez imediata disponível em caixa.'
+    },
+    ...(activeLoansOutstanding > 0 ? [{
+      id: 'credit',
+      label: 'Créditos em Carteira (Ativos)',
+      value: activeLoansOutstanding,
+      color: '#8B5CF6',
+      fill: '#8B5CF6',
+      percent: totalAllocatedCalculated > 0 ? (activeLoansOutstanding / totalAllocatedCalculated) * 100 : 0,
+      details: 'Capital temporariamente concedido em empréstimo. Retorna à liquidez de caixa com as amortizações.'
+    }] : [])
   ];
 
   // FILTERS FOR QUERY SEARCH ENGINE 

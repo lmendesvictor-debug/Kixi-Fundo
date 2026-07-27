@@ -107,20 +107,27 @@ export default function IbanQrCodeWidget({
 
     const style = document.createElement('style');
     style.innerHTML = `
+      @page {
+        size: A4 portrait;
+        margin: 10mm;
+      }
       @media print {
+        *, *::before, *::after {
+          box-sizing: border-box !important;
+        }
         body > * {
           display: none !important;
         }
         #print-container {
           display: block !important;
-          position: absolute;
-          left: 0;
-          top: 0;
-          width: 100%;
+          position: relative;
+          width: 100% !important;
+          max-width: 100% !important;
           background: white !important;
           color: black !important;
-          padding: 2cm !important;
-          box-sizing: border-box;
+          padding: 0 !important;
+          margin: 0 !important;
+          box-sizing: border-box !important;
         }
       }
     `;

@@ -111,7 +111,16 @@ export default function ReportsSection({
     (monthKey) => payoutsCompleted[Number(monthKey)]
   ).length;
   const totalBenefitsPaid = completedMonthsOfPayout * 1200000;
-  const bankBalance = totalGrossCollected - totalBenefitsPaid - totalSocialDisbursed;
+
+  // Active loans outstanding deduction
+  const totalPrincipalDisbursed = (loans || []).reduce((acc, l) => acc + l.amountRequested, 0);
+  const totalPrincipalRepaid = (loans || []).reduce((acc, l) => {
+    return acc + (l.payments || []).filter(p => p.paid).reduce((sum, p) => sum + p.principalPaid, 0);
+  }, 0);
+  const activeLoansOutstanding = Math.max(0, totalPrincipalDisbursed - totalPrincipalRepaid);
+
+  // Liquid available bank balance
+  const bankBalance = Math.max(0, totalGrossCollected - totalBenefitsPaid - totalSocialDisbursed - activeLoansOutstanding);
 
   // Compile monthly bank details based on active Leva
   const activeLevaNum = Math.ceil(currentMonth / 6) || 1;
@@ -685,11 +694,16 @@ export default function ReportsSection({
           <head>
             <title>Kixi-Fundo - Relatório de Carteira de Créditos</title>
             <style>
-              @page { size: ${orientation}; margin: 15mm; }
+              @page { size: ${orientation}; margin: 10mm; }
+              *, *::before, *::after { box-sizing: border-box !important; }
               body { 
                 font-family: ${fontStack}; 
                 font-size: ${bodySize};
-                padding: 30px; 
+                padding: 0; 
+                margin: 0;
+                width: 100%;
+                max-width: 100%;
+                overflow-x: hidden;
                 color: #1e293b; 
                 background-color: white; 
                 line-height: 1.35; 
@@ -763,9 +777,13 @@ export default function ReportsSection({
                 font-family: monospace; 
               }
               table { 
-                width: 100%; 
+                width: 100% !important; 
+                max-width: 100% !important; 
                 border-collapse: collapse; 
                 margin-bottom: 20px; 
+                table-layout: auto;
+                word-break: break-word;
+                overflow-wrap: break-word;
               }
               th { 
                 background-color: #f1f5f9; 
@@ -776,11 +794,15 @@ export default function ReportsSection({
                 text-align: left; 
                 border-bottom: 1px solid #cbd5e1; 
                 text-transform: uppercase; 
+                word-break: break-word;
+                overflow-wrap: break-word;
               }
               td { 
                 padding: 6px 10px; 
                 font-size: 9.5px; 
                 border-bottom: 1px solid #f1f5f9; 
+                word-break: break-word;
+                overflow-wrap: break-word;
               }
               h3 { 
                 font-size: 11px; 
@@ -821,7 +843,7 @@ export default function ReportsSection({
                 color: #94a3b8; 
               }
               @media print {
-                body { padding: 10px; font-size: 9px; }
+                body { padding: 0 !important; margin: 0 !important; font-size: 9px; }
                 input, button { display: none !important; }
               }
             </style>
@@ -982,11 +1004,16 @@ export default function ReportsSection({
         <head>
           <title>Kixi-Fundo - Relatório de Auditoria Financeira</title>
           <style>
-            @page { size: ${orientation}; margin: 15mm; }
+            @page { size: ${orientation}; margin: 10mm; }
+            *, *::before, *::after { box-sizing: border-box !important; }
             body { 
               font-family: ${fontStack}; 
               font-size: ${bodySize};
-              padding: 30px; 
+              padding: 0; 
+              margin: 0;
+              width: 100%;
+              max-width: 100%;
+              overflow-x: hidden;
               color: #1e293b; 
               background-color: white; 
               line-height: 1.35; 
@@ -1158,7 +1185,7 @@ export default function ReportsSection({
               color: #94a3b8; 
             }
             @media print {
-              body { padding: 10px; font-size: 9px; }
+              body { padding: 0 !important; margin: 0 !important; font-size: 9px; }
               input, button { display: none !important; }
             }
           </style>
@@ -2827,6 +2854,91 @@ export default function ReportsSection({
                   <p className="text-[9px] text-slate-450 dark:text-slate-500 font-medium mt-0.5">Juros ganhos pelo fundo</p>
                 </div>
               </div>
+
+              {/* Bar Chart: Evolution of Principal Repaid vs Outstanding Balance */}
+              {(() => {
+                const maxMonths = Math.max(currentMonth, 6);
+                const monthlyData = Array.from({ length: maxMonths }, (_, idx) => {
+                  const monthNum = idx + 1;
+                  const monthLabel = `Mês ${monthNum}`;
+
+                  let cumulativePrincipalRepaid = 0;
+                  let totalDisbursedForPeriod = 0;
+
+                  loansList.forEach(loan => {
+                    totalDisbursedForPeriod += loan.amountRequested;
+                    
+                    (loan.payments || []).forEach(p => {
+                      if (p.paid && p.month <= monthNum) {
+                        cumulativePrincipalRepaid += p.principalPaid;
+                      }
+                    });
+                  });
+
+                  const remainingOutstanding = Math.max(0, totalDisbursedForPeriod - cumulativePrincipalRepaid);
+
+                  return {
+                    month: monthLabel,
+                    'Capital Reembolsado': cumulativePrincipalRepaid,
+                    'Ainda por Receber': remainingOutstanding,
+                  };
+                });
+
+                return (
+                  <div className="bg-white dark:bg-[#151c2c] border border-slate-100 dark:border-slate-800 p-6 rounded-xl space-y-4 text-left shadow-sm">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-850 pb-3">
+                      <div>
+                        <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                          <TrendingUp className="w-4 h-4 text-emerald-500" /> Evolução Mensal do Crédito: Principal Reembolsado vs. Saldo A Receber
+                        </h4>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                          Demonstração gráfica do avanço na amortização do capital principal devolvido à carteira comparado ao valor residual a receber dos créditos ativos.
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3 text-[10px] font-bold">
+                        <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> Reembolsado: {formatCurrency(totalPrincipalCollected)}
+                        </span>
+                        <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                          <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" /> A Receber: {formatCurrency(activeOutstanding)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="h-[280px] w-full pt-2">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={monthlyData} margin={{ top: 10, right: 20, left: 20, bottom: 25 }}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" opacity={0.2} />
+                          <XAxis 
+                            dataKey="month" 
+                            tick={{ fontSize: 11, fill: '#94a3b8' }} 
+                            axisLine={{ stroke: '#475569', opacity: 0.3 }}
+                          />
+                          <YAxis 
+                            tick={{ fontSize: 10, fill: '#94a3b8' }} 
+                            axisLine={{ stroke: '#475569', opacity: 0.3 }}
+                            tickFormatter={(val) => `${(val / 1000).toFixed(0)}k`}
+                          />
+                          <Tooltip 
+                            formatter={(value: any) => [formatCurrency(Number(value)), '']}
+                            contentStyle={{ 
+                              backgroundColor: '#0f172a', 
+                              borderColor: '#334155', 
+                              borderRadius: '8px', 
+                              color: '#fff',
+                              fontSize: '11px',
+                              fontWeight: 'bold'
+                            }} 
+                          />
+                          <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} verticalAlign="bottom" />
+                          <Bar name="Capital Principal Reembolsado" dataKey="Capital Reembolsado" fill="#10b981" radius={[4, 4, 0, 0]} />
+                          <Bar name="Valor Ainda por Receber (Saldo Ativo)" dataKey="Ainda por Receber" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Table of loans */}
               <div className="border border-slate-100 dark:border-slate-900 rounded-xl bg-white dark:bg-[#151c2c] overflow-hidden shadow-sm">

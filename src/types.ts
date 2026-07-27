@@ -142,13 +142,17 @@ export interface Loan {
   borrowerName: string;
   borrowerType: 'socio' | 'singular';
   memberId?: number; // linked member ID if borrowerType is 'socio'
+  borrowerId?: number;
   documentId: string; // BI / NIF
   phone: string;
   email: string;
   amountRequested: number;
   interestRate: number; // monthly interest rate (e.g. 6%)
   durationMonths: number; // duration (1 to 12 months)
+  installmentsCount?: number;
   guarantees: string; // collateral or physical guarantee
+  purpose?: string;
+  guarantorName?: string;
   status: 'active' | 'completed' | 'overdue';
   contractDate: string;
   payments: LoanPayment[];
