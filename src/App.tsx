@@ -34,11 +34,6 @@ import {
   Check,
   Menu,
   BellRing,
-  UserCheck,
-  UserPlus,
-  Receipt,
-  CreditCard,
-  BarChart3,
 } from 'lucide-react';
 
 import { Member, KixLog, CarouselSlide, getMemberIdCode, Loan, AppConfig } from './types';
@@ -709,14 +704,14 @@ export default function App() {
   };
 
   const allNavigationItems = [
-    { id: 'inicio', label: 'Início', icon: <Wallet className="w-4 h-4 text-amber-300" /> },
-    { id: 'membro-dashboard', label: 'Minha Área', icon: <UserCheck className="w-4 h-4 text-sky-200" /> },
-    { id: 'members', label: 'Cadastro', icon: <UserPlus className="w-4 h-4 text-emerald-300" /> },
-    { id: 'cycles', label: 'Pagamentos', icon: <Receipt className="w-4 h-4 text-amber-300" /> },
-    { id: 'credit-management', label: 'Créditos', icon: <CreditCard className="w-4 h-4 text-sky-200" /> },
-    { id: 'social', label: 'Fundo Social', icon: <HeartHandshake className="w-4 h-4 text-emerald-300" /> },
-    { id: 'reports', label: 'Relatórios', icon: <BarChart3 className="w-4 h-4 text-sky-200" /> },
-    { id: 'admin-module', label: 'Administração', icon: <ShieldCheck className="w-4 h-4 text-rose-300" /> },
+    { id: 'inicio', label: 'Início', icon: <Wallet className="w-4.5 h-4.5" /> },
+    { id: 'membro-dashboard', label: 'Minha Área', icon: <Users className="w-4.5 h-4.5" /> },
+    { id: 'members', label: 'Cadastro', icon: <Users className="w-4.5 h-4.5" /> },
+    { id: 'cycles', label: 'Pagamentos', icon: <Coins className="w-4.5 h-4.5" /> },
+    { id: 'credit-management', label: 'Créditos', icon: <Coins className="w-4.5 h-4.5" /> },
+    { id: 'social', label: 'Fundo Social', icon: <HeartHandshake className="w-4.5 h-4.5 text-emerald-500 font-bold" /> },
+    { id: 'reports', label: 'Relatórios', icon: <FileText className="w-4.5 h-4.5" /> },
+    { id: 'admin-module', label: 'Administração', icon: <ShieldCheck className="w-4.5 h-4.5 text-rose-500 font-bold" /> },
   ];
 
   const allowedNavigationItems = allNavigationItems.filter(item => isAllowed(item.id));
@@ -2550,10 +2545,10 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
       
       {/* Dynamic Top Navbar styled exactly to replicate the uploaded user blueprint */}
       <nav className="w-full bg-[#0284c7] border-b border-sky-600 shadow-md sticky top-0 z-40 select-none">
-        <div className="w-full px-3 sm:px-4 lg:px-5">
-          <div className="flex items-center justify-between h-16 sm:h-20 gap-2.5 min-w-0">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-20 gap-4">
             {/* Left side brand details with Stacked coin emblem */}
-            <div className="flex items-center gap-2 cursor-pointer hover:scale-[1.02] active:scale-95 transition-all duration-300 shrink-0" onClick={() => setActiveTab('inicio')}>
+            <div className="flex items-center gap-2.5 cursor-pointer hover:scale-[1.02] active:scale-95 transition-all duration-300 shrink-0" onClick={() => setActiveTab('inicio')}>
               <div className="w-9 h-9 sm:w-10 sm:h-10 bg-amber-400 text-[#0284c7] rounded-full flex items-center justify-center font-black text-lg sm:text-xl shadow-md border-2 border-white leading-none">
                 $
               </div>
@@ -2568,7 +2563,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
             </div>
 
             {/* Desktop Navigation Row (hidden on mobile, flex on desktop) */}
-            <div id="kix-desktop-nav-row" className="hidden lg:flex items-center gap-1 xl:gap-1.5 px-1 py-1 min-w-0 flex-1 justify-center overflow-x-auto no-scrollbar">
+            <div id="kix-desktop-nav-row" className="hidden lg:flex items-center gap-0.5 xl:gap-1 px-1 py-1 min-w-0 flex-1 justify-center max-w-5xl">
               {allowedNavigationItems.map((item) => {
                 const isActive = activeTab === item.id;
                 const labelText = item.id === 'membro-dashboard' ? 'Minha Área' : item.label;
@@ -2578,14 +2573,14 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                     key={item.id}
                     onClick={() => navigateToTab(item.id)}
                     title={labelText}
-                    className={`kix-nav-btn px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all duration-200 flex items-center gap-1.5 cursor-pointer shrink-0 whitespace-nowrap ${
+                    className={`kix-nav-btn px-2 lg:px-2.5 xl:px-3.5 py-1.5 lg:py-2 rounded-xl text-xs lg:text-xs xl:text-sm font-bold transition-all duration-300 flex items-center gap-1.5 cursor-pointer hover:scale-105 active:scale-95 shrink-0 ${
                       isActive
-                        ? 'bg-white text-sky-800 shadow-sm font-extrabold border border-white'
-                        : 'text-white/90 hover:bg-white/15 hover:text-white'
+                        ? 'bg-white text-sky-700 shadow-md font-black border border-white'
+                        : 'text-white hover:bg-white/12 hover:text-white'
                     }`}
                   >
                     <span className="shrink-0">{item.icon}</span>
-                    <span className="transition-all duration-200">
+                    <span className="transition-all duration-300">
                       {labelText}
                     </span>
                   </button>
@@ -2763,34 +2758,33 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                 )}
               </div>
             </div>
-
             {/* Desktop Only status instruments - hidden on mobile, compact on desktop */}
-            <div id="kix-desktop-status-row" className="hidden lg:flex items-center gap-1.5 shrink-0 ml-auto">
+            <div id="kix-desktop-status-row" className="hidden lg:flex items-center gap-1.5 sm:gap-2 shrink-0">
 
               {/* Cloud DB Sync Status Badge */}
               <div 
-                className={`kix-status-badge flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black leading-none shrink-0 ${
+                className={`flex items-center gap-1.5 px-2 py-1 rounded-md text-[8px] font-black leading-none ${
                   isDbSyncing 
-                    ? 'bg-emerald-400/20 text-emerald-200 animate-pulse' 
-                    : 'bg-white/10 text-emerald-300'
+                    ? 'bg-emerald-500/10 text-emerald-400 animate-pulse' 
+                    : 'bg-emerald-500/5 text-emerald-500/60'
                 }`}
                 title={isDbSyncing ? 'A sincronizar dados com o servidor...' : 'Dados Sincronizados na Cloud'}
               >
-                <Cloud className={`w-3.5 h-3.5 shrink-0 ${isDbSyncing ? 'animate-spin text-emerald-300' : 'text-emerald-300'}`} />
-                <span className="hidden xl:inline whitespace-nowrap">{isDbSyncing ? 'SINCRONIZANDO' : 'G-CLOUD'}</span>
+                <Cloud className={`w-3 h-3 ${isDbSyncing ? 'animate-spin' : ''}`} />
+                <span className="hidden 2xl:inline">{isDbSyncing ? 'A SINCRONIZAR' : 'G-CLOUD ACTIVA'}</span>
               </div>
 
               {/* Connection Status Badge (Compact dot) */}
               <div 
-                className={`kix-status-badge flex items-center gap-1.5 px-2 py-1 rounded-lg text-[10px] font-black leading-none shrink-0 ${
+                className={`flex items-center gap-1 px-1.5 py-1 rounded-md text-[8px] font-black leading-none ${
                   isOnline 
-                    ? 'bg-emerald-400/20 text-emerald-200' 
-                    : 'bg-amber-400/20 text-amber-200'
+                    ? 'bg-[#10B981]/15 text-[#D1FAE5]' 
+                    : 'bg-amber-500/15 text-amber-300'
                 }`}
                 title={isOnline ? 'ONLINE' : 'OFFLINE'}
               >
-                <span className={`w-2 h-2 rounded-full shrink-0 ${isOnline ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'}`} />
-                <span className="hidden xl:inline whitespace-nowrap">{isOnline ? 'ONLINE' : 'OFFLINE'}</span>
+                <div className={`w-1 h-1 rounded-full ${isOnline ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'}`} />
+                <span className="hidden 2xl:inline">{isOnline ? 'ONLINE' : 'OFFLINE'}</span>
               </div>
 
               {/* Pending Sync Counter Badge */}
@@ -2803,28 +2797,29 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                       ? `${pendingSyncCount} alteração(ões) pendente(s) de envio para o Google Drive. Clique para sincronizar agora.`
                       : 'Todos os dados locais estão totalmente sincronizados com o Google Drive.'
                   }
-                  className={`kix-status-btn flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-extrabold transition-all cursor-pointer border shrink-0 ${
+                  className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-extrabold shadow-xs transition-all cursor-pointer border select-none ${
                     pendingSyncCount > 0
                       ? isOnline 
-                        ? 'bg-amber-400/25 text-amber-100 border-amber-400/30 hover:bg-amber-400/35'
-                        : 'bg-rose-500/20 text-rose-200 border-rose-400/30 hover:bg-rose-500/30'
-                      : 'bg-emerald-400/15 text-emerald-200 border-emerald-400/25 hover:bg-emerald-400/25'
+                        ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-600 dark:text-amber-400 border-amber-500/30'
+                        : 'bg-rose-500/10 hover:bg-rose-500/15 text-rose-550 dark:text-rose-400 border-rose-500/20'
+                      : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
                   }`}
                 >
                   {isSyncingPending ? (
-                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-300 shrink-0" />
+                    <RefreshCw className="w-3 h-3 animate-spin text-amber-500" />
                   ) : pendingSyncCount > 0 ? (
-                    <CloudOff className="w-3.5 h-3.5 shrink-0 text-amber-300" />
+                    <CloudOff className="w-3 h-3 shrink-0" />
                   ) : (
-                    <Cloud className="w-3.5 h-3.5 shrink-0 text-emerald-300" />
+                    <Cloud className="w-3 h-3 shrink-0 text-emerald-500" />
                   )}
-                  <span className="hidden xl:inline whitespace-nowrap ml-0.5">
+                  <span className="hidden 2xl:inline ml-0.5">
                     {isSyncingPending 
-                      ? 'A Sincronizar' 
+                      ? 'A Sincronizar...' 
                       : pendingSyncCount > 0 
-                        ? `Pendentes (${pendingSyncCount})` 
-                        : 'Sync Ok'}
+                        ? `Pendentes` 
+                        : 'Sincronizado'}
                   </span>
+                  {pendingSyncCount > 0 && <span className="font-mono bg-amber-500/20 px-1 py-0.2 rounded text-[8px] ml-0.5">({pendingSyncCount})</span>}
                 </button>
               )}
 
@@ -2832,17 +2827,17 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
               <button
                 onClick={() => setShowRegulations(true)}
                 title="Ver Normativos do Kix-Fundo"
-                className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs uppercase tracking-wider px-2.5 py-1.5 rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5 shrink-0 whitespace-nowrap"
+                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs uppercase tracking-wider px-2.5 py-1.5 rounded-lg shadow-sm transition-all cursor-pointer flex items-center gap-1.5 shrink-0 select-none"
               >
-                <BookOpen className="w-3.5 h-3.5 shrink-0" />
-                <span className="hidden xl:inline">NORMATIVOS</span>
+                <BookOpen className="w-4 h-4" />
+                <span className="hidden 2xl:inline">NORMATIVOS</span>
               </button>
 
               {/* Moon / Sun theme selector */}
               <button
                 onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
                 title={theme === 'light' ? 'Mudar para Escuro' : 'Mudar para Claro'}
-                className="p-1.5 rounded-xl hover:bg-white/15 text-white transition-all cursor-pointer flex items-center justify-center shrink-0 w-8.5 h-8.5"
+                className="p-1.5 rounded-full hover:bg-white/10 text-white transition-all cursor-pointer flex items-center justify-center shrink-0 w-8.5 h-8.5"
               >
                 {theme === 'light' ? (
                   <Moon className="w-4 h-4 text-white" />
@@ -2857,10 +2852,10 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                   localStorage.removeItem('kix_current_user');
                   setCurrentUser(null);
                 }}
-                className="bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs uppercase tracking-wider px-2.5 py-1.5 rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5 shrink-0 whitespace-nowrap"
+                className="bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs uppercase tracking-wider px-2.5 py-1.5 rounded-lg shadow-sm transition-all cursor-pointer flex items-center gap-1.5 shrink-0 select-none"
               >
-                <LogOut className="w-3.5 h-3.5 shrink-0" />
-                <span className="hidden xl:inline">SAIR</span>
+                <LogOut className="w-4 h-4" />
+                <span className="hidden 2xl:inline">SAIR</span>
               </button>
             </div>
 

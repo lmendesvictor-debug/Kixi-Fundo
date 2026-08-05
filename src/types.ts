@@ -137,6 +137,17 @@ export interface LoanPayment {
   paidAt?: string;
 }
 
+export interface PledgedAsset {
+  id: string;
+  type: 'veiculo' | 'imovel' | 'equipamento' | 'promissoria_fiador' | 'joias_metais' | 'deposito_titulo' | 'outro';
+  title: string;
+  description?: string;
+  serialOrDocNumber?: string;
+  estimatedValue?: number;
+  condition?: string;
+  custodyLocation?: string;
+}
+
 export interface Loan {
   id: string; // unique contract code L-XXXX
   borrowerName: string;
@@ -151,6 +162,8 @@ export interface Loan {
   durationMonths: number; // duration (1 to 12 months)
   installmentsCount?: number;
   guarantees: string; // collateral or physical guarantee
+  guaranteeAssets?: PledgedAsset[];
+  customGuaranteeClause?: string;
   purpose?: string;
   guarantorName?: string;
   status: 'active' | 'completed' | 'overdue';

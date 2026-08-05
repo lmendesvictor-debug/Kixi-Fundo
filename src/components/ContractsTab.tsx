@@ -168,7 +168,7 @@ export default function ContractsTab({
       .replace(/{TAXA_JUROS}/g, `<strong>${loan.interestRate}</strong>`)
       .replace(/{MENSALIDADE}/g, `<strong>${formatCurrency(monthlyInstallment)}</strong>`)
       .replace(/{DATA_PRIMEIRA_PARCELA}/g, `<strong>${dateStr}</strong>`)
-      .replace(/{GARANTIAS}/g, `<strong>${loan.guarantees || 'Colateral preventivo fiduciário em bens móveis registados.'}</strong>`);
+      .replace(/{GARANTIAS}/g, `<strong>${loan.customGuaranteeClause || loan.guarantees || 'Colateral preventivo fiduciário em bens móveis registados.'}</strong>`);
 
     // Bold standard terms for elegant, classical legal formatting
     text = text

@@ -760,19 +760,24 @@ export default function MembersTable({
                 </td>
               </tr>
             ) : (
-              filteredMembers.map((m) => {
-                const hasPaidCurrentMonth = m.contributions[currentMonth]?.paid;
-                const isCurrentMonthBeneficiary = beneficiariesIds.includes(m.id);
-                const paidMonthsCount = countPaidMonths(m);
-                const individualSocialInvestment = paidMonthsCount * 20000;
+              <AnimatePresence mode="popLayout">
+                {filteredMembers.map((m, index) => {
+                  const hasPaidCurrentMonth = m.contributions[currentMonth]?.paid;
+                  const isCurrentMonthBeneficiary = beneficiariesIds.includes(m.id);
+                  const paidMonthsCount = countPaidMonths(m);
+                  const individualSocialInvestment = paidMonthsCount * 20000;
 
-                return (
-                  <tr
-                    key={m.id}
-                    className={`border-b border-slate-100 dark:border-slate-800/80 hover:bg-slate-55/35 dark:hover:bg-slate-800/25 transition-colors ${
-                      isCurrentMonthBeneficiary ? 'bg-indigo-500/5 dark:bg-indigo-950/5' : ''
-                    }`}
-                  >
+                  return (
+                    <motion.tr
+                      key={m.id}
+                      initial={{ opacity: 0, y: 15, scale: 0.98 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -15, scale: 0.97 }}
+                      transition={{ duration: 0.25, delay: Math.min(index * 0.03, 0.3), ease: 'easeOut' }}
+                      className={`border-b border-slate-100 dark:border-slate-800/80 hover:bg-slate-55/35 dark:hover:bg-slate-800/25 transition-colors ${
+                        isCurrentMonthBeneficiary ? 'bg-indigo-500/5 dark:bg-indigo-950/5' : ''
+                      }`}
+                    >
                     
                     {/* Visual identification with picture conforming to Image 5 */}
                     <td className="py-4 px-5">
@@ -1017,9 +1022,10 @@ export default function MembersTable({
                       </div>
                     </td>
 
-                  </tr>
-                );
-              })
+                    </motion.tr>
+                  );
+                })}
+              </AnimatePresence>
             )}
           </tbody>
         </table>

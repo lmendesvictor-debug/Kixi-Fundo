@@ -18,8 +18,9 @@ import {
   Printer, X, Edit, Settings, FileText as FileIcon, Sparkles, CheckSquare, Pencil, Trash2,
   Download, FileSpreadsheet, FileJson, RotateCcw
 } from 'lucide-react';
-import { Loan, Member, KixLog, LoanPayment } from '../types';
+import { Loan, Member, KixLog, LoanPayment, PledgedAsset } from '../types';
 import ContractsTab from './ContractsTab';
+import GuaranteeClauseEditor from './GuaranteeClauseEditor';
 
 const DEFAULT_LEGAL_TEMPLATE = `CONTRATO DE MÚTUO FINANCEIRO COM JUROS E PENHOR DE GARANTIA
 
@@ -150,6 +151,8 @@ export default function CreditManagement({
   const [editInterestRate, setEditInterestRate] = useState<number>(0);
   const [editInstallmentsCount, setEditInstallmentsCount] = useState<number>(0);
   const [editGuarantees, setEditGuarantees] = useState('');
+  const [editGuaranteeAssets, setEditGuaranteeAssets] = useState<PledgedAsset[]>([]);
+  const [editCustomGuaranteeClause, setEditCustomGuaranteeClause] = useState<string>('');
   const [editPurpose, setEditPurpose] = useState('');
   const [editGuarantorName, setEditGuarantorName] = useState('');
   const [editStatus, setEditStatus] = useState<'active' | 'completed' | 'overdue'>('active');
@@ -166,6 +169,8 @@ export default function CreditManagement({
     setEditInterestRate(loan.interestRate || 0);
     setEditInstallmentsCount(loan.installmentsCount || loan.durationMonths || 1);
     setEditGuarantees(loan.guarantees || '');
+    setEditGuaranteeAssets(loan.guaranteeAssets || []);
+    setEditCustomGuaranteeClause(loan.customGuaranteeClause || '');
     setEditPurpose(loan.purpose || '');
     setEditGuarantorName(loan.guarantorName || '');
     setEditStatus(loan.status || 'active');
@@ -221,6 +226,8 @@ export default function CreditManagement({
       interestRate: Number(editInterestRate),
       installmentsCount: Number(editInstallmentsCount),
       guarantees: editGuarantees,
+      guaranteeAssets: editGuaranteeAssets,
+      customGuaranteeClause: editCustomGuaranteeClause,
       purpose: editPurpose,
       guarantorName: editGuarantorName,
       status: editStatus,
@@ -301,6 +308,8 @@ export default function CreditManagement({
   const [durationMonths, setDurationMonths] = useState<number>(3);
   const [interestRate, setInterestRate] = useState<number>(10);
   const [guarantees, setGuarantees] = useState('');
+  const [guaranteeAssets, setGuaranteeAssets] = useState<PledgedAsset[]>([]);
+  const [customGuaranteeClause, setCustomGuaranteeClause] = useState<string>('');
   const [readTerms, setReadTerms] = useState(false);
 
   // New Contract legal state and printing workflow states
@@ -794,6 +803,8 @@ export default function CreditManagement({
       interestRate,
       durationMonths,
       guarantees: guaranteesWithFiadorText,
+      guaranteeAssets,
+      customGuaranteeClause,
       status: 'active',
       contractDate: new Date().toLocaleDateString('pt-AO'),
       payments: generatedPayments,
@@ -1640,17 +1651,17 @@ export default function CreditManagement({
                 </div>
               </div>
 
-              {/* Collateral & Guarantee Requirements */}
+              {/* Collateral & Guarantee Requirements Dynamic Editor */}
               <div>
-                <label className="block text-[11px] font-bold uppercase text-slate-400 mb-1 flex items-center gap-1">
-                  Garantias Reais e Penhores Oferecidos <span className="text-red-500">*</span>
-                </label>
-                <textarea
+                <GuaranteeClauseEditor
                   value={guarantees}
-                  onChange={(e) => setGuarantees(e.target.value)}
-                  rows={2}
-                  placeholder="Especifique detalhadamente os bens custodiados ou co-assinaturas fiadoras (Ex: Retenção de documento do veículo matrícula LD-45-23-AA, penhor de gerador industrial de 15KVA ou termo assinado por fiador sócio)"
-                  className="w-full p-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-850 rounded-lg text-xs font-semibold text-slate-900 dark:text-white"
+                  assets={guaranteeAssets}
+                  customClause={customGuaranteeClause}
+                  onChange={(text, assets, customText) => {
+                    setGuarantees(text);
+                    setGuaranteeAssets(assets);
+                    setCustomGuaranteeClause(customText);
+                  }}
                 />
               </div>
 
@@ -2973,17 +2984,18 @@ export default function CreditManagement({
                   </select>
                 </div>
 
-                {/* Guarantees */}
+                {/* Guarantees Dynamic Clause Editor */}
                 <div className="sm:col-span-2">
-                  <label className="block text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">
-                    Garantias e Colaterais em Penhor
-                  </label>
-                  <input
-                    type="text"
+                  <GuaranteeClauseEditor
                     value={editGuarantees}
-                    onChange={(e) => setEditGuarantees(e.target.value)}
-                    placeholder="Ex: Viatura Hilux LD-01-23, Ficha técnica do gerador..."
-                    className="w-full px-3 py-2 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-semibold text-slate-900 dark:text-white"
+                    assets={editGuaranteeAssets}
+                    customClause={editCustomGuaranteeClause}
+                    onChange={(text, assets, customText) => {
+                      setEditGuarantees(text);
+                      setEditGuaranteeAssets(assets);
+                      setEditCustomGuaranteeClause(customText);
+                    }}
+                    compact={true}
                   />
                 </div>
 
