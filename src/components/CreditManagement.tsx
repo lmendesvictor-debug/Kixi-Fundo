@@ -2148,10 +2148,22 @@ export default function CreditManagement({
                           <span className="font-extrabold font-mono text-slate-900 dark:text-white">{formatCurrency(p.amount)}</span>
                           
                           {p.paid ? (
-                            <span className="text-[9px] font-black text-emerald-600 bg-emerald-100/50 dark:bg-[#052e25] px-2 py-0.5 rounded-full border border-emerald-250/50">
-                              ✓ Pago {p.paidAt ? `(${p.paidAt})` : ''}
-                            </span>
-                          ) : (isAdmin && isWriteAllowed) ? (
+                            <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                              <span className="text-[9px] font-black text-emerald-600 bg-emerald-100/50 dark:bg-[#052e25] px-2 py-0.5 rounded-full border border-emerald-250/50">
+                                ✓ Pago {p.paidAt ? `(${p.paidAt})` : ''}
+                              </span>
+                              {(isAdmin || isWriteAllowed) && (
+                                <button
+                                  type="button"
+                                  onClick={() => onPayInstallment(selectedLoan.id, p.month)}
+                                  title="Estornar esta amortização de crédito"
+                                  className="px-2 py-0.5 text-[9px] font-bold text-slate-500 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400 bg-slate-100 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-950/30 rounded border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
+                                >
+                                  Estornar
+                                </button>
+                              )}
+                            </div>
+                          ) : (isAdmin || isWriteAllowed) ? (
                             <div className="flex items-center gap-1.5 flex-wrap justify-end">
                               <button
                                 type="button"

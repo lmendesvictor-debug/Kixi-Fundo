@@ -304,7 +304,9 @@ export default function App() {
       if (!prevM) return nextM;
       
       const nextContribs = { ...nextM.contributions };
-      let loanEarningsBalance = (nextM as any).loanEarningsBalance || 0;
+      let loanEarningsBalance = (nextM as any).loanEarningsBalance !== undefined 
+        ? (nextM as any).loanEarningsBalance 
+        : ((prevM as any).loanEarningsBalance || 0);
       
       for (let mNum = 1; mNum <= 6; mNum++) {
         const prevPaid = prevM.contributions[mNum]?.paid || false;
@@ -2096,31 +2098,46 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
   };
 
   const handlePayInstallment = (loanId: string, paymentMonth: number) => {
-    const isSuperAdmin = currentUser?.email.trim().toLowerCase() === 'lmendesvictor@gmail.com';
-    if (!isSuperAdmin && loggedInMember?.permissions?.actionIssueCredits === false) {
+    const isSuperAdmin = currentUser?.email?.trim().toLowerCase() === 'lmendesvictor@gmail.com';
+    const isAdminRole = currentUser?.role === 'admin';
+    const hasPermission = isSuperAdmin || isAdminRole || (loggedInMember?.permissions?.actionIssueCredits !== false);
+
+    if (!hasPermission) {
       alert('Acesso Negado: Não possui privilégios de gestor para processar amortizações de créditos.');
       return;
     }
 
     const targetLoan = loans.find(l => l.id === loanId);
-    if (!targetLoan) return;
+    if (!targetLoan) {
+      alert('Contrato de crédito não encontrado.');
+      return;
+    }
 
+    const targetPayment = targetLoan.payments.find(p => p.month === paymentMonth);
+    if (!targetPayment) {
+      alert(`Prestação nº ${paymentMonth} não encontrada no plano de amortização.`);
+      return;
+    }
+
+    const wasPaid = targetPayment.paid;
+    const isAdding = !wasPaid;
+
+    // Toggle payment paid state
     const updatedLoans = loans.map((loan) => {
       if (loan.id === loanId) {
         const updatedPayments = loan.payments.map((p) => {
           if (p.month === paymentMonth) {
-            const hasPaid = p.paid;
             return {
               ...p,
-              paid: !hasPaid,
-              paidAt: !hasPaid ? new Date().toISOString() : undefined,
+              paid: !wasPaid,
+              paidAt: !wasPaid ? new Date().toISOString().split('T')[0] : undefined,
             };
           }
           return p;
         });
 
         const allPaid = updatedPayments.every(p => p.paid);
-        const status = allPaid ? 'completed' : 'active';
+        const status = allPaid ? ('completed' as const) : ('active' as const);
 
         return {
           ...loan,
@@ -2131,77 +2148,28 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
       return loan;
     }) as Loan[];
 
-    const payment = targetLoan.payments.find(p => p.month === paymentMonth);
-    const wasPaid = payment ? payment.paid : false;
+    // Calculate financials
+    const principalPaid = targetPayment.principalPaid || 0;
+    const interestPaid = targetPayment.interestPaid || 0;
+    const totalInstallmentPaid = targetPayment.amount || (principalPaid + interestPaid);
 
-    // RULE: Automatically distribute reimbursed principal back to members' contributions (into rotation fund)
-    // The interest paid is alocated fully to the Fundo de Interajuda (Fundo Social)
-    const isAdding = !wasPaid;
-    const amountToDistribute = payment ? payment.principalPaid : 0;
-    const share = amountToDistribute / (members.length || 1);
+    // Distribution rule:
+    // Reimbursed principal returns to Kixi-Fundo Liquidity (Vault/Rotation Fund).
+    // Interest paid is distributed as yield among active cooperative members (loanEarningsBalance).
+    const membersCount = members.length || 1;
+    const interestSharePerMember = interestPaid / membersCount;
 
     const updatedMembers = members.map((m) => {
-      const contributions = { ...m.contributions };
-      const paidMonths = Object.keys(contributions)
-        .map(Number)
-        .filter(mNum => contributions[mNum]?.paid)
-        .sort((a, b) => a - b);
-        
-      let loanEarningsBalance = (m as any).loanEarningsBalance || 0;
-      
+      let currentEarnings = (m as any).loanEarningsBalance || 0;
       if (isAdding) {
-        if (paidMonths.length > 0) {
-          // Add share to the first paid contribution
-          const targetMonth = paidMonths[0];
-          const currentAmount = contributions[targetMonth].amount !== undefined 
-            ? (contributions[targetMonth] as any).amount 
-            : 120000;
-          
-          contributions[targetMonth] = {
-            ...contributions[targetMonth],
-            amount: currentAmount + share
-          };
-        } else {
-          // Accrue to balance
-          loanEarningsBalance += share;
-        }
+        currentEarnings += interestSharePerMember;
       } else {
-        // Subtract or reduce back
-        if (paidMonths.length > 0) {
-          let remainingToSubtract = share;
-          for (const mNum of paidMonths) {
-            const currentAmount = contributions[mNum].amount !== undefined 
-              ? (contributions[mNum] as any).amount 
-              : 120000;
-              
-            const subtractable = currentAmount - 120000;
-            if (subtractable >= remainingToSubtract) {
-              contributions[mNum] = {
-                ...contributions[mNum],
-                amount: currentAmount - remainingToSubtract
-              };
-              remainingToSubtract = 0;
-              break;
-            } else {
-              contributions[mNum] = {
-                ...contributions[mNum],
-                amount: 120000
-              };
-              remainingToSubtract -= subtractable;
-            }
-          }
-          if (remainingToSubtract > 0) {
-            loanEarningsBalance = Math.max(0, loanEarningsBalance - remainingToSubtract);
-          }
-        } else {
-          loanEarningsBalance = Math.max(0, loanEarningsBalance - share);
-        }
+        currentEarnings = Math.max(0, currentEarnings - interestSharePerMember);
       }
-      
+
       return {
         ...m,
-        loanEarningsBalance,
-        contributions
+        loanEarningsBalance: currentEarnings,
       };
     });
 
@@ -2210,11 +2178,11 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
       timestamp: new Date().toISOString(),
       type: 'contribution',
       memberName: targetLoan.borrowerName,
-      amount: payment ? payment.amount : 0,
+      amount: totalInstallmentPaid,
       month: currentMonth,
-      description: !wasPaid
-        ? `AMORTIZAÇÃO EFECTUADA: Prestação nº ${paymentMonth} recebida de ${targetLoan.borrowerName} (${targetLoan.borrowerType === 'socio' ? 'sócio' : 'singular'}). Amortização de principal (${formatCurrency(payment ? payment.principalPaid : 0)}) redistribuída automaticamente ao fundo rotativo dos cooperantes (+${formatCurrency(share)} cada) e os juros (${formatCurrency(payment ? payment.interestPaid : 0)}) alocados diretamente ao Fundo Social.`
-        : `AMORTIZAÇÃO ANULADA: Pagamento da prestação nº ${paymentMonth} de ${targetLoan.borrowerName} cancelado e estornos realizados.`,
+      description: isAdding
+        ? `AMORTIZAÇÃO CONCLUÍDA: Prestação nº ${paymentMonth} recebida de ${targetLoan.borrowerName} (${targetLoan.borrowerType === 'socio' ? 'sócio' : 'singular'}). Capital amortizado (${formatCurrency(principalPaid)}) reincorporado na Tesouraria e Juros (${formatCurrency(interestPaid)}) distribuídos aos sócios (+${formatCurrency(interestSharePerMember)} por cooperante).`
+        : `AMORTIZAÇÃO ESTORNADA: Estorno da prestação nº ${paymentMonth} de ${targetLoan.borrowerName}. Rendimentos e saldos da carteira reajustados.`,
     };
 
     const updatedLogs = [newLog, ...logs];
