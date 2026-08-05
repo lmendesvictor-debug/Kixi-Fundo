@@ -366,16 +366,20 @@ export default function App() {
     return INITIAL_LOGS;
   });
   
-  const sanitizeLoansUnpaid = (loanList: Loan[]): Loan[] => {
-    return (loanList || []).map((l) => ({
-      ...l,
-      status: 'active' as const,
-      payments: (l.payments || []).map((p) => ({
+  const sanitizeLoans = (loanList: Loan[]): Loan[] => {
+    return (loanList || []).map((l) => {
+      const payments = (l.payments || []).map((p) => ({
         ...p,
-        paid: false,
-        paidAt: undefined,
-      })),
-    }));
+        paid: p.paid === true || String(p.paid).toLowerCase() === 'true',
+        paidAt: p.paidAt || undefined,
+      }));
+      const allPaid = payments.length > 0 && payments.every(p => p.paid);
+      return {
+        ...l,
+        status: allPaid ? ('completed' as const) : (l.status || 'active'),
+        payments,
+      };
+    });
   };
 
   const [loans, setLoans] = useState<Loan[]>(() => {
@@ -391,11 +395,11 @@ export default function App() {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
           const filtered = parsed.filter(l => !FICTITIOUS_EMAILS.includes((l.email || '').trim().toLowerCase()));
-          if (filtered.length > 0) return sanitizeLoansUnpaid(filtered);
+          if (filtered.length > 0) return sanitizeLoans(filtered);
         }
       } catch {}
     }
-    return sanitizeLoansUnpaid(INITIAL_LOANS);
+    return sanitizeLoans(INITIAL_LOANS);
   });
 
   const unsubscribeRef = useRef<(() => void) | null>(null);
@@ -1417,7 +1421,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
               setLogs(dbState.logs);
             }
             if (dbState.loans) {
-              const sanitizedRemoteLoans = sanitizeLoansUnpaid(dbState.loans);
+              const sanitizedRemoteLoans = sanitizeLoans(dbState.loans);
               if (JSON.stringify(sanitizedRemoteLoans) !== JSON.stringify(stateRef.current.loans)) {
                 setLoans(sanitizedRemoteLoans);
                 localStorage.setItem('kix_loans', JSON.stringify(sanitizedRemoteLoans));
@@ -1686,6 +1690,22 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
     localStorage.setItem('kix_current_month', String(newMonth));
     localStorage.setItem('kix_loans', JSON.stringify(newLoans));
     localStorage.setItem('kix_app_config', JSON.stringify(newAppConfig));
+
+    // Persist immediately to Cloud Firestore if connected and active
+    if (!isFirestoreQuotaExceededRef.current) {
+      saveStateToFirestore({
+        members: reconciledMembers,
+        logs: newLogs,
+        payoutsCompleted: newPayouts,
+        currentMonth: newMonth,
+        loans: newLoans,
+        appConfig: newAppConfig,
+        carouselSlides,
+        updatedAt: generatedTimestamp
+      }).catch(e => {
+        console.error("[saveState] Erro ao sincronizar com Firestore:", e);
+      });
+    }
 
     // Backup offline local automático redundante
     try {
