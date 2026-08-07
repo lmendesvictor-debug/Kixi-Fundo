@@ -16,7 +16,7 @@ import {
   Scale, Calendar, HelpCircle, CreditCard, ArrowUpRight, 
   User, Building, Search, DollarSign, Landmark, Phone, MessageSquare, Briefcase,
   Printer, X, Edit, Settings, FileText as FileIcon, Sparkles, CheckSquare, Pencil, Trash2,
-  Download, FileSpreadsheet, FileJson, RotateCcw
+  Download, FileSpreadsheet, FileJson, RotateCcw, CheckCircle2
 } from 'lucide-react';
 import { Loan, Member, KixLog, LoanPayment, PledgedAsset } from '../types';
 import ContractsTab from './ContractsTab';
@@ -215,6 +215,20 @@ export default function CreditManagement({
       });
     }
 
+    let finalStatus = editStatus;
+    if (editStatus === 'completed') {
+      updatedPayments = updatedPayments.map(p => ({
+        ...p,
+        paid: true,
+        paidAt: p.paidAt || new Date().toISOString().split('T')[0],
+      }));
+    } else {
+      const allPaid = updatedPayments.length > 0 && updatedPayments.every(p => p.paid);
+      if (allPaid) {
+        finalStatus = 'completed';
+      }
+    }
+
     const updatedLoan: Loan = {
       ...editingLoan,
       borrowerName: editBorrowerName.trim() || editingLoan.borrowerName,
@@ -230,7 +244,7 @@ export default function CreditManagement({
       customGuaranteeClause: editCustomGuaranteeClause,
       purpose: editPurpose,
       guarantorName: editGuarantorName,
-      status: editStatus,
+      status: finalStatus,
       payments: updatedPayments,
     };
 
@@ -250,6 +264,61 @@ export default function CreditManagement({
     saveState(members, updatedLogs, undefined, undefined, updatedLoans);
     setShowEditLoanModal(false);
     setEditingLoan(null);
+  };
+
+  const handleFullyLiquidateLoan = (loanId: string) => {
+    const targetLoan = loans.find(l => l.id === loanId);
+    if (!targetLoan) return;
+
+    if (!window.confirm(`Confirma a liquidação integral e quitação total do contrato ${targetLoan.id} (${targetLoan.borrowerName})? Todas as parcelas em aberto serão registadas como pagas e os rendimentos de juros serão distribuídos aos cooperantes.`)) {
+      return;
+    }
+
+    let newlyCollectedInterest = 0;
+    const updatedPayments = targetLoan.payments.map((p) => {
+      if (!p.paid) {
+        newlyCollectedInterest += (p.interestPaid || 0);
+      }
+      return {
+        ...p,
+        paid: true,
+        paidAt: p.paidAt || new Date().toISOString().split('T')[0],
+      };
+    });
+
+    const updatedLoans = loans.map((l) => {
+      if (l.id === loanId) {
+        return {
+          ...l,
+          status: 'completed' as const,
+          payments: updatedPayments,
+        };
+      }
+      return l;
+    });
+
+    const membersCount = members.length || 1;
+    const interestSharePerMember = newlyCollectedInterest / membersCount;
+
+    const updatedMembers = members.map((m) => {
+      return {
+        ...m,
+        loanEarningsBalance: ((m as any).loanEarningsBalance || 0) + interestSharePerMember,
+      };
+    });
+
+    const newLog: KixLog = {
+      id: `liquidate-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      type: 'contribution',
+      memberName: targetLoan.borrowerName,
+      amount: targetLoan.amountRequested,
+      month: currentMonth,
+      description: `LIQUIDAÇÃO TOTAL DE CRÉDITO: Contrato nº ${targetLoan.id} de ${targetLoan.borrowerName} foi totalmente quitado e liquidado. Capital amortizado reincorporado na Tesouraria e juros remanescentes (${formatCurrency(newlyCollectedInterest)}) distribuídos aos cooperantes (+${formatCurrency(interestSharePerMember)} por sócio).`,
+    };
+
+    const updatedLogs = [newLog, ...(logs || [])];
+    saveState(updatedMembers, updatedLogs, undefined, undefined, updatedLoans);
   };
 
   const handleDeleteLoanContract = (loanId: string) => {
@@ -2108,6 +2177,17 @@ export default function CreditManagement({
                       >
                         <Pencil className="w-3.5 h-3.5" />
                         Retificar / Editar Dados do Contrato (Admin)
+                      </button>
+                    )}
+
+                    {isAdmin && selectedLoan.status !== 'completed' && (
+                      <button
+                        type="button"
+                        onClick={() => handleFullyLiquidateLoan(selectedLoan.id)}
+                        className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition-all cursor-pointer hover:scale-[1.01]"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Liquidar / Quitar Contrato Integralmente
                       </button>
                     )}
                   </div>

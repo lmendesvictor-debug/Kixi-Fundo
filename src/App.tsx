@@ -368,15 +368,20 @@ export default function App() {
   
   const sanitizeLoans = (loanList: Loan[]): Loan[] => {
     return (loanList || []).map((l) => {
-      const payments = (l.payments || []).map((p) => ({
-        ...p,
-        paid: p.paid === true || String(p.paid).toLowerCase() === 'true',
-        paidAt: p.paidAt || undefined,
-      }));
+      const isCompletedStatus = l.status === 'completed';
+      const payments = (l.payments || []).map((p) => {
+        const isPaid = isCompletedStatus || p.paid === true || String(p.paid).toLowerCase() === 'true';
+        return {
+          ...p,
+          paid: isPaid,
+          paidAt: isPaid ? (p.paidAt || new Date().toISOString().split('T')[0]) : undefined,
+        };
+      });
       const allPaid = payments.length > 0 && payments.every(p => p.paid);
+      const status = (allPaid || isCompletedStatus) ? ('completed' as const) : (l.status || 'active');
       return {
         ...l,
-        status: allPaid ? ('completed' as const) : (l.status || 'active'),
+        status,
         payments,
       };
     });
