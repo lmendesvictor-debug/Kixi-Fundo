@@ -2355,6 +2355,27 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
   const fontSizeSetting = appConfig.fontSize || 'normal';
   const primaryColorSetting = appConfig.primaryColorTheme || 'emerald';
 
+  const uiScaleSetting = appConfig.uiScale || 'normal';
+  const uiDensitySetting = appConfig.uiDensity || 'normal';
+  const iconScaleSetting = appConfig.iconScale || 'normal';
+  const printFontSizeSetting = appConfig.printFontSize || 'normal';
+  const printMarginsSetting = appConfig.printMargins || 'normal';
+  const printPaperFormatSetting = appConfig.printPaperFormat || 'a4_portrait';
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.remove('ui-scale-small', 'ui-scale-normal', 'ui-scale-large', 'ui-scale-xlarge');
+    root.classList.remove('ui-density-compact', 'ui-density-normal', 'ui-density-relaxed');
+    root.classList.remove('icon-scale-normal', 'icon-scale-large', 'icon-scale-xlarge');
+
+    root.classList.add(`ui-scale-${uiScaleSetting}`);
+    root.classList.add(`ui-density-${uiDensitySetting}`);
+    root.classList.add(`icon-scale-${iconScaleSetting}`);
+
+    document.body.classList.remove('print-format-a4-portrait', 'print-format-a4-landscape', 'print-format-a5', 'print-format-letter');
+    document.body.classList.add(`print-format-${printPaperFormatSetting}`);
+  }, [uiScaleSetting, uiDensitySetting, iconScaleSetting, printPaperFormatSetting]);
+
   let fontCSS = '';
   if (fontFamilySetting === 'outfit') {
     fontCSS = `--font-sans: 'Outfit', sans-serif !important; --font-display: 'Outfit', sans-serif !important;`;
@@ -2380,6 +2401,20 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
   } else if (fontSizeSetting === 'xlarge') {
     fontSizeCSS = `:root, html { font-size: 22px !important; }`;
   }
+
+  const printMarginVal = printMarginsSetting === 'compact' ? '5mm' : printMarginsSetting === 'wide' ? '18mm' : '10mm';
+  const printPaperSizeVal = printPaperFormatSetting === 'a4_landscape' ? 'A4 landscape' : printPaperFormatSetting === 'a5' ? 'A5 portrait' : printPaperFormatSetting === 'letter' ? 'letter portrait' : 'A4 portrait';
+  const printFontPtVal = printFontSizeSetting === 'small' ? '8.5pt' : printFontSizeSetting === 'large' ? '11.5pt' : '10pt';
+
+  const printCSS = `
+    @page {
+      size: ${printPaperSizeVal};
+      margin: ${printMarginVal};
+    }
+    :root {
+      --print-font-size: ${printFontPtVal};
+    }
+  `;
 
   const colorsMap = {
     emerald: {
@@ -2477,6 +2512,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
       }
       ${fontSizeCSS}
       ${colorOverridesCSS}
+      ${printCSS}
     `}</style>
   );
 

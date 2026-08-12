@@ -30,6 +30,14 @@ import {
   MessageSquare,
   Lock,
   FileText,
+  Palette,
+  Printer,
+  Sliders,
+  Maximize2,
+  Layout,
+  Type,
+  Eye,
+  Check,
 } from 'lucide-react';
 import UserManagement from './UserManagement';
 import ReceiptsAutomation from './ReceiptsAutomation';
@@ -100,7 +108,7 @@ export default function AdminModule({
   onRegisterSecurityAttempt,
   loans = [],
 }: AdminModuleProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'users' | 'receipts' | 'banking' | 'carousel' | 'audit' | 'backup' | 'privileges' | 'member-cleanup'>('users');
+  const [activeSubTab, setActiveSubTab] = useState<'users' | 'receipts' | 'banking' | 'carousel' | 'audit' | 'backup' | 'privileges' | 'member-cleanup' | 'appearance'>('users');
 
   const loggedInMember = currentUser 
     ? members.find(m => m.id === currentUser.memberId || m.email?.trim().toLowerCase() === currentUser.email?.trim().toLowerCase())
@@ -623,6 +631,11 @@ export default function AdminModule({
       description: 'Visualização cronológica de diretivas críticas, acessos, políticas e palavras-passe.',
     },
     {
+      id: 'appearance' as const,
+      label: 'Aparência, Responsividade & Impressão',
+      description: 'Ajustes globais de escala (90%-125%), fontes, densidade de ecrã, tamanhos de ícones e formato de impressão A4/PDF.',
+    },
+    {
       id: 'member-cleanup' as const,
       label: 'Exclusão de Membros (Definitivo)',
       description: 'Ferramenta administrativa de remoção definitiva de utilizadores/membros com sincronização Firestore imediata.',
@@ -634,6 +647,11 @@ export default function AdminModule({
     const badgeIconSizeClass = "w-4 h-4";
     
     switch (id) {
+      case 'appearance':
+        return {
+          main: <Palette className={`${iconSizeClass} text-purple-600 dark:text-purple-400`} />,
+          second: <Printer className={`${badgeIconSizeClass} text-[#af904f] dark:text-purple-300`} />
+        };
       case 'users':
         return {
           main: <Users className={`${iconSizeClass} text-sky-600 dark:text-sky-400`} />,
@@ -2551,6 +2569,425 @@ export default function AdminModule({
                   </div>
                 );
               })()}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Appearance & Print Settings SubTab */}
+        {activeSubTab === 'appearance' && (
+          <motion.div
+            key="admin_appearance"
+            initial={{ opacity: 0, y: 5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="space-y-6"
+          >
+            {/* Top Banner */}
+            <div className={`p-5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+              isDark ? 'bg-slate-900/80 border-purple-900/40' : 'bg-purple-50/60 border-purple-200'
+            }`}>
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-purple-600 text-white rounded-xl shadow-md">
+                  <Palette className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+                    Configurações de Aparência, Responsividade & Impressão
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Defina a escala da interface, tamanho de ícones, densidade visual e parâmetros de layout de impressão A4/PDF.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const updatedConfig = {
+                    ...appConfig,
+                    uiScale: 'normal',
+                    uiDensity: 'normal',
+                    iconScale: 'normal',
+                    fontSize: 'normal',
+                    fontFamily: 'inter',
+                    primaryColorTheme: 'emerald',
+                    printFontSize: 'normal',
+                    printMargins: 'normal',
+                    printPaperFormat: 'a4_portrait',
+                    printShowHeaderFooter: true,
+                  };
+                  setAppConfig(updatedConfig);
+                  saveState(members, logs, payoutsCompleted, currentMonth, loans, updatedConfig);
+                  alert("Aparência e parâmetros de impressão restaurados para os padrões recomendados!");
+                }}
+                className="px-3.5 py-2 text-xs font-bold rounded-lg border border-purple-300 dark:border-purple-700/50 text-purple-700 dark:text-purple-300 hover:bg-purple-100/50 dark:hover:bg-purple-900/30 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                Restaurar Padrões
+              </button>
+            </div>
+
+            {/* Grid of Settings */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {/* Card 1: UI Scale */}
+              <div className={`p-5 rounded-xl border ${isDark ? 'bg-slate-900/70 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+                <div className="flex items-center gap-2 mb-3">
+                  <Maximize2 className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                    Escala Global da Interface
+                  </h4>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-4 leading-relaxed">
+                  Redimensiona proporcionalmente todos os textos, botões e elementos do ecrã.
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: 'small', label: 'Pequena (90%)', sub: 'Compacta' },
+                    { id: 'normal', label: 'Normal (100%)', sub: 'Recomendado' },
+                    { id: 'large', label: 'Grande (110%)', sub: 'Legibilidade +' },
+                    { id: 'xlarge', label: 'Muito Grande (125%)', sub: 'Acessibilidade' },
+                  ].map((item) => {
+                    const isSel = (appConfig.uiScale || 'normal') === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => {
+                          const newCfg = { ...appConfig, uiScale: item.id };
+                          setAppConfig(newCfg);
+                          saveState(members, logs, payoutsCompleted, currentMonth, loans, newCfg);
+                        }}
+                        className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
+                          isSel
+                            ? 'bg-purple-600 text-white border-purple-600 font-bold shadow-sm'
+                            : isDark
+                            ? 'bg-slate-800/60 border-slate-700/60 text-slate-300 hover:border-purple-500/50'
+                            : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-purple-300'
+                        }`}
+                      >
+                        <div className="text-xs font-bold">{item.label}</div>
+                        <div className={`text-[10px] ${isSel ? 'text-purple-100' : 'text-slate-400'}`}>{item.sub}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Card 2: UI Density */}
+              <div className={`p-5 rounded-xl border ${isDark ? 'bg-slate-900/70 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+                <div className="flex items-center gap-2 mb-3">
+                  <Layout className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                    Densidade e Espaçamentos
+                  </h4>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-4 leading-relaxed">
+                  Ajusta as margens e paddings dos cartões, tabelas e menus da aplicação.
+                </p>
+                <div className="space-y-2">
+                  {[
+                    { id: 'compact', label: 'Densidade Compacta', desc: 'Maximiza aproveitamento de ecrã e tabelas' },
+                    { id: 'normal', label: 'Densidade Normal', desc: 'Equilíbrio padrão para utilização diária' },
+                    { id: 'relaxed', label: 'Densidade Relaxada', desc: 'Espaçamentos generosos e toque simplificado' },
+                  ].map((item) => {
+                    const isSel = (appConfig.uiDensity || 'normal') === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => {
+                          const newCfg = { ...appConfig, uiDensity: item.id };
+                          setAppConfig(newCfg);
+                          saveState(members, logs, payoutsCompleted, currentMonth, loans, newCfg);
+                        }}
+                        className={`w-full p-2.5 rounded-lg border text-left transition-all flex items-center justify-between cursor-pointer ${
+                          isSel
+                            ? 'bg-purple-600 text-white border-purple-600 font-bold shadow-sm'
+                            : isDark
+                            ? 'bg-slate-800/60 border-slate-700/60 text-slate-300 hover:border-purple-500/50'
+                            : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-purple-300'
+                        }`}
+                      >
+                        <div>
+                          <div className="text-xs font-bold">{item.label}</div>
+                          <div className={`text-[10px] ${isSel ? 'text-purple-100' : 'text-slate-400'}`}>{item.desc}</div>
+                        </div>
+                        {isSel && <Check className="w-4 h-4 text-white shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Card 3: Icon Scaling */}
+              <div className={`p-5 rounded-xl border ${isDark ? 'bg-slate-900/70 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+                <div className="flex items-center gap-2 mb-3">
+                  <Sliders className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                    Escala de Ícones Interativos
+                  </h4>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-4 leading-relaxed">
+                  Dimensão visual dos ícones nos botões, abas e indicadores.
+                </p>
+                <div className="space-y-2">
+                  {[
+                    { id: 'normal', label: 'Ícones Padrão (18-24px)', desc: 'Tamanho estético equilibrado' },
+                    { id: 'large', label: 'Ícones Grandes (+15%)', desc: 'Destaque visual aprimorado' },
+                    { id: 'xlarge', label: 'Ícones Muito Grandes (+30%)', desc: 'Identificação instantânea' },
+                  ].map((item) => {
+                    const isSel = (appConfig.iconScale || 'normal') === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => {
+                          const newCfg = { ...appConfig, iconScale: item.id };
+                          setAppConfig(newCfg);
+                          saveState(members, logs, payoutsCompleted, currentMonth, loans, newCfg);
+                        }}
+                        className={`w-full p-2.5 rounded-lg border text-left transition-all flex items-center justify-between cursor-pointer ${
+                          isSel
+                            ? 'bg-purple-600 text-white border-purple-600 font-bold shadow-sm'
+                            : isDark
+                            ? 'bg-slate-800/60 border-slate-700/60 text-slate-300 hover:border-purple-500/50'
+                            : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-purple-300'
+                        }`}
+                      >
+                        <div>
+                          <div className="text-xs font-bold">{item.label}</div>
+                          <div className={`text-[10px] ${isSel ? 'text-purple-100' : 'text-slate-400'}`}>{item.desc}</div>
+                        </div>
+                        {isSel && <Check className="w-4 h-4 text-white shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Card 4: Typography Family */}
+              <div className={`p-5 rounded-xl border ${isDark ? 'bg-slate-900/70 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+                <div className="flex items-center gap-2 mb-3">
+                  <Type className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                    Família Tipográfica
+                  </h4>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-4 leading-relaxed">
+                  Selecione a fonte oficial aplicada em toda a plataforma.
+                </p>
+                <div className="space-y-1.5">
+                  {[
+                    { id: 'inter', label: 'Inter', desc: 'SaaS Limpa, Neutra & Legível' },
+                    { id: 'outfit', label: 'Outfit', desc: 'Geométrica Moderna Premium' },
+                    { id: 'mono', label: 'JetBrains Mono', desc: 'Numérica e Contabilística' },
+                    { id: 'playfair', label: 'Playfair Display', desc: 'Institucional & Documental' },
+                    { id: 'space', label: 'Space Grotesk', desc: 'Tecnológica / Contemporânea' },
+                  ].map((item) => {
+                    const isSel = (appConfig.fontFamily || 'inter') === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => {
+                          const newCfg = { ...appConfig, fontFamily: item.id };
+                          setAppConfig(newCfg);
+                          saveState(members, logs, payoutsCompleted, currentMonth, loans, newCfg);
+                        }}
+                        className={`w-full p-2 rounded-lg border text-left transition-all flex items-center justify-between cursor-pointer ${
+                          isSel
+                            ? 'bg-purple-600 text-white border-purple-600 font-bold shadow-sm'
+                            : isDark
+                            ? 'bg-slate-800/60 border-slate-700/60 text-slate-300 hover:border-purple-500/50'
+                            : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-purple-300'
+                        }`}
+                      >
+                        <div>
+                          <span className="text-xs font-bold">{item.label}</span>
+                          <span className={`text-[10px] ml-2 ${isSel ? 'text-purple-100' : 'text-slate-400'}`}>{item.desc}</span>
+                        </div>
+                        {isSel && <Check className="w-3.5 h-3.5 text-white shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Card 5: Print Paper Format */}
+              <div className={`p-5 rounded-xl border ${isDark ? 'bg-slate-900/70 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+                <div className="flex items-center gap-2 mb-3">
+                  <Printer className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                    Formato de Impressão & Papel
+                  </h4>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-4 leading-relaxed">
+                  Formato padrão para emissão de relatórios, extratos e fichas em PDF/Impressora.
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: 'a4_portrait', label: 'A4 Retrato', sub: 'Padrão Vertical' },
+                    { id: 'a4_landscape', label: 'A4 Paisagem', sub: 'Tabelas Largas' },
+                    { id: 'a5', label: 'Formato A5', sub: 'Recibos Compactos' },
+                    { id: 'letter', label: 'Carta (Letter)', sub: 'EUA / Padrão' },
+                  ].map((item) => {
+                    const isSel = (appConfig.printPaperFormat || 'a4_portrait') === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => {
+                          const newCfg = { ...appConfig, printPaperFormat: item.id };
+                          setAppConfig(newCfg);
+                          saveState(members, logs, payoutsCompleted, currentMonth, loans, newCfg);
+                        }}
+                        className={`p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
+                          isSel
+                            ? 'bg-purple-600 text-white border-purple-600 font-bold shadow-sm'
+                            : isDark
+                            ? 'bg-slate-800/60 border-slate-700/60 text-slate-300 hover:border-purple-500/50'
+                            : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-purple-300'
+                        }`}
+                      >
+                        <div className="text-xs font-bold">{item.label}</div>
+                        <div className={`text-[10px] ${isSel ? 'text-purple-100' : 'text-slate-400'}`}>{item.sub}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Card 6: Print Margins & Font */}
+              <div className={`p-5 rounded-xl border ${isDark ? 'bg-slate-900/70 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+                <div className="flex items-center gap-2 mb-3">
+                  <Printer className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                    Margens e Fonte na Impressão
+                  </h4>
+                </div>
+                
+                <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">
+                  Margens do Documento
+                </label>
+                <div className="grid grid-cols-3 gap-1.5 mb-3">
+                  {[
+                    { id: 'compact', label: 'Compacta (5mm)' },
+                    { id: 'normal', label: 'Normal (10mm)' },
+                    { id: 'wide', label: 'Larga (18mm)' },
+                  ].map((m) => {
+                    const isSel = (appConfig.printMargins || 'normal') === m.id;
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => {
+                          const newCfg = { ...appConfig, printMargins: m.id };
+                          setAppConfig(newCfg);
+                          saveState(members, logs, payoutsCompleted, currentMonth, loans, newCfg);
+                        }}
+                        className={`p-1.5 rounded text-[10.5px] font-bold text-center border transition-all cursor-pointer ${
+                          isSel
+                            ? 'bg-purple-600 text-white border-purple-600'
+                            : isDark ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-slate-100 text-slate-700 border-slate-200'
+                        }`}
+                      >
+                        {m.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">
+                  Tamanho da Fonte em PDF
+                </label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {[
+                    { id: 'small', label: 'Pequeno (8.5pt)' },
+                    { id: 'normal', label: 'Normal (10pt)' },
+                    { id: 'large', label: 'Grande (11.5pt)' },
+                  ].map((f) => {
+                    const isSel = (appConfig.printFontSize || 'normal') === f.id;
+                    return (
+                      <button
+                        key={f.id}
+                        type="button"
+                        onClick={() => {
+                          const newCfg = { ...appConfig, printFontSize: f.id };
+                          setAppConfig(newCfg);
+                          saveState(members, logs, payoutsCompleted, currentMonth, loans, newCfg);
+                        }}
+                        className={`p-1.5 rounded text-[10.5px] font-bold text-center border transition-all cursor-pointer ${
+                          isSel
+                            ? 'bg-purple-600 text-white border-purple-600'
+                            : isDark ? 'bg-slate-800 text-slate-300 border-slate-700' : 'bg-slate-100 text-slate-700 border-slate-200'
+                        }`}
+                      >
+                        {f.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* Live Interactive Preview */}
+            <div className={`p-6 rounded-2xl border ${isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-md'}`}>
+              <div className="flex items-center justify-between mb-4 border-b pb-3 border-slate-200 dark:border-slate-800">
+                <div className="flex items-center gap-2">
+                  <Eye className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                  <h4 className="text-sm font-extrabold uppercase tracking-wider text-slate-900 dark:text-white">
+                    Pré-visualização em Tempo Real da Interface & Layout
+                  </h4>
+                </div>
+                <span className="px-2.5 py-1 bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 rounded-full text-[10px] font-extrabold uppercase tracking-wider">
+                  Configurações Ativas
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Visual Interface Preview */}
+                <div className="p-4 rounded-xl border border-dashed border-slate-300 dark:border-slate-700 space-y-3">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400 block">
+                    Demonstração Visual no Ecrã
+                  </span>
+
+                  <div className="flex items-center justify-between">
+                    <h5 className="font-extrabold text-slate-900 dark:text-white">
+                      Título do Card Exemplo
+                    </h5>
+                    <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 rounded text-xs font-bold">
+                      Ativo
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                    Ajustes de escala e fonte são aplicados globalmente a tabelas, relatórios, modais, formulários e botões em todos os módulos da aplicação.
+                  </p>
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <button type="button" className="px-3 py-1.5 bg-purple-600 text-white rounded-lg text-xs font-bold shadow flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5" /> Botão Exemplo
+                    </button>
+                    <button type="button" className="px-3 py-1.5 border border-slate-300 dark:border-slate-700 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Ação Secundária
+                    </button>
+                  </div>
+                </div>
+
+                {/* Print Layout Preview Box */}
+                <div className="p-4 rounded-xl border border-dashed border-purple-300 dark:border-purple-800/60 bg-purple-50/30 dark:bg-purple-950/20 space-y-2">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-purple-600 dark:text-purple-400 block">
+                    Resumo do Documento de Impressão PDF
+                  </span>
+
+                  <div className="text-xs space-y-1.5 font-mono text-slate-700 dark:text-slate-300">
+                    <div><span className="font-bold">Formato Papel:</span> {appConfig.printPaperFormat === 'a4_landscape' ? 'A4 Horizontal' : appConfig.printPaperFormat === 'a5' ? 'A5 Compacto' : appConfig.printPaperFormat === 'letter' ? 'Carta' : 'A4 Vertical'}</div>
+                    <div><span className="font-bold">Margem do Papel:</span> {appConfig.printMargins === 'compact' ? '5mm (Compacta)' : appConfig.printMargins === 'wide' ? '18mm (Larga)' : '10mm (Padrão)'}</div>
+                    <div><span className="font-bold">Fonte de Impressão:</span> {appConfig.printFontSize === 'small' ? '8.5pt' : appConfig.printFontSize === 'large' ? '11.5pt' : '10pt'}</div>
+                    <div><span className="font-bold">Modo Responsivo:</span> Tabelas com quebra de página automática sem corte de colunas.</div>
+                  </div>
+                </div>
+              </div>
             </div>
           </motion.div>
         )}

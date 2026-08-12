@@ -16,7 +16,7 @@ import {
   Scale, Calendar, HelpCircle, CreditCard, ArrowUpRight, 
   User, Building, Search, DollarSign, Landmark, Phone, MessageSquare, Briefcase,
   Printer, X, Edit, Settings, FileText as FileIcon, Sparkles, CheckSquare, Pencil, Trash2,
-  Download, FileSpreadsheet, FileJson, RotateCcw, CheckCircle2
+  Download, FileSpreadsheet, FileJson, RotateCcw, CheckCircle2, Vault, Wallet, Coins
 } from 'lucide-react';
 import { Loan, Member, KixLog, LoanPayment, PledgedAsset } from '../types';
 import ContractsTab from './ContractsTab';
@@ -598,19 +598,22 @@ export default function CreditManagement({
     : 0;
 
   // Prudential Rules & Solvency Calculations
-  const totalQuotasWithdrawn = members.reduce((acc, m) => {
+  const totalSocialFundRetained = members.reduce((acc, m) => {
     return acc + Object.keys(m.contributions).reduce((monthAcc, monthKey) => {
       const contr = m.contributions[Number(monthKey)];
       if (contr?.paid) {
-        const amt = (contr as any).amount !== undefined ? (contr as any).amount : 120000;
-        return monthAcc + amt;
+        return monthAcc + 20000;
       }
       return monthAcc;
     }, 0);
   }, 0);
 
-  const liquidVaultBalance = Math.max(0, totalQuotasWithdrawn - activeAmortizingBalance);
-  const riskExposureRatio = totalQuotasWithdrawn > 0 ? (activeAmortizingBalance / totalQuotasWithdrawn) * 100 : 0;
+  // Capital Total do Fundo (Retenção Fundo 20k/membro/mês + Juros Liquidados)
+  const totalFundCapital = totalSocialFundRetained + totalInterestFundoCollected;
+
+  // Saldo Líquido Disponível do Fundo após deduções dos créditos concedidos ativos
+  const liquidVaultBalance = Math.max(0, totalFundCapital - activeAmortizingBalance);
+  const riskExposureRatio = totalFundCapital > 0 ? (activeAmortizingBalance / totalFundCapital) * 100 : 0;
   
   const overdueLoansCount = loans.filter(l => l.status === 'overdue').length;
   const totalActiveLoansCount = loans.filter(l => l.status === 'active' || l.status === 'overdue').length;
@@ -1130,6 +1133,78 @@ export default function CreditManagement({
         </div>
       </div>
 
+      {/* Treasury & Fund Availability Summary Banner */}
+      <div className="bg-slate-900 dark:bg-slate-900 text-white p-5 rounded-2xl border border-slate-800 shadow-md">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 border-b border-slate-800 pb-3 mb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="p-2 bg-emerald-500/20 border border-emerald-500/30 rounded-xl text-emerald-400">
+              <Vault className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-xs font-black uppercase tracking-wider text-white flex items-center gap-2">
+                Demonstrativo de Capital & Saldo Disponível do Fundo
+              </h3>
+              <p className="text-[11px] text-slate-400">
+                Resumo do capital total acumulado e do saldo líquido em caixa após as deduções de créditos concedidos ativos.
+              </p>
+            </div>
+          </div>
+          <span className="px-2.5 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-widest rounded-lg">
+            Tesouraria Ativa
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 font-mono">
+          {/* Capital Total do Fundo */}
+          <div className="bg-slate-800/80 p-3.5 rounded-xl border border-slate-700/60">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block font-sans">
+                Capital Total do Fundo
+              </span>
+              <Coins className="w-3.5 h-3.5 text-sky-400" />
+            </div>
+            <span className="text-base font-black text-white block mt-1">
+              {formatCurrency(totalFundCapital)}
+            </span>
+            <span className="text-[9.5px] text-slate-400 block mt-1 font-sans">
+              Quotas Fundo ({formatCurrency(totalSocialFundRetained)}) + Juros ({formatCurrency(totalInterestFundoCollected)})
+            </span>
+          </div>
+
+          {/* (-) Deduções de Créditos Concedidos */}
+          <div className="bg-amber-950/40 p-3.5 rounded-xl border border-amber-800/40">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block font-sans">
+                (-) Dedução: Créditos Concedidos
+              </span>
+              <TrendingUp className="w-3.5 h-3.5 text-amber-400" />
+            </div>
+            <span className="text-base font-black text-amber-300 block mt-1">
+              - {formatCurrency(activeAmortizingBalance)}
+            </span>
+            <span className="text-[9.5px] text-amber-400/80 block mt-1 font-sans">
+              Capital alocado sob amortização ({loans.filter(l => l.status === 'active' || l.status === 'overdue').length} devedores)
+            </span>
+          </div>
+
+          {/* (=) Saldo Disponível do Fundo */}
+          <div className="bg-emerald-950/50 p-3.5 rounded-xl border border-emerald-500/50">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block font-sans">
+                (=) Saldo Disponível do Fundo
+              </span>
+              <Wallet className="w-3.5 h-3.5 text-emerald-400" />
+            </div>
+            <span className="text-base font-black text-emerald-300 block mt-1">
+              {formatCurrency(liquidVaultBalance)}
+            </span>
+            <span className="text-[9.5px] text-emerald-400/80 block mt-1 font-sans font-bold">
+              ✓ Liquidez de tesouraria livre para concessão de crédito
+            </span>
+          </div>
+        </div>
+      </div>
+
       {/* Navigation Table with cell-style tabs */}
       <div className="w-full overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm bg-white dark:bg-[#111625]">
         <table className="w-full border-collapse min-w-[750px] lg:min-w-0">
@@ -1214,64 +1289,102 @@ export default function CreditManagement({
       {/* DASHBOARD TAB CONTROLS */}
       {activeSubTab === 'dashboard' && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             
-            {/* Stat Card 1: Principal Outstandind */}
+            {/* Stat Card 1: Capital Total do Fundo */}
+            <div className="bg-white dark:bg-[#151c2c]/85 border border-sky-100 dark:border-sky-900/30 p-5 rounded-xl flex flex-col justify-between hover:scale-[1.01] transition-transform shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase text-sky-600 dark:text-sky-400">Capital Acumulado</span>
+                <div className="p-1.5 bg-sky-50 dark:bg-sky-950/40 rounded text-sky-500">
+                  <Coins className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-4">
+                <h4 className="text-xs text-slate-400 font-semibold">Capital Total do Fundo</h4>
+                <p className="text-xl font-black font-mono text-slate-900 dark:text-white mt-1">
+                  {formatCurrency(totalFundCapital)}
+                </p>
+                <span className="text-[9px] text-slate-450 font-bold">
+                  Quotas: {formatCurrency(totalSocialFundRetained)} | Juros: {formatCurrency(totalInterestFundoCollected)}
+                </span>
+              </div>
+            </div>
+
+            {/* Stat Card 2: Saldo Disponível do Fundo */}
+            <div className="bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/20 p-5 rounded-xl flex flex-col justify-between hover:scale-[1.01] transition-transform shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase text-emerald-600 dark:text-emerald-400">Caixa Livre do Fundo</span>
+                <div className="p-1.5 bg-emerald-100 dark:bg-emerald-950/40 rounded text-emerald-600 dark:text-emerald-400">
+                  <Wallet className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-4">
+                <h4 className="text-xs text-emerald-700 dark:text-emerald-400 font-bold">Saldo Disponível (Após Deduções)</h4>
+                <p className="text-xl font-black font-mono text-emerald-600 dark:text-emerald-300 mt-1">
+                  {formatCurrency(liquidVaultBalance)}
+                </p>
+                <span className="text-[9px] text-emerald-600/80 dark:text-emerald-400/80 font-bold">
+                  Líquido em tesouraria pronto para novos empréstimos
+                </span>
+              </div>
+            </div>
+
+            {/* Stat Card 3: Deduções - Créditos em Aberto */}
+            <div className="bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 p-5 rounded-xl flex flex-col justify-between hover:scale-[1.01] transition-transform shadow-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase text-amber-600 dark:text-amber-400">Dedução Ativa</span>
+                <div className="p-1.5 bg-amber-100 dark:bg-amber-950/40 rounded text-amber-600 dark:text-amber-400">
+                  <TrendingUp className="w-4 h-4" />
+                </div>
+              </div>
+              <div className="mt-4">
+                <h4 className="text-xs text-slate-400 font-semibold">Créditos Concedidos (Sob Amortização)</h4>
+                <p className="text-xl font-black font-mono text-amber-600 dark:text-amber-400 mt-1">
+                  {formatCurrency(activeAmortizingBalance)}
+                </p>
+                <span className="text-[9px] text-amber-600/80 dark:text-amber-400/80 font-bold">
+                  {loans.filter(l => l.status === 'active' || l.status === 'overdue').length} devedores em amortização ativa
+                </span>
+              </div>
+            </div>
+
+            {/* Stat Card 4: Total Concedido (Histórico) */}
             <div className="bg-white dark:bg-[#151c2c]/85 border border-slate-100 dark:border-slate-800 p-5 rounded-xl flex flex-col justify-between hover:scale-[1.01] transition-transform">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase text-slate-400">Total Concedido</span>
+                <span className="text-[10px] font-black uppercase text-slate-400">Volume Concedido</span>
                 <div className="p-1.5 bg-slate-100 dark:bg-slate-900 rounded text-sky-500">
                   <Landmark className="w-4 h-4" />
                 </div>
               </div>
               <div className="mt-4">
-                <h4 className="text-xs text-slate-400 font-semibold">Carteira de Crédito</h4>
+                <h4 className="text-xs text-slate-400 font-semibold">Total Emprestado (Histórico)</h4>
                 <p className="text-xl font-black font-mono text-slate-900 dark:text-white mt-1">
                   {formatCurrency(totalPrincipalDisbursed)}
                 </p>
-                <span className="text-[9px] text-slate-450 font-bold">Distribuição de Capital Ativo</span>
+                <span className="text-[9px] text-slate-450 font-bold">{loans.length} contratos celebrados no total</span>
               </div>
             </div>
 
-            {/* Stat Card 2: Remaining amortization */}
+            {/* Stat Card 5: Ganhos de Juros Realizados */}
             <div className="bg-white dark:bg-[#151c2c]/85 border border-slate-100 dark:border-slate-800 p-5 rounded-xl flex flex-col justify-between hover:scale-[1.01] transition-transform">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase text-slate-400">Saldo Sob Amortização</span>
-                <div className="p-1.5 bg-slate-100 dark:bg-slate-900 rounded text-amber-500">
-                  <TrendingUp className="w-4 h-4" />
-                </div>
-              </div>
-              <div className="mt-4">
-                <h4 className="text-xs text-slate-400 font-semibold">Principal em Aberto</h4>
-                <p className="text-xl font-black font-mono text-slate-900 dark:text-white mt-1">
-                  {formatCurrency(activeAmortizingBalance)}
-                </p>
-                <span className="text-[9px] text-slate-450 font-bold">
-                  {loans.length} financiamentos em andamento
-                </span>
-              </div>
-            </div>
-
-            {/* Stat Card 3: Cooperative interest earnings (Impact directly on pool) */}
-            <div className="bg-white dark:bg-[#151c2c]/85 border border-slate-100 dark:border-slate-800 p-5 rounded-xl flex flex-col justify-between hover:scale-[1.01] transition-transform">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] font-black uppercase text-slate-400">Ganhos de Juros Realizados</span>
+                <span className="text-[10px] font-black uppercase text-slate-400">Rentabilização do Fundo</span>
                 <div className="p-1.5 bg-emerald-50 dark:bg-emerald-950/20 rounded text-emerald-600">
                   <ArrowUpRight className="w-4 h-4" />
                 </div>
               </div>
               <div className="mt-4">
-                <h4 className="text-xs text-slate-400 font-semibold">Rentabilização do Fundo</h4>
+                <h4 className="text-xs text-slate-400 font-semibold">Ganhos de Juros Realizados</h4>
                 <p className="text-xl font-black font-mono text-emerald-600 dark:text-emerald-400 mt-1">
                   {formatCurrency(totalInterestFundoCollected)}
                 </p>
                 <span className="text-[9px] text-emerald-500 font-bold font-mono">
-                  + {formatCurrency(totalInterestFundoExpected - totalInterestFundoCollected)} previstos em colheita
+                  + {formatCurrency(totalInterestFundoExpected - totalInterestFundoCollected)} a receber de prestações
                 </span>
               </div>
             </div>
 
-            {/* Stat Card 4: Retorno Médio */}
+            {/* Stat Card 6: Taxa de Juros Média */}
             <div className="bg-white dark:bg-[#151c2c]/85 border border-slate-100 dark:border-slate-800 p-5 rounded-xl flex flex-col justify-between hover:scale-[1.01] transition-transform">
               <div className="flex items-center justify-between">
                 <span className="text-[10px] font-black uppercase text-slate-400">Risco & Retorno</span>
@@ -1301,19 +1414,19 @@ export default function CreditManagement({
                 <div className="flex items-center justify-between text-[10px] uppercase font-bold text-slate-400">
                   <span>Margem de Solvência</span>
                   <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black ${
-                    totalQuotasWithdrawn > 0 && (liquidVaultBalance / totalQuotasWithdrawn) * 105 >= 20 
+                    totalSocialFundRetained > 0 && (liquidVaultBalance / totalSocialFundRetained) * 100 >= 20 
                       ? 'bg-emerald-50 dark:bg-[#052e25] text-emerald-600 dark:text-emerald-450' 
                       : 'bg-rose-50 dark:bg-rose-950/20 text-rose-500'
                   }`}>
-                    {totalQuotasWithdrawn > 0 && (liquidVaultBalance / totalQuotasWithdrawn) * 105 >= 20 ? 'Excelente' : 'Abaixo de 20%'}
+                    {totalSocialFundRetained > 0 && (liquidVaultBalance / totalSocialFundRetained) * 100 >= 20 ? 'Excelente' : 'Abaixo de 20%'}
                   </span>
                 </div>
                 <div className="space-y-1">
                   <div className="text-lg font-black font-mono text-slate-900 dark:text-white">
-                    {(totalQuotasWithdrawn > 0 ? (liquidVaultBalance / totalQuotasWithdrawn) * 105 : 0).toFixed(1)}% <span className="text-[10px] text-slate-450 font-medium">de liquidez</span>
+                    {(totalSocialFundRetained > 0 ? (liquidVaultBalance / totalSocialFundRetained) * 100 : 0).toFixed(1)}% <span className="text-[10px] text-slate-450 font-medium">de liquidez</span>
                   </div>
                   <div className="text-[10px] text-slate-450 leading-normal font-medium">
-                    Fundo de reserva líquido em caixa ({formatCurrency(liquidVaultBalance)}) sobre total de quota social ({formatCurrency(totalQuotasWithdrawn)}).
+                    Fundo de reserva líquido em caixa ({formatCurrency(liquidVaultBalance)}) sobre total de quota social ({formatCurrency(totalSocialFundRetained)}).
                   </div>
                 </div>
               </div>

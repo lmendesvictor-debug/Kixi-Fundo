@@ -17,7 +17,10 @@ import {
   MessageSquare,
   Send,
   BellRing,
-  Sparkles
+  Sparkles,
+  Landmark,
+  TrendingUp,
+  Vault
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { Member, Loan, getFullMonthLabel, getMonthSimpleLabel } from '../types';
@@ -197,21 +200,42 @@ export default function MetricCards({
   }, 0) || 0;
   const activeLoansOutstanding = Math.max(0, totalPrincipalDisbursed - totalPrincipalRepaid);
 
-  const rotationPrice = Math.max(0, totalBeneficiaryDestined - totalBeneficiaryPaid);
-  const socialPrice = socialBalance;
-  
-  // Deduct active loans from rotation fund to find the liquid amount available in cash
-  const liquidRotation = Math.max(0, rotationPrice - activeLoansOutstanding);
-  const combinedTotal = liquidRotation + activeLoansOutstanding + socialPrice;
+  // Cálculos de Juros Realizados (Lucros)
+  const totalRealizedInterest = loans?.reduce((acc, l) => {
+    return acc + (l.payments || []).filter(p => p.paid).reduce((sum, p) => sum + p.interestPaid, 0);
+  }, 0) || 0;
 
-  const rotationPercent = combinedTotal > 0 ? ((liquidRotation / combinedTotal) * 100).toFixed(1) : '0.0';
+  // Patrimônio Líquido do Fundo (Retenção Fundo 20k/sócio/ciclo + Juros Realizados - Apoios Sociais Desembolsados)
+  const totalPatrimonioFundo = Math.max(0, totalSocialRetained + totalRealizedInterest - totalSocialDisbursed);
+
+  // Saldo Líquido do Fundo disponível em Banco (Patrimônio do Fundo - Capital Emprestado Ativo em Amortização)
+  const saldoLiquidoFundoEmBanco = Math.max(0, totalPatrimonioFundo - activeLoansOutstanding);
+
+  // Contagem exata de quotas mensais pagas
+  const totalPaidContributionsCount = members?.reduce((acc, m) => {
+    return acc + Object.values(m.contributions || {}).filter(c => c?.paid).length;
+  }, 0) || 0;
+
+  // Valor arrecadado especificamente para a Kixikila (100.000 Kz por quota paga)
+  const totalKixikilaCollected = totalPaidContributionsCount * 100000;
+  
+  // Saldo pendente de rotação da Kixikila (0 se todos os ciclos foram liquidados aos contemplados)
+  const rotationPrice = Math.max(0, totalKixikilaCollected - totalBeneficiaryPaid);
+  
+  // O Patrimônio Coletivo é a soma real do Patrimônio do Fundo com qualquer rotação pendente da Kixikila
+  const combinedTotal = totalPatrimonioFundo + rotationPrice;
+
+  const rotationPercent = combinedTotal > 0 ? ((rotationPrice / combinedTotal) * 100).toFixed(1) : '0.0';
   const creditPercent = combinedTotal > 0 ? ((activeLoansOutstanding / combinedTotal) * 100).toFixed(1) : '0.0';
-  const socialPercent = combinedTotal > 0 ? ((socialPrice / combinedTotal) * 100).toFixed(1) : '0.0';
+  const socialPercent = combinedTotal > 0 ? ((saldoLiquidoFundoEmBanco / combinedTotal) * 100).toFixed(1) : '0.0';
 
   const pieData = combinedTotal > 0 ? [
-    { name: 'Disponível p/ Rotação (Líquido)', value: liquidRotation, color: '#0284C7', percent: rotationPercent, hoverBg: 'bg-[#0284C7]/10', hoverBorder: 'border-[#0284C7]/20', textColor: 'text-sky-600 dark:text-sky-450', badgeBg: 'bg-sky-500/10' },
+    ...(rotationPrice > 0 
+      ? [{ name: 'Disponível p/ Rotação (Líquido)', value: rotationPrice, color: '#0284C7', percent: rotationPercent, hoverBg: 'bg-[#0284C7]/10', hoverBorder: 'border-[#0284C7]/20', textColor: 'text-sky-600 dark:text-sky-450', badgeBg: 'bg-sky-500/10' }] 
+      : [{ name: 'Disponível p/ Rotação (Liquidada)', value: 0, color: '#0284C7', percent: '0.0', hoverBg: 'bg-[#0284C7]/10', hoverBorder: 'border-[#0284C7]/20', textColor: 'text-sky-600 dark:text-sky-450', badgeBg: 'bg-sky-500/10' }]
+    ),
     ...(activeLoansOutstanding > 0 ? [{ name: 'Crédito Ativo (Emprestado)', value: activeLoansOutstanding, color: '#8B5CF6', percent: creditPercent, hoverBg: 'bg-violet-500/10', hoverBorder: 'border-violet-500/20', textColor: 'text-violet-600 dark:text-violet-400', badgeBg: 'bg-violet-500/10' }] : []),
-    { name: 'Fundo Social (Reservado)', value: socialPrice, color: '#10B981', percent: socialPercent, hoverBg: 'bg-[#10B981]/10', hoverBorder: 'border-[#10B981]/20', textColor: 'text-emerald-600 dark:text-emerald-450', badgeBg: 'bg-emerald-500/10' }
+    ...(saldoLiquidoFundoEmBanco > 0 ? [{ name: 'Fundo Social em Banco (Líquido)', value: saldoLiquidoFundoEmBanco, color: '#10B981', percent: socialPercent, hoverBg: 'bg-[#10B981]/10', hoverBorder: 'border-[#10B981]/20', textColor: 'text-emerald-600 dark:text-emerald-450', badgeBg: 'bg-emerald-500/10' }] : [])
   ] : [
     { name: 'Sem Informações (Cadastro Vazio)', value: 1, color: '#94A3B8', percent: '0.0', hoverBg: 'bg-slate-500/10', hoverBorder: 'border-slate-500/20', textColor: 'text-slate-600 dark:text-slate-400', badgeBg: 'bg-slate-500/10' }
   ];
@@ -226,9 +250,6 @@ export default function MetricCards({
   const totalLentAmount = loans?.reduce((acc, l) => acc + l.amountRequested, 0) || 0;
   const totalContractedInterest = loans?.reduce((acc, l) => {
     return acc + (l.payments || []).reduce((sum, p) => sum + p.interestPaid, 0);
-  }, 0) || 0;
-  const totalRealizedInterest = loans?.reduce((acc, l) => {
-    return acc + (l.payments || []).filter(p => p.paid).reduce((sum, p) => sum + p.interestPaid, 0);
   }, 0) || 0;
   const totalProjectedInterest = Math.max(0, totalContractedInterest - totalRealizedInterest);
 
@@ -261,6 +282,95 @@ export default function MetricCards({
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-1 select-none font-sans text-slate-800 dark:text-slate-100" id="dashboard-widgets-panel">
+      
+      {/* BANNER KPI: DEMONSTRATIVO DE SALDO LÍQUIDO DO FUNDO EM BANCO */}
+      <div className="col-span-1 lg:col-span-2 bg-slate-900 dark:bg-slate-900/90 text-white p-6 rounded-3xl border border-slate-800 shadow-lg space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-emerald-500/20 border border-emerald-500/30 rounded-2xl text-emerald-400">
+              <Landmark className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black uppercase tracking-wider text-white flex items-center gap-2">
+                Demonstrativo do Saldo Líquido do Fundo (Em Banco)
+              </h3>
+              <p className="text-xs text-slate-400">
+                Líquido real em caixa bancária do Fundo após dedução do capital concedido sob empréstimos ativos.
+              </p>
+            </div>
+          </div>
+          <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-widest rounded-xl shrink-0 w-fit">
+            ✓ Tesouraria Bancária
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          
+          {/* CARTÃO 1: PATRIMÓNIO LÍQUIDO DO FUNDO (RETENÇÃO 20K + JUROS REALIZADOS - APOIOS) */}
+          <div className="bg-slate-800/80 p-4 rounded-2xl border border-slate-700/60 font-mono">
+            <div className="flex items-center justify-between font-sans mb-1">
+              <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">
+                Patrimônio do Fundo
+              </span>
+              <Coins className="w-4 h-4 text-sky-400" />
+            </div>
+            <span className="text-xl font-black text-white block mt-1">
+              {formatCurrency(totalPatrimonioFundo)}
+            </span>
+            <span className="text-[10px] text-slate-400 block mt-1 font-sans">
+              Quotas (20k) + Juros ({formatCurrency(totalRealizedInterest)}) - Apoios Sociais ({formatCurrency(totalSocialDisbursed)})
+            </span>
+          </div>
+
+          {/* CARTÃO 2: (-) CAPITAL CONCEDIDO EM EMPRÉSTIMOS ATIVOS */}
+          <div className="bg-amber-950/40 p-4 rounded-2xl border border-amber-800/50 font-mono">
+            <div className="flex items-center justify-between font-sans mb-1">
+              <span className="text-[10.5px] font-bold text-amber-400 uppercase tracking-wider">
+                (-) Empréstimos Ativos
+              </span>
+              <TrendingUp className="w-4 h-4 text-amber-400" />
+            </div>
+            <span className="text-xl font-black text-amber-300 block mt-1">
+              - {formatCurrency(activeLoansOutstanding)}
+            </span>
+            <span className="text-[10px] text-amber-400/80 block mt-1 font-sans">
+              Capital emprestado em amortização
+            </span>
+          </div>
+
+          {/* CARTÃO 3: (=) SALDO LÍQUIDO DO FUNDO (EM BANCO) */}
+          <div className="sm:col-span-2 lg:col-span-1 bg-emerald-950/60 p-4 rounded-2xl border border-emerald-500/60 font-mono relative overflow-hidden shadow-sm">
+            <div className="flex items-center justify-between font-sans mb-1">
+              <span className="text-[10.5px] font-bold text-emerald-400 uppercase tracking-wider">
+                (=) Saldo Líquido em Banco
+              </span>
+              <Wallet className="w-4 h-4 text-emerald-400" />
+            </div>
+            <span className="text-xl sm:text-2xl font-black text-emerald-300 block mt-1">
+              {formatCurrency(saldoLiquidoFundoEmBanco)}
+            </span>
+            <span className="text-[10px] text-emerald-400/90 block mt-1 font-sans font-bold">
+              ✓ Liquidez livre do Fundo disponível em banco
+            </span>
+          </div>
+
+        </div>
+
+        {/* Nota explicativa de governança e contabilidade da Kixikila */}
+        <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800/90 text-xs text-slate-300 space-y-2">
+          <div className="flex items-center justify-between border-b border-slate-800/80 pb-2 text-[11px] font-sans">
+            <span className="text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+              <span>📊</span> Informações Contabilísticas da Kixikila (Consórcio de Rotação)
+            </span>
+            <span className="text-slate-400">
+              Total Bruto Arrecadado: <strong className="text-white font-mono">{formatCurrency(totalQuotasCollected)}</strong> | Pagos em Rotação: <strong className="text-sky-400 font-mono">{formatCurrency(totalBeneficiaryPaid)}</strong>
+            </span>
+          </div>
+          <p className="text-[11px] text-slate-400 leading-relaxed font-sans">
+            <strong className="text-emerald-400">Regra de Apuração:</strong> De cada prestação de <strong>120.000,00 Kz</strong> por sócio, <strong>20.000,00 Kz</strong> destinam-se ao Fundo e <strong>100.000,00 Kz</strong> à Kixikila (repassados integralmente aos 2 sócios contemplados que recebem <strong>600.000,00 Kz</strong> cada). <strong>Todas as ajudas sociais</strong> (ex: 150.000,00 Kz de condolências/óbito do sócio André Paulo) <strong>recaem exclusivamente sobre o Fundo</strong>. O <strong className="text-emerald-300">Saldo Líquido em Banco ({formatCurrency(saldoLiquidoFundoEmBanco)})</strong> constitui o patrimônio líquido real do Fundo (20.000 Kz/sócio/mês + Lucros de Juros - Apoios Sociais Desembolsados), já descontando os empréstimos ativos.
+          </p>
+        </div>
+      </div>
       
       {/* CARD 1: PAINEL DE PATRIMÓNIO & GOVERNAÇÃO COLETIVA */}
       <div className="bg-white/45 dark:bg-slate-900/40 backdrop-blur-md rounded-3xl border border-slate-200/50 dark:border-slate-800/60 p-6 flex flex-col justify-between shadow-md hover:shadow-lg transition-all duration-300 hover:border-sky-350 dark:hover:border-sky-800/80 min-h-[640px]">

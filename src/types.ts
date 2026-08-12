@@ -224,6 +224,13 @@ export interface AppConfig {
   lastAutoBackupFirestore?: string;
   lastAutoBackupGDrive?: string;
   rolePermissions?: RolePermissions;
+  uiScale?: 'small' | 'normal' | 'large' | 'xlarge';
+  uiDensity?: 'compact' | 'normal' | 'relaxed';
+  iconScale?: 'normal' | 'large' | 'xlarge';
+  printFontSize?: 'small' | 'normal' | 'large';
+  printMargins?: 'compact' | 'normal' | 'wide';
+  printPaperFormat?: 'a4_portrait' | 'a4_landscape' | 'a5' | 'letter';
+  printShowHeaderFooter?: boolean;
 }
 
 export const monthNamesPortuguese = [
