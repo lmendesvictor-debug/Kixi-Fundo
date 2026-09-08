@@ -589,22 +589,27 @@ export default function MembersTable({
   };
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden transition-colors" id="members-table-container">
+    <div className="bg-white dark:bg-slate-900 rounded-2xl border-2 border-slate-200 dark:border-slate-800 p-5 sm:p-7 shadow-lg relative select-none transition-colors" id="members-table-container">
       
       {/* Table Header Section */}
-      <div className="p-5 border-b border-slate-200 dark:border-slate-800 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-base font-bold font-display text-slate-800 dark:text-white">
-              Cadastro de Membros e Perfis
-            </h2>
-            <span className="text-xs bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-200 font-bold px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700">
-              Foco Mês {currentMonth}
-            </span>
+      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 pb-5 border-b-2 border-slate-100 dark:border-slate-800">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <div className="p-2.5 rounded-xl bg-sky-600 text-white shadow-md">
+            <UserCheck className="w-5 h-5" />
           </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Visualização de cargos, agendas e estados de tesouraria de cada membro ativo.
-          </p>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-xl font-black font-display text-slate-900 dark:text-white tracking-tight">
+                Cadastro de Membros e Perfis
+              </h2>
+              <span className="text-xs bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 font-black px-2.5 py-0.5 rounded-lg border border-sky-200 dark:border-sky-800">
+                Foco Mês {currentMonth}
+              </span>
+            </div>
+            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-0.5">
+              Visualização de cargos, agendas e estados de tesouraria de cada membro ativo.
+            </p>
+          </div>
         </div>
 
         {/* Action button panel - Only show admin options if logged-in user is actually admin */}
@@ -612,10 +617,10 @@ export default function MembersTable({
           <div className="flex flex-wrap items-center gap-2.5">
             <button
               onClick={() => setIsAdminMode(!isAdminMode)}
-              className={`text-xs font-bold px-3 py-2 rounded-lg border transition-all cursor-pointer ${
+              className={`text-xs font-black px-3.5 py-2 rounded-xl border-2 transition-all cursor-pointer ${
                 isAdminMode 
-                  ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900 border-transparent shadow-sm' 
-                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-705 hover:bg-slate-50 dark:hover:bg-slate-700'
+                  ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 border-transparent shadow-md' 
+                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
               }`}
             >
               {isAdminMode ? 'Desativar Controle Admin' : 'Ativar Controle Admin'}
@@ -624,10 +629,10 @@ export default function MembersTable({
             {isAdminMode && (
               <button
                 onClick={handleOpenCreateForm}
-                className="bg-[#10B981] hover:bg-[#059669] text-white text-xs font-bold px-3 py-2 rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-black text-xs uppercase tracking-wider shadow-md hover:shadow-lg transition-all flex items-center gap-2 cursor-pointer shrink-0"
               >
-                <UserPlus className="w-4 h-4" />
-                Adicionar Membro
+                <UserPlus className="w-4 h-4 stroke-[2.5]" />
+                <span>+ Adicionar Membro</span>
               </button>
             )}
           </div>

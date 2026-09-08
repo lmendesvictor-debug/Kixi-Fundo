@@ -284,22 +284,22 @@ export default function MetricCards({
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-1 select-none font-sans text-slate-800 dark:text-slate-100" id="dashboard-widgets-panel">
       
       {/* BANNER KPI: DEMONSTRATIVO DE SALDO LÍQUIDO DO FUNDO EM BANCO */}
-      <div className="col-span-1 lg:col-span-2 bg-slate-900 dark:bg-slate-900/90 text-white p-6 rounded-3xl border border-slate-800 shadow-lg space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+      <div className="col-span-1 lg:col-span-2 bg-white dark:bg-slate-900 text-slate-900 dark:text-white p-6 sm:p-7 rounded-2xl border-2 border-slate-200 dark:border-slate-800 shadow-lg space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b-2 border-slate-100 dark:border-slate-800 pb-4">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-emerald-500/20 border border-emerald-500/30 rounded-2xl text-emerald-400">
+            <div className="p-2.5 bg-emerald-500/10 border-2 border-emerald-500/30 rounded-xl text-emerald-600 dark:text-emerald-400">
               <Landmark className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="text-sm font-black uppercase tracking-wider text-white flex items-center gap-2">
+              <h3 className="text-sm font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
                 Demonstrativo do Saldo Líquido do Fundo (Em Banco)
               </h3>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                 Líquido real em caixa bancária do Fundo após dedução do capital concedido sob empréstimos ativos.
               </p>
             </div>
           </div>
-          <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-black uppercase tracking-widest rounded-xl shrink-0 w-fit">
+          <span className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 text-[10px] font-black uppercase tracking-widest rounded-xl shrink-0 w-fit">
             ✓ Tesouraria Bancária
           </span>
         </div>
@@ -307,49 +307,49 @@ export default function MetricCards({
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           
           {/* CARTÃO 1: PATRIMÓNIO LÍQUIDO DO FUNDO (RETENÇÃO 20K + JUROS REALIZADOS - APOIOS) */}
-          <div className="bg-slate-800/80 p-4 rounded-2xl border border-slate-700/60 font-mono">
+          <div className="bg-slate-50 dark:bg-slate-800/80 p-4 rounded-xl border-2 border-slate-200 dark:border-slate-700 font-mono shadow-sm">
             <div className="flex items-center justify-between font-sans mb-1">
-              <span className="text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">
+              <span className="text-[10.5px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 Patrimônio do Fundo
               </span>
-              <Coins className="w-4 h-4 text-sky-400" />
+              <Coins className="w-4 h-4 text-sky-500" />
             </div>
-            <span className="text-xl font-black text-white block mt-1">
+            <span className="text-xl font-black text-slate-900 dark:text-white block mt-1">
               {formatCurrency(totalPatrimonioFundo)}
             </span>
-            <span className="text-[10px] text-slate-400 block mt-1 font-sans">
+            <span className="text-[10px] text-slate-500 dark:text-slate-400 block mt-1 font-sans">
               Quotas (20k) + Juros ({formatCurrency(totalRealizedInterest)}) - Apoios Sociais ({formatCurrency(totalSocialDisbursed)})
             </span>
           </div>
 
           {/* CARTÃO 2: (-) CAPITAL CONCEDIDO EM EMPRÉSTIMOS ATIVOS */}
-          <div className="bg-amber-950/40 p-4 rounded-2xl border border-amber-800/50 font-mono">
+          <div className="bg-amber-50/80 dark:bg-amber-950/30 p-4 rounded-xl border-2 border-amber-500/30 font-mono shadow-sm">
             <div className="flex items-center justify-between font-sans mb-1">
-              <span className="text-[10.5px] font-bold text-amber-400 uppercase tracking-wider">
+              <span className="text-[10.5px] font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">
                 (-) Empréstimos Ativos
               </span>
-              <TrendingUp className="w-4 h-4 text-amber-400" />
+              <TrendingUp className="w-4 h-4 text-amber-500" />
             </div>
-            <span className="text-xl font-black text-amber-300 block mt-1">
+            <span className="text-xl font-black text-amber-700 dark:text-amber-300 block mt-1">
               - {formatCurrency(activeLoansOutstanding)}
             </span>
-            <span className="text-[10px] text-amber-400/80 block mt-1 font-sans">
+            <span className="text-[10px] text-amber-600/90 dark:text-amber-400/80 block mt-1 font-sans font-medium">
               Capital emprestado em amortização
             </span>
           </div>
 
           {/* CARTÃO 3: (=) SALDO LÍQUIDO DO FUNDO (EM BANCO) */}
-          <div className="sm:col-span-2 lg:col-span-1 bg-emerald-950/60 p-4 rounded-2xl border border-emerald-500/60 font-mono relative overflow-hidden shadow-sm">
+          <div className="sm:col-span-2 lg:col-span-1 bg-emerald-50/80 dark:bg-emerald-950/40 p-4 rounded-xl border-2 border-emerald-500/40 font-mono relative overflow-hidden shadow-sm">
             <div className="flex items-center justify-between font-sans mb-1">
-              <span className="text-[10.5px] font-bold text-emerald-400 uppercase tracking-wider">
+              <span className="text-[10.5px] font-bold text-emerald-800 dark:text-emerald-400 uppercase tracking-wider">
                 (=) Saldo Líquido em Banco
               </span>
-              <Wallet className="w-4 h-4 text-emerald-400" />
+              <Wallet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
             </div>
-            <span className="text-xl sm:text-2xl font-black text-emerald-300 block mt-1">
+            <span className="text-xl sm:text-2xl font-black text-emerald-700 dark:text-emerald-300 block mt-1">
               {formatCurrency(saldoLiquidoFundoEmBanco)}
             </span>
-            <span className="text-[10px] text-emerald-400/90 block mt-1 font-sans font-bold">
+            <span className="text-[10px] text-emerald-700/90 dark:text-emerald-400/90 block mt-1 font-sans font-bold">
               ✓ Liquidez livre do Fundo disponível em banco
             </span>
           </div>
@@ -357,76 +357,76 @@ export default function MetricCards({
         </div>
 
         {/* Nota explicativa de governança e contabilidade da Kixikila */}
-        <div className="bg-slate-950/80 p-4 rounded-2xl border border-slate-800/90 text-xs text-slate-300 space-y-2">
-          <div className="flex items-center justify-between border-b border-slate-800/80 pb-2 text-[11px] font-sans">
-            <span className="text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+        <div className="bg-slate-100 dark:bg-slate-950 p-4 rounded-xl border-2 border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-300 space-y-2">
+          <div className="flex flex-wrap items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2 text-[11px] font-sans gap-2">
+            <span className="text-slate-700 dark:text-slate-300 font-bold uppercase tracking-wider flex items-center gap-1.5">
               <span>📊</span> Informações Contabilísticas da Kixikila (Consórcio de Rotação)
             </span>
-            <span className="text-slate-400">
-              Total Bruto Arrecadado: <strong className="text-white font-mono">{formatCurrency(totalQuotasCollected)}</strong> | Pagos em Rotação: <strong className="text-sky-400 font-mono">{formatCurrency(totalBeneficiaryPaid)}</strong>
+            <span className="text-slate-600 dark:text-slate-400">
+              Total Bruto Arrecadado: <strong className="text-slate-900 dark:text-white font-mono">{formatCurrency(totalQuotasCollected)}</strong> | Pagos em Rotação: <strong className="text-sky-600 dark:text-sky-400 font-mono">{formatCurrency(totalBeneficiaryPaid)}</strong>
             </span>
           </div>
-          <p className="text-[11px] text-slate-400 leading-relaxed font-sans">
-            <strong className="text-emerald-400">Regra de Apuração:</strong> De cada prestação de <strong>120.000,00 Kz</strong> por sócio, <strong>20.000,00 Kz</strong> destinam-se ao Fundo e <strong>100.000,00 Kz</strong> à Kixikila (repassados integralmente aos 2 sócios contemplados que recebem <strong>600.000,00 Kz</strong> cada). <strong>Todas as ajudas sociais</strong> (ex: 150.000,00 Kz de condolências/óbito do sócio André Paulo) <strong>recaem exclusivamente sobre o Fundo</strong>. O <strong className="text-emerald-300">Saldo Líquido em Banco ({formatCurrency(saldoLiquidoFundoEmBanco)})</strong> constitui o patrimônio líquido real do Fundo (20.000 Kz/sócio/mês + Lucros de Juros - Apoios Sociais Desembolsados), já descontando os empréstimos ativos.
+          <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed font-sans">
+            <strong className="text-emerald-600 dark:text-emerald-400">Regra de Apuração:</strong> De cada prestação de <strong>120.000,00 Kz</strong> por sócio, <strong>20.000,00 Kz</strong> destinam-se ao Fundo e <strong>100.000,00 Kz</strong> à Kixikila (repassados integralmente aos 2 sócios contemplados que recebem <strong>600.000,00 Kz</strong> cada). <strong>Todas as ajudas sociais</strong> (ex: 150.000,00 Kz de condolências/óbito do sócio André Paulo) <strong>recaem exclusivamente sobre o Fundo</strong>. O <strong className="text-emerald-700 dark:text-emerald-300">Saldo Líquido em Banco ({formatCurrency(saldoLiquidoFundoEmBanco)})</strong> constitui o patrimônio líquido real do Fundo (20.000 Kz/sócio/mês + Lucros de Juros - Apoios Sociais Desembolsados), já descontando os empréstimos ativos.
           </p>
         </div>
       </div>
       
       {/* CARD 1: PAINEL DE PATRIMÓNIO & GOVERNAÇÃO COLETIVA */}
-      <div className="bg-white/45 dark:bg-slate-900/40 backdrop-blur-md rounded-3xl border border-slate-200/50 dark:border-slate-800/60 p-6 flex flex-col justify-between shadow-md hover:shadow-lg transition-all duration-300 hover:border-sky-350 dark:hover:border-sky-800/80 min-h-[640px]">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border-2 border-slate-200 dark:border-slate-800 p-6 flex flex-col justify-between shadow-lg transition-all duration-300 hover:border-sky-500/50 min-h-[640px]">
         <div>
           {/* Header & Main Toggle */}
-          <div className="flex flex-col gap-4 mb-6 border-b border-slate-100 dark:border-slate-800 pb-4">
+          <div className="flex flex-col gap-4 mb-6 border-b-2 border-slate-100 dark:border-slate-800 pb-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-[13px] font-black tracking-tight text-slate-900 dark:text-white uppercase flex items-center gap-2">
-                <span className="w-7 h-7 rounded-lg bg-[#0d5c3a] text-white flex items-center justify-center font-black text-xs">
+              <h2 className="text-sm font-black tracking-tight text-slate-900 dark:text-white uppercase flex items-center gap-2.5">
+                <span className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black text-sm shadow-md">
                   🏛️
                 </span>
                 Governação & Patrimônio
               </h2>
-              <span className="text-[9.5px] font-extrabold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md">
+              <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 rounded-lg">
                 Fundo de Rotação
               </span>
             </div>
 
             {/* Pill Bar Selector */}
-            <div className="flex flex-wrap gap-1 bg-slate-150/60 dark:bg-slate-950/40 p-1 rounded-2xl border border-slate-200/35 dark:border-slate-800/30">
+            <div className="flex flex-wrap gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
               <button
                 onClick={() => setActiveLeftTab('composition')}
-                className={`flex-1 min-w-[70px] text-[10.5px] py-2 font-black rounded-xl transition-all cursor-pointer text-center whitespace-nowrap ${
+                className={`flex-1 min-w-[70px] text-xs py-2 font-black rounded-lg transition-all cursor-pointer text-center whitespace-nowrap ${
                   activeLeftTab === 'composition'
-                    ? 'bg-[#0d5c3a] text-white shadow-md font-extrabold'
-                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-750 hover:bg-slate-200/40 dark:hover:bg-slate-800/30'
+                    ? 'bg-emerald-600 text-white shadow-sm font-black'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-700/60'
                 }`}
               >
                 Composição
               </button>
               <button
                 onClick={() => setActiveLeftTab('social')}
-                className={`flex-1 min-w-[70px] text-[10.5px] py-2 font-black rounded-xl transition-all cursor-pointer text-center whitespace-nowrap ${
+                className={`flex-1 min-w-[70px] text-xs py-2 font-black rounded-lg transition-all cursor-pointer text-center whitespace-nowrap ${
                   activeLeftTab === 'social'
-                    ? 'bg-[#0d5c3a] text-white shadow-md font-extrabold'
-                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-750 hover:bg-slate-200/40 dark:hover:bg-slate-800/30'
+                    ? 'bg-emerald-600 text-white shadow-sm font-black'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-700/60'
                 }`}
               >
                 Fundo Social
               </button>
               <button
                 onClick={() => setActiveLeftTab('cycle')}
-                className={`flex-1 min-w-[70px] text-[10.5px] py-2 font-black rounded-xl transition-all cursor-pointer text-center whitespace-nowrap ${
+                className={`flex-1 min-w-[70px] text-xs py-2 font-black rounded-lg transition-all cursor-pointer text-center whitespace-nowrap ${
                   activeLeftTab === 'cycle'
-                    ? 'bg-[#0d5c3a] text-white shadow-md font-extrabold'
-                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-750 hover:bg-slate-200/40 dark:hover:bg-slate-800/30'
+                    ? 'bg-emerald-600 text-white shadow-sm font-black'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-700/60'
                 }`}
               >
                 Ciclo Corrente
               </button>
               <button
                 onClick={() => setActiveLeftTab('contemplations')}
-                className={`flex-1 min-w-[70px] text-[10.5px] py-2 font-black rounded-xl transition-all cursor-pointer text-center whitespace-nowrap ${
+                className={`flex-1 min-w-[70px] text-xs py-2 font-black rounded-lg transition-all cursor-pointer text-center whitespace-nowrap ${
                   activeLeftTab === 'contemplations'
-                    ? 'bg-[#0d5c3a] text-white shadow-md font-extrabold'
-                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-750 hover:bg-slate-200/40 dark:hover:bg-slate-800/30'
+                    ? 'bg-emerald-600 text-white shadow-sm font-black'
+                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/60 dark:hover:bg-slate-700/60'
                 }`}
               >
                 Contemplações
@@ -1006,28 +1006,28 @@ export default function MetricCards({
       </div>
 
       {/* CARD 2: GESTÃO DE CRÉDITO & LUCRATIVIDADE (LUCROS DE JUROS) */}
-      <div className="bg-white/45 dark:bg-slate-900/40 backdrop-blur-md rounded-3xl border border-slate-200/50 dark:border-slate-800/60 p-6 flex flex-col justify-between shadow-md hover:shadow-lg transition-all duration-300 hover:border-violet-300/40 dark:hover:border-violet-800/50 min-h-[640px]">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border-2 border-slate-200 dark:border-slate-800 p-6 flex flex-col justify-between shadow-lg transition-all duration-300 hover:border-violet-500/50 min-h-[640px]">
         <div>
-          <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-center justify-between mb-4 pb-3 border-b-2 border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-3">
-              <span className="w-7 h-7 rounded-lg bg-violet-600 text-white flex items-center justify-center font-black text-xs">
+              <span className="w-8 h-8 rounded-xl bg-violet-600 text-white flex items-center justify-center font-black text-sm shadow-md">
                 📈
               </span>
               <div>
-                <h2 className="text-[13px] font-black tracking-tight text-slate-900 dark:text-white uppercase flex items-center gap-1.5">
+                <h2 className="text-sm font-black tracking-tight text-slate-900 dark:text-white uppercase flex items-center gap-1.5">
                   Rendimento & Rentabilidade de Crédito
                 </h2>
-                <p className="text-[9px] text-slate-400">Total emprestado e rendimentos gerados por juros.</p>
+                <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400">Total emprestado e rendimentos gerados por juros.</p>
               </div>
             </div>
-            <div className="px-2.5 py-0.5 bg-violet-100 dark:bg-violet-950/30 border border-violet-200/30 rounded-lg text-violet-700 dark:text-violet-300 text-[10px] font-bold font-mono">
+            <div className="px-2.5 py-1 bg-violet-100 dark:bg-violet-950/40 border border-violet-300 dark:border-violet-800 rounded-lg text-violet-700 dark:text-violet-300 text-[10px] font-black uppercase font-mono">
               Rendimento Ativo
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3 mb-5">
             {/* Card 1: Total Emprestado */}
-            <div className="bg-slate-50/50 dark:bg-slate-950/30 border border-slate-200/40 dark:border-slate-800/60 p-3 rounded-xl flex flex-col justify-between">
+            <div className="bg-slate-50 dark:bg-slate-800/80 border-2 border-slate-200 dark:border-slate-700 p-3 rounded-xl flex flex-col justify-between shadow-sm">
               <span className="block font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider text-[8px]">Capital Concedido</span>
               <span className="font-mono font-black text-slate-900 dark:text-white text-xs block mt-0.5">
                 {formatCurrency(totalLentAmount)}
@@ -1067,7 +1067,7 @@ export default function MetricCards({
           <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
             
             {/* Left Column: Doughnut Chart (span 5) */}
-            <div className="xl:col-span-5 flex flex-col items-center justify-center p-3 bg-slate-50/50 dark:bg-slate-950/20 rounded-2xl border border-slate-200/50 dark:border-slate-800/60 relative animate-fadeIn min-h-[220px]">
+            <div className="xl:col-span-5 flex flex-col items-center justify-center p-3 bg-slate-50 dark:bg-slate-800/80 rounded-2xl border-2 border-slate-200 dark:border-slate-700 relative animate-fadeIn min-h-[220px]">
               <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1 text-center">
                 Proporção de Rentabilidade
               </h4>

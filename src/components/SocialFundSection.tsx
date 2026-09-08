@@ -128,10 +128,12 @@ export default function SocialFundSection({
     <div className="space-y-8">
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Overview & Rules of the Social Fund */}
-        <div className="lg:col-span-7 bg-white dark:bg-slate-900/60 rounded-2xl border border-slate-100 dark:border-slate-800/80 p-6 shadow-custom flex flex-col justify-between">
+        <div className="lg:col-span-7 bg-white dark:bg-slate-900 rounded-2xl border-2 border-slate-200 dark:border-slate-800 p-6 sm:p-7 shadow-lg flex flex-col justify-between">
           <div>
-            <h2 className="text-lg font-bold font-display text-slate-800 dark:text-white flex items-center gap-2 mb-4">
-              <Landmark className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+            <h2 className="text-lg font-black font-display text-slate-900 dark:text-white flex items-center gap-2.5 mb-4">
+              <span className="w-8 h-8 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black text-sm shadow-md">
+                <Landmark className="w-5 h-5" />
+              </span>
               Estrutura do Fundo de Interajuda & Apoio Social
             </h2>
             <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed mb-4">
@@ -140,20 +142,20 @@ export default function SocialFundSection({
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 my-2">
-              <div className="border border-emerald-50 dark:border-emerald-900/30 bg-emerald-50/20 dark:bg-emerald-950/10 rounded-xl p-4">
-                <span className="text-xs font-semibold text-emerald-800 dark:text-emerald-300 uppercase block tracking-wider mb-1">
+              <div className="border-2 border-emerald-500/30 bg-emerald-50/80 dark:bg-emerald-950/30 rounded-xl p-4 shadow-sm">
+                <span className="text-xs font-black text-emerald-800 dark:text-emerald-300 uppercase block tracking-wider mb-1">
                   Retenção Mensal Coletiva
                 </span>
-                <span className="text-sm text-slate-500 dark:text-slate-400 font-display">
+                <span className="text-sm text-slate-600 dark:text-slate-400 font-display">
                   12 membros × 20.000,00 KZs
                 </span>
-                <span className="text-lg font-bold font-mono text-emerald-700 dark:text-emerald-400 block mt-1">
+                <span className="text-lg font-black font-mono text-emerald-700 dark:text-emerald-400 block mt-1">
                   240.000,00 KZs / mês
                 </span>
               </div>
 
-              <div className="border border-indigo-50 dark:border-indigo-900/30 bg-indigo-50/20 dark:bg-indigo-950/10 rounded-xl p-4">
-                <span className="text-xs font-semibold text-indigo-800 dark:text-indigo-300 uppercase block tracking-wider mb-1">
+              <div className="border-2 border-indigo-500/30 bg-indigo-50/80 dark:bg-indigo-950/30 rounded-xl p-4 shadow-sm">
+                <span className="text-xs font-black text-indigo-800 dark:text-indigo-300 uppercase block tracking-wider mb-1">
                   Finalidade Estatutária
                 </span>
                 <p className="text-xs text-indigo-900 dark:text-indigo-200 leading-snug">
@@ -164,7 +166,7 @@ export default function SocialFundSection({
 
             <div className="mt-5 space-y-4">
               <div>
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-400 font-display mb-2">Histórico de Apoios Recentes (Soma por Membro)</h3>
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 font-display mb-2">Histórico de Apoios Recentes (Soma por Membro)</h3>
                 {members.filter((m) => m.socialSupportReceived > 0).length === 0 ? (
                   <p className="text-xs text-slate-400 dark:text-slate-500 italic">Nenhum auxílio social pago até o momento.</p>
                 ) : (
@@ -172,23 +174,23 @@ export default function SocialFundSection({
                     {members
                       .filter((m) => m.socialSupportReceived > 0)
                       .map((m) => (
-                        <div key={m.id} className="flex items-center justify-between text-xs bg-slate-50/50 dark:bg-slate-950/20 border border-slate-100 dark:border-slate-850/60 px-3 py-2 rounded-lg">
+                        <div key={m.id} className="flex items-center justify-between text-xs bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 px-3.5 py-2.5 rounded-xl">
                           <div className="flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-emerald-550" />
-                            <span className="font-semibold text-slate-700 dark:text-slate-300">{m.name}</span>
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                            <span className="font-bold text-slate-800 dark:text-slate-200">{m.name}</span>
                           </div>
-                          <span className="text-slate-500 dark:text-slate-400">Total Recebido: <strong className="font-mono text-emerald-800 dark:text-emerald-400">{formatCurrency(m.socialSupportReceived)}</strong></span>
+                          <span className="text-slate-600 dark:text-slate-400">Total Recebido: <strong className="font-mono text-emerald-700 dark:text-emerald-400 font-black">{formatCurrency(m.socialSupportReceived)}</strong></span>
                         </div>
                       ))}
                   </div>
                 )}
               </div>
 
-              <div className="border-t border-slate-100 dark:border-slate-800/80 pt-4 space-y-2">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 dark:text-slate-400 font-display flex items-center gap-1.5 justify-between">
+              <div className="border-t-2 border-slate-100 dark:border-slate-800 pt-4 space-y-2">
+                <h3 className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 font-display flex items-center gap-1.5 justify-between">
                   <span>Registos de Apoio Individuais</span>
                   {isAdmin && (
-                    <span className="text-[9px] bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold px-2 py-0.5 rounded tracking-wide">
+                    <span className="text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 font-black px-2.5 py-0.5 rounded-lg tracking-wide uppercase">
                       Administrador (Pode Editar/Eliminar)
                     </span>
                   )}

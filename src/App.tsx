@@ -2769,15 +2769,8 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
 
   return (
     <div className={`min-h-screen transition-colors duration-250 flex flex-col w-full font-sans antialiased relative ${
-      theme === 'dark' ? 'bg-[#111827] text-slate-100' : 'bg-slate-50 text-slate-800'
+      theme === 'dark' ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-800'
     }`}>
-      {/* Universal Financial Growth Watermark Background */}
-      <div 
-        className="pointer-events-none fixed inset-0 z-0 bg-cover bg-center bg-no-repeat transition-opacity duration-300 select-none opacity-[0.025]"
-        style={{
-          backgroundImage: `url('https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?auto=format&fit=crop&q=80&w=2000')`
-        }}
-      />
       {appStylesElement}
       
       {/* Dynamic Top Navbar styled exactly to replicate the uploaded user blueprint */}
@@ -3234,20 +3227,16 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
 
                 {/* Custom Admin Announcement Message Banner */}
                 {appConfig.customDashboardMessage && (
-                  <div className={`p-4 rounded-2xl border flex items-start gap-4 relative overflow-hidden transition-all shadow-sm backdrop-blur-md ${
-                    theme === 'dark' 
-                      ? 'bg-slate-900/40 border-slate-800/60 text-slate-200' 
-                      : 'bg-white/45 border-slate-200/50 text-slate-800'
-                  }`}>
+                  <div className="p-5 rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-start gap-4 relative overflow-hidden transition-all shadow-md text-slate-800 dark:text-slate-200">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none" />
-                    <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-500 shrink-0 text-sm">
+                    <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0 text-base">
                       📢
                     </span>
-                    <div className="flex-1 space-y-0.5">
-                      <h4 className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    <div className="flex-1 space-y-1">
+                      <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
                         Comunicado do Administrador
                       </h4>
-                      <p className="text-xs font-semibold leading-relaxed">
+                      <p className="text-sm font-semibold leading-relaxed">
                         {appConfig.customDashboardMessage}
                       </p>
                     </div>
@@ -3291,28 +3280,26 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                   </p>
                 </div>
 
-                {/* Bento Grid: 4 Secções (Missão, Visão, Valores, Objectivo) de Finanças Comparticipadas - MAGNIFICADAS */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
+                {/* Bento Grid: 4 Secções (Missão, Visão, Valores, Objectivo) de Finanças Comparticipadas */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   {/* Missão Card */}
                   <motion.div
-                    whileHover={{ y: -8, scale: 1.02 }}
-                    className="bg-white/45 dark:bg-slate-900/40 backdrop-blur-md rounded-[2.5rem] border border-slate-200/55 dark:border-slate-800/60 p-10 md:p-12 shadow-lg flex flex-col justify-between space-y-8 relative overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-sky-350 dark:hover:border-sky-850"
+                    whileHover={{ y: -4, scale: 1.01 }}
+                    className="bg-white dark:bg-slate-900 rounded-2xl border-2 border-slate-200 dark:border-slate-800 p-7 shadow-md flex flex-col justify-between space-y-6 relative overflow-hidden transition-all duration-300 hover:shadow-lg hover:border-sky-500/50"
                   >
-                    <div className="absolute top-0 right-0 w-44 h-44 bg-sky-500/5 rounded-bl-full pointer-events-none" />
-                    <div className="space-y-6 relative z-10">
-                      {/* Target round icon */}
-                      <div className="w-20 h-20 bg-sky-50 dark:bg-sky-950/40 text-sky-600 rounded-3xl flex items-center justify-center shadow-md">
-                        <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="space-y-4 relative z-10">
+                      <div className="w-14 h-14 bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 rounded-2xl flex items-center justify-center shadow-sm border border-sky-200/50 dark:border-sky-800/50">
+                        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <circle cx="12" cy="12" r="10" strokeWidth="2" stroke="currentColor" />
                           <circle cx="12" cy="12" r="6" strokeWidth="2" stroke="currentColor" />
                           <circle cx="12" cy="12" r="2" strokeWidth="3" fill="currentColor" stroke="currentColor" />
                         </svg>
                       </div>
                       
-                      <h3 className="text-2xl font-black font-sans text-slate-900 dark:text-white tracking-tight">
+                      <h3 className="text-xl font-black font-sans text-slate-900 dark:text-white tracking-tight">
                         Missão
                       </h3>
-                      <p className="text-[13px] sm:text-sm md:text-[15px] leading-relaxed text-slate-600 dark:text-slate-100 font-semibold font-sans">
+                      <p className="text-xs sm:text-sm leading-relaxed text-slate-600 dark:text-slate-300 font-medium font-sans">
                         Promover a poupança cooperativa, o autofinanciamento e a ajuda mútua, gerindo os recursos com rigor, transparência e responsabilidade coletiva.
                       </p>
                     </div>
@@ -3320,23 +3307,21 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
 
                   {/* Visão Card */}
                   <motion.div
-                    whileHover={{ y: -8, scale: 1.02 }}
-                    className="bg-white/45 dark:bg-slate-900/40 backdrop-blur-md rounded-[2.5rem] border border-slate-200/55 dark:border-slate-800/60 p-10 md:p-12 shadow-lg flex flex-col justify-between space-y-8 relative overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-purple-350 dark:hover:border-purple-850"
+                    whileHover={{ y: -4, scale: 1.01 }}
+                    className="bg-white dark:bg-slate-900 rounded-2xl border-2 border-slate-200 dark:border-slate-800 p-7 shadow-md flex flex-col justify-between space-y-6 relative overflow-hidden transition-all duration-300 hover:shadow-lg hover:border-purple-500/50"
                   >
-                    <div className="absolute top-0 right-0 w-44 h-44 bg-purple-500/5 rounded-bl-full pointer-events-none" />
-                    <div className="space-y-6 relative z-10">
-                      {/* Eye round icon */}
-                      <div className="w-20 h-20 bg-purple-50 dark:bg-purple-950/40 text-purple-600 rounded-3xl flex items-center justify-center shadow-md">
-                        <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="space-y-4 relative z-10">
+                      <div className="w-14 h-14 bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 rounded-2xl flex items-center justify-center shadow-sm border border-purple-200/50 dark:border-purple-800/50">
+                        <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                         </svg>
                       </div>
                       
-                      <h3 className="text-2xl font-black font-sans text-slate-900 dark:text-white tracking-tight">
+                      <h3 className="text-xl font-black font-sans text-slate-900 dark:text-white tracking-tight">
                         Visão
                       </h3>
-                      <p className="text-[13px] sm:text-sm md:text-[15px] leading-relaxed text-slate-600 dark:text-slate-100 font-semibold font-sans">
+                      <p className="text-xs sm:text-sm leading-relaxed text-slate-600 dark:text-slate-300 font-medium font-sans">
                         Ser a maior e mais confiável plataforma de consórcios rotativos, reconhecida pela excelência em gestão e impacto positivo nas famílias cooperadoras.
                       </p>
                     </div>
@@ -3344,20 +3329,18 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
 
                   {/* Valores Card */}
                   <motion.div
-                    whileHover={{ y: -8, scale: 1.02 }}
-                    className="bg-white/45 dark:bg-slate-900/40 backdrop-blur-md rounded-[2.5rem] border border-slate-200/55 dark:border-slate-800/60 p-10 md:p-12 shadow-lg flex flex-col justify-between space-y-8 relative overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-amber-300 dark:hover:border-amber-850"
+                    whileHover={{ y: -4, scale: 1.01 }}
+                    className="bg-white dark:bg-slate-900 rounded-2xl border-2 border-slate-200 dark:border-slate-800 p-7 shadow-md flex flex-col justify-between space-y-6 relative overflow-hidden transition-all duration-300 hover:shadow-lg hover:border-amber-500/50"
                   >
-                    <div className="absolute top-0 right-0 w-44 h-44 bg-amber-500/5 rounded-bl-full pointer-events-none" />
-                    <div className="space-y-6 relative z-10">
-                      {/* Heart round icon for values */}
-                      <div className="w-20 h-20 bg-amber-50 dark:bg-amber-950/40 text-amber-600 rounded-3xl flex items-center justify-center shadow-md font-black text-3xl select-none">
+                    <div className="space-y-4 relative z-10">
+                      <div className="w-14 h-14 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 rounded-2xl flex items-center justify-center shadow-sm border border-amber-200/50 dark:border-amber-800/50 font-black text-2xl select-none">
                         ♥
                       </div>
                       
-                      <h3 className="text-2xl font-black font-sans text-slate-900 dark:text-white tracking-tight">
+                      <h3 className="text-xl font-black font-sans text-slate-900 dark:text-white tracking-tight">
                         Valores
                       </h3>
-                      <p className="text-[13px] sm:text-sm md:text-[15px] leading-relaxed text-slate-600 dark:text-slate-100 font-semibold font-sans">
+                      <p className="text-xs sm:text-sm leading-relaxed text-slate-600 dark:text-slate-300 font-medium font-sans">
                         Transparência absoluta, solidariedade recíproca, integridade absoluta de conduta, rigor financeiro e igualdade de oportunidade para todos os sócios.
                       </p>
                     </div>
@@ -3365,20 +3348,18 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
 
                   {/* Objectivo Card */}
                   <motion.div
-                    whileHover={{ y: -8, scale: 1.02 }}
-                    className="bg-white/45 dark:bg-slate-900/40 backdrop-blur-md rounded-[2.5rem] border border-slate-200/55 dark:border-slate-800/60 p-10 md:p-12 shadow-lg flex flex-col justify-between space-y-8 relative overflow-hidden transition-all duration-300 hover:shadow-xl hover:border-emerald-350 dark:hover:border-emerald-850"
+                    whileHover={{ y: -4, scale: 1.01 }}
+                    className="bg-white dark:bg-slate-900 rounded-2xl border-2 border-slate-200 dark:border-slate-800 p-7 shadow-md flex flex-col justify-between space-y-6 relative overflow-hidden transition-all duration-300 hover:shadow-lg hover:border-emerald-500/50"
                   >
-                    <div className="absolute top-0 right-0 w-44 h-44 bg-emerald-500/5 rounded-bl-full pointer-events-none" />
-                    <div className="space-y-6 relative z-10">
-                      {/* Compass round icon */}
-                      <div className="w-20 h-20 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 rounded-3xl flex items-center justify-center shadow-md">
-                        <Compass className="w-10 h-10" />
+                    <div className="space-y-4 relative z-10">
+                      <div className="w-14 h-14 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 rounded-2xl flex items-center justify-center shadow-sm border border-emerald-200/50 dark:border-emerald-800/50">
+                        <Compass className="w-7 h-7" />
                       </div>
                       
-                      <h3 className="text-2xl font-black font-sans text-slate-900 dark:text-white tracking-tight">
+                      <h3 className="text-xl font-black font-sans text-slate-900 dark:text-white tracking-tight">
                         Objectivo
                       </h3>
-                      <p className="text-[13px] sm:text-sm md:text-[15px] leading-relaxed text-slate-600 dark:text-slate-100 font-semibold font-sans">
+                      <p className="text-xs sm:text-sm leading-relaxed text-slate-600 dark:text-slate-300 font-medium font-sans">
                         Garantir a angariação rotativa mensal de capitais e promover o fomento de micro-poupanças estruturadas com redistribuição em apoio imediato.
                       </p>
                     </div>
