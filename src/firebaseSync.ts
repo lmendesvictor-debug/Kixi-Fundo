@@ -1,6 +1,6 @@
 import { doc, getDoc, setDoc, getDocFromServer, collection, addDoc, getDocs, deleteDoc, query, orderBy, writeBatch } from 'firebase/firestore';
 import { db, auth } from './driveBackup';
-import { Member, KixLog, Loan } from './types';
+import { Member, KixLog, Loan, SemesterCycle } from './types';
 
 export enum OperationType {
   CREATE = 'create',
@@ -55,6 +55,7 @@ export interface SavedStatePayload {
   loans?: Loan[];
   payoutsCompleted: { [month: string]: boolean };
   currentMonth: number;
+  cycles?: SemesterCycle[];
   appConfig: any;
   updatedAt: string;
   carouselSlides?: any[];

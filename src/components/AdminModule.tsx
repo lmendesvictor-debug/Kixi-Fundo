@@ -58,6 +58,7 @@ import {
   downloadBackupContent,
   deleteBackupFile
 } from '../driveBackup';
+import { getFullMonthLabel } from '../types';
 
 interface AdminModuleProps {
   currentMonth: number;
@@ -82,6 +83,7 @@ interface AdminModuleProps {
   setFirestorePendingOps?: React.Dispatch<React.SetStateAction<{ id: string; timestamp: string; description: string }[]>>;
   onRegisterSecurityAttempt?: (userId: string) => void;
   loans?: any[];
+  onGenerateNextSemester?: () => void;
 }
 
 export default function AdminModule({
@@ -107,8 +109,9 @@ export default function AdminModule({
   setFirestorePendingOps,
   onRegisterSecurityAttempt,
   loans = [],
+  onGenerateNextSemester,
 }: AdminModuleProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'users' | 'receipts' | 'banking' | 'carousel' | 'audit' | 'backup' | 'privileges' | 'member-cleanup' | 'appearance'>('users');
+  const [activeSubTab, setActiveSubTab] = useState<'users' | 'receipts' | 'banking' | 'cycles' | 'carousel' | 'audit' | 'backup' | 'privileges' | 'member-cleanup' | 'appearance'>('users');
 
   const loggedInMember = currentUser 
     ? members.find(m => m.id === currentUser.memberId || m.email?.trim().toLowerCase() === currentUser.email?.trim().toLowerCase())
@@ -616,6 +619,11 @@ export default function AdminModule({
       description: 'Conciliação matemática do caixa, extratos consolidados e balancetes.',
     },
     {
+      id: 'cycles' as const,
+      label: 'Estrutura & Ciclos Semestrais',
+      description: 'Estrutura semestral de 6 meses (2 cooperantes/mês). No fim de cada ciclo, gera e inicia o novo ciclo.',
+    },
+    {
       id: 'carousel' as const,
       label: 'Comunicação & Slides',
       description: 'Gerir as mensagens e imagens rotativas difundidas no topo do portal do fundo.',
@@ -671,6 +679,11 @@ export default function AdminModule({
         return {
           main: <Landmark className={`${iconSizeClass} text-indigo-500`} />,
           second: <TrendingUp className={`${badgeIconSizeClass} text-[#af904f] dark:text-sky-400`} />
+        };
+      case 'cycles':
+        return {
+          main: <Calendar className={`${iconSizeClass} text-emerald-500`} />,
+          second: <RotateCcw className={`${badgeIconSizeClass} text-emerald-400`} />
         };
       case 'carousel':
         return {
@@ -1228,6 +1241,222 @@ export default function AdminModule({
             />
           </motion.div>
         )}
+
+        {activeSubTab === 'cycles' && (() => {
+          const currentLeva = Math.ceil(currentMonth / 6) || 1;
+          const startMonthOfLeva = (currentLeva - 1) * 6 + 1;
+          const endMonthOfLeva = currentLeva * 6;
+          const levaMonths = Array.from({ length: 6 }, (_, i) => startMonthOfLeva + i);
+          const paidMonthsCount = levaMonths.filter(m => payoutsCompleted[m] === true).length;
+          const isLevaCompleted = levaMonths.every(m => payoutsCompleted[m] === true);
+          const totalDisbursedInLeva = paidMonthsCount * 1200000;
+          const totalTargetInLeva = 6 * 1200000;
+
+          return (
+            <motion.div
+              key="admin_cycles"
+              initial={{ opacity: 0, y: 5 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="space-y-6"
+            >
+              <div className={`p-6 rounded-2xl border ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} shadow-sm`}>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800/60 pb-5">
+                  <div className="flex items-start gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold shrink-0 border border-emerald-500/20">
+                      <Calendar className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="text-base font-extrabold text-slate-900 dark:text-white uppercase tracking-wider">
+                          Estrutura Lógica Semestral & Geração de Novos Ciclos
+                        </h3>
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                          {currentLeva}º Semestre Ativo
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 leading-relaxed max-w-4xl">
+                        Os ciclos de recebimento dos sócios possuem uma <strong>estrutura semestral de 6 meses</strong> (2 cooperantes contemplados por mês com 600.000,00 Kz cada, totalizando 12 membros por ciclo). No término de cada ciclo semestral, a aplicação gera e inicia o novo ciclo semestral, escalonando os membros na nova rotação.
+                      </p>
+                    </div>
+                  </div>
+
+                  {onGenerateNextSemester && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm(`Deseja encerrar o ${currentLeva}º Semestre e dar início oficial ao ${currentLeva + 1}º Ciclo Semestral (Meses ${currentLeva * 6 + 1} a ${(currentLeva + 1) * 6})? Todos os 12 membros serão alocados na nova rotação.`)) {
+                          onGenerateNextSemester();
+                        }
+                      }}
+                      className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-xs uppercase tracking-wider shadow-md hover:shadow-lg transition-all flex items-center gap-2 shrink-0 cursor-pointer self-start md:self-auto"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      <span>Gerar {currentLeva + 1}º Semestre</span>
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 mt-5">
+                  <div className={`p-4 rounded-xl border ${isDark ? 'bg-slate-850/60 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                    <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Semestre Vigente</div>
+                    <div className="text-base font-black text-slate-900 dark:text-white mt-1">
+                      {currentLeva}º Semestre
+                    </div>
+                    <div className="text-[11px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">
+                      Meses {startMonthOfLeva} a {endMonthOfLeva}
+                    </div>
+                  </div>
+
+                  <div className={`p-4 rounded-xl border ${isDark ? 'bg-slate-850/60 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                    <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Meses Liquidados</div>
+                    <div className="text-base font-black text-slate-900 dark:text-white mt-1">
+                      {paidMonthsCount} de 6 Meses
+                    </div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold mt-0.5">
+                      {paidMonthsCount * 2} de 12 Sócios Contemplados
+                    </div>
+                  </div>
+
+                  <div className={`p-4 rounded-xl border ${isDark ? 'bg-slate-850/60 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                    <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Desembolso no Semestre</div>
+                    <div className="text-base font-black text-emerald-600 dark:text-emerald-400 font-mono mt-1">
+                      {totalDisbursedInLeva.toLocaleString('pt-PT')},00 Kz
+                    </div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold mt-0.5">
+                      Meta: {totalTargetInLeva.toLocaleString('pt-PT')},00 Kz
+                    </div>
+                  </div>
+
+                  <div className={`p-4 rounded-xl border ${isDark ? 'bg-slate-850/60 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                    <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Estado do Semestre</div>
+                    <div className={`text-base font-black mt-1 ${isLevaCompleted ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-500'}`}>
+                      {isLevaCompleted ? '100% Concluído' : `${6 - paidMonthsCount} Meses Restantes`}
+                    </div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold mt-0.5">
+                      {isLevaCompleted ? 'Pronto p/ Novo Ciclo' : 'Ciclo em Andamento'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className={`mt-5 p-4 rounded-xl border flex flex-col md:flex-row items-center justify-between gap-4 ${
+                  isLevaCompleted 
+                    ? 'bg-emerald-500/10 border-emerald-500/30' 
+                    : 'bg-sky-500/10 border-sky-500/20'
+                }`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-lg ${
+                      isLevaCompleted ? 'bg-emerald-500 text-white' : 'bg-sky-500 text-white'
+                    }`}>
+                      {isLevaCompleted ? '🏆' : 'ℹ️'}
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold text-slate-900 dark:text-white">
+                        {isLevaCompleted 
+                          ? `Parabéns! O ${currentLeva}º Semestre foi 100% liquidado.` 
+                          : `Regra de Continuidade Cooperativa`}
+                      </div>
+                      <div className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
+                        {isLevaCompleted
+                          ? 'Todos os 12 membros receberam os seus 600.000,00 Kz. Gere o próximo ciclo semestral para prosseguir com o fundo.'
+                          : 'Sempre que termina um ciclo semestral de 6 meses, a aplicação gera e inicia o novo ciclo, mantendo a poupança ativa.'}
+                      </div>
+                    </div>
+                  </div>
+                  {onGenerateNextSemester && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (window.confirm(`Confirmar inicialização do ${currentLeva + 1}º Semestre?`)) {
+                          onGenerateNextSemester();
+                        }
+                      }}
+                      className="px-4 py-2 rounded-lg bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-black dark:hover:bg-slate-100 text-xs font-black uppercase tracking-wider transition-all shrink-0 cursor-pointer shadow-sm"
+                    >
+                      {isLevaCompleted ? `Iniciar ${currentLeva + 1}º Semestre →` : `Gerar Próximo Ciclo →`}
+                    </button>
+                  )}
+                </div>
+
+                <div className="mt-6 border-t border-slate-100 dark:border-slate-800/80 pt-5">
+                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
+                    <Calendar className="w-3.5 h-3.5 text-emerald-500" />
+                    <span>Cronograma dos 6 Meses do {currentLeva}º Semestre</span>
+                  </h4>
+                  <div className="overflow-x-auto rounded-xl border border-slate-100 dark:border-slate-800">
+                    <table className="w-full text-left text-xs">
+                      <thead className={`text-[10px] font-black uppercase tracking-wider border-b ${
+                        isDark ? 'bg-slate-850/80 border-slate-800 text-slate-400' : 'bg-slate-50 border-slate-200 text-slate-600'
+                      }`}>
+                        <tr>
+                          <th className="p-3">Mês do Semestre</th>
+                          <th className="p-3">Cooperantes Contemplados</th>
+                          <th className="p-3">Benefício Unitário</th>
+                          <th className="p-3">Total Repassado</th>
+                          <th className="p-3 text-right">Situação</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {levaMonths.map((mNum, idx) => {
+                          const beneficiaries = members.filter(m => m.assignedMonth === mNum);
+                          const isPaid = payoutsCompleted[mNum] === true;
+                          const isCurrentFocus = currentMonth === mNum;
+
+                          return (
+                            <tr key={mNum} className={`transition-colors ${
+                              isCurrentFocus ? 'bg-emerald-500/5 dark:bg-emerald-500/10 font-medium' : 'hover:bg-slate-50 dark:hover:bg-slate-850/40'
+                            }`}>
+                              <td className="p-3 whitespace-nowrap">
+                                <div className="font-bold text-slate-800 dark:text-slate-200">
+                                  Mês {mNum} ({idx + 1}º do Semestre)
+                                </div>
+                                <div className="text-[10px] text-slate-400">
+                                  {getFullMonthLabel(mNum)}
+                                </div>
+                              </td>
+                              <td className="p-3">
+                                {beneficiaries.length > 0 ? (
+                                  <div className="flex flex-col gap-1">
+                                    {beneficiaries.map(b => (
+                                      <span key={b.id} className="font-bold text-slate-800 dark:text-slate-200">
+                                        • {b.name} <span className="text-[10px] text-slate-400 font-normal font-mono">(#0{b.id})</span>
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span className="text-slate-400 italic text-[11px]">Nenhum membro escalonado</span>
+                                )}
+                              </td>
+                              <td className="p-3 font-mono font-bold text-slate-700 dark:text-slate-300">
+                                600.000,00 Kz
+                              </td>
+                              <td className="p-3 font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                                {(beneficiaries.length * 600000).toLocaleString('pt-PT')},00 Kz
+                              </td>
+                              <td className="p-3 text-right">
+                                {isPaid ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                                    <CheckCircle className="w-3 h-3" /> Liquidado
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                    Pendente
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+              </div>
+            </motion.div>
+          );
+        })()}
 
         {activeSubTab === 'carousel' && carouselSlides && setCarouselSlides && (
           <motion.div
@@ -2810,6 +3039,72 @@ export default function AdminModule({
                       </button>
                     );
                   })}
+                </div>
+              </div>
+
+              {/* Card 4B: Font Size (Tamanho da Letra / Ampliação) */}
+              <div className={`p-5 rounded-xl border ${isDark ? 'bg-slate-900/70 border-slate-800' : 'bg-white border-slate-200 shadow-sm'}`}>
+                <div className="flex items-center gap-2 mb-3">
+                  <Type className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                  <h4 className="text-xs font-extrabold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                    Tamanho da Letra (Ampliação & Acessibilidade)
+                  </h4>
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-4 leading-relaxed">
+                  Permite ampliar ou reduzir o tamanho das letras de toda a aplicação para máxima legibilidade.
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {[
+                    { id: 'compact', label: 'Compacta', px: '14px' },
+                    { id: 'normal', label: 'Normal', px: '16px' },
+                    { id: 'medium', label: 'Ampliada', px: '18px' },
+                    { id: 'large', label: 'Grande', px: '20px' },
+                    { id: 'xlarge', label: 'Muito Grande', px: '22px' },
+                    { id: 'gigante', label: 'Gigante', px: '25px' },
+                  ].map((item) => {
+                    const isSel = (appConfig.fontSize || 'normal') === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => {
+                          const newCfg = { ...appConfig, fontSize: item.id as any };
+                          setAppConfig(newCfg);
+                          saveState(members, logs, payoutsCompleted, currentMonth, loans, newCfg);
+                        }}
+                        className={`p-2 rounded-lg border text-left transition-all cursor-pointer ${
+                          isSel
+                            ? 'bg-purple-600 text-white border-purple-600 font-bold shadow-sm'
+                            : isDark
+                            ? 'bg-slate-850 border-slate-700/60 text-slate-300 hover:border-purple-500/50'
+                            : 'bg-slate-50 border-slate-200 text-slate-700 hover:border-purple-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold">{item.label}</span>
+                          <span className={`text-[10px] font-mono ${isSel ? 'text-purple-200' : 'text-slate-400'}`}>
+                            {item.px}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Live typography preview container */}
+                <div className="mt-4 p-3 rounded-xl border border-purple-500/20 bg-purple-500/5">
+                  <div className="text-[10px] uppercase font-bold text-purple-600 dark:text-purple-400 mb-1 flex items-center justify-between">
+                    <span>Pré-visualização em Tempo Real</span>
+                    <span className="font-mono text-[9px] uppercase px-1.5 py-0.2 rounded bg-purple-500/20">
+                      {appConfig.fontSize || 'normal'}
+                    </span>
+                  </div>
+                  <p className="font-bold text-slate-900 dark:text-white leading-snug">
+                    Kixi-Fundo: Quota Mensal de 120.000,00 Kz
+                  </p>
+                  <p className="text-slate-600 dark:text-slate-300 text-[11px] mt-0.5">
+                    Benefício Semestral: 600.000,00 Kz atribuído aos 2 cooperantes contemplados.
+                  </p>
                 </div>
               </div>
 

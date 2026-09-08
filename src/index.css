@@ -154,8 +154,8 @@ html.dark {
    ========================================================== */
 
 @media (min-width: 1024px) and (max-width: 1600px) {
-  :root, html {
-    font-size: 15px !important; /* Boosted base font size for 14-15" displays for superior readability */
+  :root {
+    --base-screen-font-size: 16px;
   }
 
   /* Compact top navbar container and heights */
@@ -236,8 +236,8 @@ html.dark {
 }
 
 @media (max-width: 1023px) {
-  :root, html {
-    font-size: 15px !important;
+  :root {
+    --base-screen-font-size: 16px;
   }
 }
 
@@ -254,8 +254,8 @@ html.dark {
 
 /* Large Monitors (1920px width / 24" - 27" screens and up) */
 @media (min-width: 1920px) {
-  :root, html {
-    font-size: 16.5px !important; /* Scale up typography/spacing proportionally to prevent tiny text on big screens */
+  :root {
+    --base-screen-font-size: 17px;
   }
   .max-w-7xl {
     max-width: 1820px !important; /* Expand layout to occupy more screen space */
@@ -264,8 +264,8 @@ html.dark {
 
 /* Ultra-Wide & 4K Monitors (2560px width and up) */
 @media (min-width: 2560px) {
-  :root, html {
-    font-size: 18px !important; /* Scale up proportional sizing further for super high resolution screens */
+  :root {
+    --base-screen-font-size: 18px;
   }
   .max-w-7xl {
     max-width: 2400px !important; /* Maximize data visibility on huge screens */
@@ -277,6 +277,8 @@ html.dark {
    ========================================================== */
 
 :root {
+  --base-screen-font-size: 16px;
+  --kix-font-size: 16px;
   --kix-ui-scale: 1;
   --kix-icon-scale: 1;
   --kix-padding-scale: 1;
@@ -297,25 +299,45 @@ html.dark {
   --spacing-lg: calc(1.5rem * var(--kix-gap-scale));
 }
 
+/* Font Size levels driven by AppConfig & Top Quick Zoom */
+html.ui-font-compact {
+  --kix-font-size: 14px;
+}
+html.ui-font-normal {
+  --kix-font-size: 16px;
+}
+html.ui-font-medium {
+  --kix-font-size: 18px;
+}
+html.ui-font-large {
+  --kix-font-size: 20px;
+}
+html.ui-font-xlarge {
+  --kix-font-size: 22px;
+}
+html.ui-font-gigante {
+  --kix-font-size: 24px;
+}
+
 /* Scaling utilities driven by AppConfig */
 html.ui-scale-small {
   --kix-ui-scale: 0.9;
-  font-size: 14.4px !important;
 }
 
 html.ui-scale-normal {
   --kix-ui-scale: 1;
-  font-size: 16px !important;
 }
 
 html.ui-scale-large {
   --kix-ui-scale: 1.1;
-  font-size: 17.6px !important;
 }
 
 html.ui-scale-xlarge {
   --kix-ui-scale: 1.25;
-  font-size: 20px !important;
+}
+
+:root, html {
+  font-size: calc(var(--kix-font-size, var(--base-screen-font-size, 16px)) * var(--kix-ui-scale, 1)) !important;
 }
 
 /* Density utilities */

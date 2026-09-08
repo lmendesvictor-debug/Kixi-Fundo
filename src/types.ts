@@ -57,6 +57,17 @@ export interface Member {
   socialSupportReceived: number;
 }
 
+export interface SemesterCycle {
+  id: number; // 1, 2, 3...
+  name: string; // e.g. "1º Ciclo Semestral", "2º Ciclo Semestral"
+  startMonth: number; // 1, 7, 13...
+  endMonth: number; // 6, 12, 18...
+  status: 'completed' | 'active' | 'upcoming';
+  allocations: { [month: number]: number[] }; // monthNumber -> array of 2 member ids
+  createdAt: string;
+  notes?: string;
+}
+
 export interface KixLog {
   id: string;
   timestamp: string;
@@ -209,7 +220,7 @@ export interface AppConfig {
   chartColorTheme?: 'teal' | 'indigo' | 'coral' | 'amber';
   customDashboardMessage?: string;
   fontFamily?: 'inter' | 'outfit' | 'mono' | 'playfair' | 'space';
-  fontSize?: 'compact' | 'normal' | 'medium' | 'large' | 'xlarge';
+  fontSize?: 'compact' | 'normal' | 'medium' | 'large' | 'xlarge' | 'gigante';
   primaryColorTheme?: 'emerald' | 'indigo' | 'slate' | 'teal' | 'coral' | 'amber' | 'violet' | 'bordeaux' | 'royal_plum' | 'fire_coral' | 'dark_zinc' | 'solid_navy' | 'sky_frost' | 'ocean_teal';
   adminPrivilegeCanDelete?: boolean;
   adminPrivilegeCanRefund?: boolean;
@@ -243,7 +254,7 @@ export function getFullMonthLabel(mNum: number): string {
   const calIndex = (mNum - 1 + 2) % 12; // March offset
   const calYear = 2026 + Math.floor((mNum - 1 + 2) / 12);
   const levaNum = Math.ceil(mNum / 6);
-  return `Leva ${levaNum} - Mês ${relNum} (${monthNamesPortuguese[calIndex]} de ${calYear})`;
+  return `${levaNum}º Semestre (Leva ${levaNum}) - Mês ${relNum} (${monthNamesPortuguese[calIndex]} de ${calYear})`;
 }
 
 export function getMonthSimpleLabel(mNum: number): string {

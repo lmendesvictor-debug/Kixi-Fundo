@@ -36,8 +36,9 @@ import {
   BellRing,
 } from 'lucide-react';
 
-import { Member, KixLog, CarouselSlide, getMemberIdCode, Loan, AppConfig } from './types';
+import { Member, KixLog, CarouselSlide, getMemberIdCode, Loan, AppConfig, getFullMonthLabel, SemesterCycle } from './types';
 import { INITIAL_MEMBERS, INITIAL_LOGS, INITIAL_LOANS } from './data';
+import { buildDefaultInitialCycles, generateNextSemesterCycle } from './utils/cycles';
 import MetricCards from './components/MetricCards';
 import SchedulesGrid from './components/SchedulesGrid';
 import MembersTable from './components/MembersTable';
@@ -273,6 +274,24 @@ export default function App() {
       } catch {}
     }
     return INITIAL_MEMBERS;
+  });
+
+  const [cycles, setCycles] = useState<SemesterCycle[]>(() => {
+    const saved = localStorage.getItem('kix_semester_cycles');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      } catch {}
+    }
+    return buildDefaultInitialCycles(INITIAL_MEMBERS, {});
+  });
+
+  const [selectedCycleId, setSelectedCycleId] = useState<number>(() => {
+    const currentM = Number(localStorage.getItem('kix_current_month') || '1');
+    return Math.ceil(currentM / 6) || 1;
   });
 
   const resolveConflict = (
@@ -598,6 +617,19 @@ export default function App() {
     return Number(localStorage.getItem('kix_pending_sync_count') || '0');
   });
   const [isSyncingPending, setIsSyncingPending] = useState<boolean>(false);
+  const [semesterCelebrationModal, setSemesterCelebrationModal] = useState<{
+    isOpen: boolean;
+    completedLeva: number;
+    newLeva: number;
+    startMonth: number;
+    endMonth: number;
+  } | null>(null);
+  const [semesterPromptModal, setSemesterPromptModal] = useState<{
+    isOpen: boolean;
+    completedLeva: number;
+    nextLeva: number;
+    newStartMonth: number;
+  } | null>(null);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -1705,6 +1737,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
         currentMonth: newMonth,
         loans: newLoans,
         appConfig: newAppConfig,
+        cycles: cycles,
         carouselSlides,
         updatedAt: generatedTimestamp
       }).catch(e => {
@@ -1731,6 +1764,24 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
 
     // Auto-backup para Google Drive se o token e configuração estiverem ativos
     triggerAutoBackupGDrive(reconciledMembers, newLogs, newPayouts, newMonth);
+  };
+
+  const handleSaveCycles = (updatedCycles: SemesterCycle[]) => {
+    setCycles(updatedCycles);
+    localStorage.setItem('kix_semester_cycles', JSON.stringify(updatedCycles));
+    if (!isFirestoreQuotaExceededRef.current) {
+      saveStateToFirestore({
+        members,
+        logs,
+        payoutsCompleted,
+        currentMonth,
+        loans,
+        appConfig,
+        cycles: updatedCycles,
+        carouselSlides,
+        updatedAt: new Date().toISOString()
+      }).catch(e => console.error("[handleSaveCycles] Erro:", e));
+    }
   };
 
   const handleResetData = () => {
@@ -1981,6 +2032,136 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
     setPayoutsCompleted(updatedPayouts);
     setLogs(updatedLogs);
     saveState(updatedMembers, updatedLogs, updatedPayouts);
+
+    // Check if all 6 months of the current semester are completed
+    const currentLevaNum = Math.ceil(currentMonth / 6) || 1;
+    const startM = (currentLevaNum - 1) * 6 + 1;
+    const levaMonths = Array.from({ length: 6 }, (_, i) => startM + i);
+    const isSemesterFullyCompleted = levaMonths.every(m => updatedPayouts[m] === true);
+
+    // Update cycle statuses in cycles list
+    const updatedCyclesList = cycles.map(c => {
+      const cMonths = Array.from({ length: 6 }, (_, i) => c.startMonth + i);
+      const allPaid = cMonths.every(m => updatedPayouts[m] === true);
+      if (allPaid) {
+        return { ...c, status: 'completed' as const };
+      }
+      return c;
+    });
+    setCycles(updatedCyclesList);
+    localStorage.setItem('kix_semester_cycles', JSON.stringify(updatedCyclesList));
+
+    if (isSemesterFullyCompleted) {
+      setSemesterPromptModal({
+        isOpen: true,
+        completedLeva: currentLevaNum,
+        nextLeva: currentLevaNum + 1,
+        newStartMonth: currentLevaNum * 6 + 1,
+      });
+    }
+  };
+
+  // Automated Next Semester Generation
+  const handleGenerateNextSemesterCycle = () => {
+    const isSuperAdmin = currentUser?.email?.trim().toLowerCase() === 'lmendesvictor@gmail.com';
+    const isAdminUser = currentUser?.role === 'admin' || isSuperAdmin;
+    if (!isAdminUser) {
+      alert('Acesso Negado: Apenas a administração do Kixi-Fundo pode gerar e iniciar um novo ciclo semestral.');
+      return;
+    }
+
+    const currentLevaNum = Math.ceil(currentMonth / 6) || 1;
+    const nextLevaNum = currentLevaNum + 1;
+    const newStartMonth = (nextLevaNum - 1) * 6 + 1;
+    const newEndMonth = nextLevaNum * 6;
+
+    // Reschedule members into new 6-month semester rotation
+    // Keep relative rotation slots so that all 12 members rotate 2-by-2 per month across the 6 months
+    const updatedMembers = members.map((m, idx) => {
+      const relativeSlot = m.assignedMonth > 0 ? ((m.assignedMonth - 1) % 6) : (idx % 6);
+      const nextAssignedMonth = newStartMonth + relativeSlot;
+
+      const newContributions = { ...(m.contributions || {}) };
+      const newBenefits = { ...(m.benefits || {}) };
+
+      for (let mIdx = newStartMonth; mIdx <= newEndMonth; mIdx++) {
+        if (!newContributions[mIdx]) {
+          newContributions[mIdx] = { paid: false };
+        }
+        if (!newBenefits[mIdx]) {
+          newBenefits[mIdx] = { received: false, amount: 600000 };
+        }
+      }
+
+      return {
+        ...m,
+        assignedMonth: nextAssignedMonth,
+        contributions: newContributions,
+        benefits: newBenefits,
+      };
+    });
+
+    const updatedPayouts = { ...payoutsCompleted };
+    for (let mIdx = newStartMonth; mIdx <= newEndMonth; mIdx++) {
+      updatedPayouts[mIdx] = false;
+    }
+
+    // Ensure cycle exists in cycles array
+    let updatedCycles = [...cycles];
+    const existingIdx = updatedCycles.findIndex(c => c.id === nextLevaNum);
+    if (existingIdx >= 0) {
+      updatedCycles[existingIdx] = {
+        ...updatedCycles[existingIdx],
+        status: 'active'
+      };
+    } else {
+      const generated = generateNextSemesterCycle(
+        updatedCycles,
+        members,
+        `${nextLevaNum}º Ciclo Semestral (Meses ${newStartMonth} a ${newEndMonth})`
+      );
+      generated.status = 'active';
+      updatedCycles.push(generated);
+    }
+
+    // Mark previous cycles as completed
+    updatedCycles = updatedCycles.map(c => {
+      if (c.id < nextLevaNum) {
+        return { ...c, status: 'completed' as const };
+      }
+      return c;
+    });
+
+    setCycles(updatedCycles);
+    setSelectedCycleId(nextLevaNum);
+    localStorage.setItem('kix_semester_cycles', JSON.stringify(updatedCycles));
+
+    const newLog: KixLog = {
+      id: `cycle-auto-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      type: 'cycle_change',
+      amount: 0,
+      description: `NOVO CICLO SEMESTRAL INICIADO: Conclusão oficial do ${currentLevaNum}º Semestre. Teve início o ${nextLevaNum}º Ciclo Semestral (${getFullMonthLabel(newStartMonth)} a ${getFullMonthLabel(newEndMonth)}). Todos os 12 cooperantes foram devidamente escalonados na nova rotação semestral.`,
+      month: newStartMonth,
+    };
+
+    const updatedLogs = [newLog, ...logs];
+
+    setMembers(updatedMembers);
+    setPayoutsCompleted(updatedPayouts);
+    setCurrentMonth(newStartMonth);
+    setLogs(updatedLogs);
+
+    saveState(updatedMembers, updatedLogs, updatedPayouts, newStartMonth);
+
+    setSemesterPromptModal(null);
+    setSemesterCelebrationModal({
+      isOpen: true,
+      completedLeva: currentLevaNum,
+      newLeva: nextLevaNum,
+      startMonth: newStartMonth,
+      endMonth: newEndMonth,
+    });
   };
 
   // Social Aid grant
@@ -2367,14 +2548,16 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
     root.classList.remove('ui-scale-small', 'ui-scale-normal', 'ui-scale-large', 'ui-scale-xlarge');
     root.classList.remove('ui-density-compact', 'ui-density-normal', 'ui-density-relaxed');
     root.classList.remove('icon-scale-normal', 'icon-scale-large', 'icon-scale-xlarge');
+    root.classList.remove('ui-font-compact', 'ui-font-normal', 'ui-font-medium', 'ui-font-large', 'ui-font-xlarge', 'ui-font-gigante');
 
     root.classList.add(`ui-scale-${uiScaleSetting}`);
     root.classList.add(`ui-density-${uiDensitySetting}`);
     root.classList.add(`icon-scale-${iconScaleSetting}`);
+    root.classList.add(`ui-font-${fontSizeSetting}`);
 
     document.body.classList.remove('print-format-a4-portrait', 'print-format-a4-landscape', 'print-format-a5', 'print-format-letter');
     document.body.classList.add(`print-format-${printPaperFormatSetting}`);
-  }, [uiScaleSetting, uiDensitySetting, iconScaleSetting, printPaperFormatSetting]);
+  }, [uiScaleSetting, uiDensitySetting, iconScaleSetting, printPaperFormatSetting, fontSizeSetting]);
 
   let fontCSS = '';
   if (fontFamilySetting === 'outfit') {
@@ -2400,7 +2583,34 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
     fontSizeCSS = `:root, html { font-size: 20px !important; }`;
   } else if (fontSizeSetting === 'xlarge') {
     fontSizeCSS = `:root, html { font-size: 22px !important; }`;
+  } else if (fontSizeSetting === 'gigante') {
+    fontSizeCSS = `:root, html { font-size: 25px !important; }`;
   }
+
+  const FONT_SIZES_ORDER: Array<'compact' | 'normal' | 'medium' | 'large' | 'xlarge' | 'gigante'> = [
+    'compact',
+    'normal',
+    'medium',
+    'large',
+    'xlarge',
+    'gigante',
+  ];
+
+  const handleAdjustFontSize = (direction: 'increase' | 'decrease') => {
+    const current = (appConfig.fontSize || 'normal') as 'compact' | 'normal' | 'medium' | 'large' | 'xlarge' | 'gigante';
+    const idx = FONT_SIZES_ORDER.indexOf(current);
+    const validIdx = idx === -1 ? 1 : idx;
+    let nextIdx = validIdx;
+    if (direction === 'increase') {
+      nextIdx = Math.min(FONT_SIZES_ORDER.length - 1, validIdx + 1);
+    } else {
+      nextIdx = Math.max(0, validIdx - 1);
+    }
+    const nextSize = FONT_SIZES_ORDER[nextIdx];
+    const newCfg: AppConfig = { ...appConfig, fontSize: nextSize };
+    setAppConfig(newCfg);
+    saveState(members, logs, payoutsCompleted, currentMonth, loans, newCfg);
+  };
 
   const printMarginVal = printMarginsSetting === 'compact' ? '5mm' : printMarginsSetting === 'wide' ? '18mm' : '10mm';
   const printPaperSizeVal = printPaperFormatSetting === 'a4_landscape' ? 'A4 landscape' : printPaperFormatSetting === 'a5' ? 'A5 portrait' : printPaperFormatSetting === 'letter' ? 'letter portrait' : 'A4 portrait';
@@ -2563,11 +2773,9 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
     }`}>
       {/* Universal Financial Growth Watermark Background */}
       <div 
-        className="pointer-events-none fixed inset-0 z-0 bg-cover bg-center bg-no-repeat transition-opacity duration-300 select-none"
+        className="pointer-events-none fixed inset-0 z-0 bg-cover bg-center bg-no-repeat transition-opacity duration-300 select-none opacity-[0.025]"
         style={{
-          backgroundImage: `url('https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?auto=format&fit=crop&q=80&w=2000')`,
-          opacity: theme === 'dark' ? 0.045 : 0.08,
-          mixBlendMode: (theme === 'dark' ? 'overlay' : 'multiply') as any
+          backgroundImage: `url('https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?auto=format&fit=crop&q=80&w=2000')`
         }}
       />
       {appStylesElement}
@@ -2851,6 +3059,32 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                   {pendingSyncCount > 0 && <span className="font-mono bg-amber-500/20 px-1 py-0.2 rounded text-[8px] ml-0.5">({pendingSyncCount})</span>}
                 </button>
               )}
+
+              {/* Quick Font Size Scaling Controls */}
+              <div 
+                className="flex items-center bg-white/10 dark:bg-slate-900/40 border border-white/15 dark:border-slate-700/50 rounded-lg p-0.5 shrink-0 select-none"
+                title={`Tamanho atual da letra: ${fontSizeSetting.toUpperCase()} (Clique em A+ para ampliar a letra)`}
+              >
+                <button
+                  type="button"
+                  onClick={() => handleAdjustFontSize('decrease')}
+                  title="Diminuir tamanho da letra (A-)"
+                  className="px-2 py-1 hover:bg-white/15 active:scale-95 text-white text-[11px] font-black rounded transition-all cursor-pointer"
+                >
+                  A-
+                </button>
+                <span className="px-1.5 text-[10px] font-mono font-extrabold text-white/90 uppercase tracking-tighter">
+                  {fontSizeSetting === 'gigante' ? 'GIG' : fontSizeSetting === 'xlarge' ? 'XG' : fontSizeSetting === 'large' ? 'GRD' : fontSizeSetting === 'medium' ? 'AMP' : fontSizeSetting === 'compact' ? 'CMP' : 'NORM'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleAdjustFontSize('increase')}
+                  title="Ampliar tamanho da letra (A+)"
+                  className="px-2 py-1 hover:bg-white/15 active:scale-95 text-white text-[11px] font-black rounded transition-all cursor-pointer"
+                >
+                  A+
+                </button>
+              </div>
 
               {/* Normativos do Kix-Fundo Button */}
               <button
@@ -3288,46 +3522,48 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                   <div className="space-y-6">
                     {currentUser.role === 'admin' && (
                       /* Dynamic Warning and Action Center for active month benefits control */
-                      <div className={`p-5 rounded-2xl border transition-colors ${
-                        theme === 'dark' ? 'bg-[#1e293b]/50 border-slate-700' : 'bg-white border-slate-200'
+                      <div className={`p-6 rounded-2xl border-2 transition-colors shadow-sm ${
+                        theme === 'dark' ? 'bg-slate-900 border-slate-750' : 'bg-white border-slate-200 shadow-slate-100'
                       }`}>
                         <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-6">
                           <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Coins className="w-4 h-4 text-emerald-500" />
-                              <h3 className={`font-display font-bold text-xs uppercase tracking-wide ${
-                                theme === 'dark' ? 'text-white' : 'text-slate-800'
+                            <div className="flex items-center gap-2 mb-2.5">
+                              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
+                                <Coins className="w-4 h-4" />
+                              </div>
+                              <h3 className={`font-display font-extrabold text-sm uppercase tracking-wider ${
+                                theme === 'dark' ? 'text-white' : 'text-slate-900'
                               }`}>
                                 Controle de Liquidação de Benefícios — Mês {currentMonth}
                               </h3>
                             </div>
 
                             {isCurrentMonthPayoutDone ? (
-                              <div className="bg-emerald-50 border border-emerald-100 rounded-lg p-3.5 flex items-start gap-3">
-                                <CheckCircle className="w-4.5 h-4.5 text-emerald-600 shrink-0 mt-0.5" />
+                              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex items-start gap-3.5">
+                                <CheckCircle className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                                 <div>
-                                  <h4 className="text-xs font-bold text-emerald-800 uppercase tracking-wider">Ciclo Concluído & Liquidado</h4>
-                                  <p className="text-[11px] text-emerald-700 mt-0.5 leading-relaxed">
+                                  <h4 className="text-xs font-black text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">Ciclo Concluído & Liquidado</h4>
+                                  <p className="text-xs text-emerald-700 dark:text-emerald-200 mt-0.5 leading-relaxed font-medium">
                                     O pagamento total de <strong>1.200.000,00 KZs</strong> já foi repassado com sucesso aos beneficiários correspondentes do ciclo. A parcela retida de <strong>240.000,00 KZs</strong> já está definitivamente computada na poupança social de interajuda.
                                   </p>
                                 </div>
                               </div>
                             ) : currentMonthPaidCount === 12 ? (
-                              <div className="bg-[#10B981]/10 border border-[#10B981]/30 rounded-lg p-3.5 flex items-start gap-3">
-                                <ShieldCheck className="w-4.5 h-4.5 text-emerald-600 shrink-0 mt-0.5" />
+                              <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex items-start gap-3.5">
+                                <ShieldCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                                 <div>
-                                  <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider">Arrecadação Concluída (100%)</h4>
-                                  <p className="text-[11px] text-emerald-300 mt-0.5 leading-relaxed">
+                                  <h4 className="text-xs font-black text-emerald-700 dark:text-emerald-300 uppercase tracking-wider">Arrecadação Concluída (100%)</h4>
+                                  <p className="text-xs text-emerald-700 dark:text-emerald-200 mt-0.5 leading-relaxed font-medium">
                                     Perfeito! Todos os 12 membros contribuíram com a cota mensal de 120.000,00 KZs. O capital de <strong>1.200.000,00 KZs</strong> está totalmente pronto para desembolso aos beneficiários deste ciclo.
                                   </p>
                                 </div>
                               </div>
                             ) : (
-                              <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-3.5 flex items-start gap-3">
-                                <AlertCircle className="w-4.5 h-4.5 text-amber-500 shrink-0 mt-0.5" />
+                              <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex items-start gap-3.5">
+                                <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
                                 <div>
-                                  <h4 className="text-xs font-bold text-amber-500 uppercase tracking-wider">Arrecadação Parcial Incompleta</h4>
-                                  <p className="text-[11px] text-slate-400 mt-0.5 leading-relaxed">
+                                  <h4 className="text-xs font-black text-amber-600 dark:text-amber-400 uppercase tracking-wider">Arrecadação Parcial Incompleta</h4>
+                                  <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 leading-relaxed font-medium">
                                     Registrados <strong>{currentMonthPaidCount} de 12</strong> pagamentos ({formatCurrency(currentMonthCollected)}). Faltam arrecadar {12 - currentMonthPaidCount} cotas (<strong>{formatCurrency(1440000 - currentMonthCollected)}</strong>) para liberar a liquidação dos benefícios aos contemplados do mês.
                                   </p>
                                 </div>
@@ -3339,12 +3575,12 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                             <button
                               disabled={currentMonthPaidCount < 12 || isCurrentMonthPayoutDone}
                               onClick={handleExecutePayout}
-                              className={`w-full py-3 px-4 rounded-lg text-xs font-bold uppercase tracking-wider text-center transition-all ${
+                              className={`w-full py-3.5 px-4 rounded-xl text-xs font-black uppercase tracking-wider text-center transition-all ${
                                 isCurrentMonthPayoutDone
                                   ? (theme === 'dark' ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed' : 'bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed')
                                   : currentMonthPaidCount < 12
-                                  ? (theme === 'dark' ? 'bg-amber-500/5 text-amber-500 border border-amber-500/10 cursor-not-allowed' : 'bg-amber-50 text-amber-500 border border-amber-200 cursor-not-allowed')
-                                  : 'bg-[#10B981] hover:bg-[#059669] text-white shadow-sm cursor-pointer'
+                                  ? (theme === 'dark' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20 cursor-not-allowed' : 'bg-amber-50 text-amber-600 border border-amber-200 cursor-not-allowed')
+                                  : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/20 cursor-pointer active:scale-95'
                               }`}
                             >
                               {isCurrentMonthPayoutDone
@@ -3353,7 +3589,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                                 ? 'Pagamento Bloqueado'
                                 : 'Confirmar Repasse (1.200.000,00)'}
                             </button>
-                            <span className="text-[10px] text-slate-400 text-center mt-1.5 font-medium">
+                            <span className="text-[11px] text-slate-400 dark:text-slate-500 text-center mt-2 font-semibold">
                               {currentMonthPaidCount < 12 && !isCurrentMonthPayoutDone
                                 ? 'Requer contribuição total de todos os 12 membros.'
                                 : 'Transfere 600.000,00 KZs a cada beneficiário.'}
@@ -3370,6 +3606,11 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                       payoutDoneMap={payoutsCompleted}
                       isAdmin={currentUser.role === 'admin'}
                       onUpdateMembers={handleUpdateMembersFromSchedules}
+                      onGenerateNextSemester={handleGenerateNextSemesterCycle}
+                      cycles={cycles}
+                      onSaveCycles={handleSaveCycles}
+                      selectedCycleId={selectedCycleId}
+                      onSelectCycleId={setSelectedCycleId}
                     />
                   </div>
                 )}
@@ -3424,6 +3665,7 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                   onRestoreBackup={handleRestoreBackupState}
                   onRegisterSecurityAttempt={registerSecurityAttempt}
                   loans={loans}
+                  onGenerateNextSemester={handleGenerateNextSemesterCycle}
                 />
               </motion.div>
             )}
@@ -3686,6 +3928,114 @@ E, por estarem de pleno acordo, as partes celebram e validam eletromagneticament
                   {contributionConfirm.isPaidCurrently ? 'CONFIRMAR ESTORNO' : 'EFETUAR REGISTRO'}
                 </button>
               </div>
+            </motion.div>
+          </div>
+        )}
+        {/* Semester Completed Modal Prompt */}
+        {semesterPromptModal?.isOpen && (
+          <div 
+            className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 select-none"
+            onClick={() => setSemesterPromptModal(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl p-6 text-center"
+            >
+              <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto mb-4 border border-emerald-500/20">
+                <Sparkles className="w-7 h-7" />
+              </div>
+              <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                {semesterPromptModal.completedLeva}º Ciclo Semestral Concluído!
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+                Todos os 6 meses do <strong>{semesterPromptModal.completedLeva}º Semestre</strong> foram faturados e os 12 cooperantes contemplados com o benefício de 600.000,00 Kz cada.
+              </p>
+
+              <div className="mt-4 p-4 rounded-2xl bg-emerald-500/5 border border-emerald-500/20 text-left space-y-2 text-xs">
+                <div className="flex items-center justify-between font-bold">
+                  <span className="text-slate-500 dark:text-slate-400">Novo Ciclo a Gerar:</span>
+                  <span className="text-emerald-600 dark:text-emerald-400 font-black">{semesterPromptModal.nextLeva}º Semestre</span>
+                </div>
+                <div className="flex items-center justify-between font-semibold">
+                  <span className="text-slate-500 dark:text-slate-400">Próximos Meses:</span>
+                  <span className="font-mono">Meses {semesterPromptModal.newStartMonth} a {semesterPromptModal.newStartMonth + 5}</span>
+                </div>
+                <div className="flex items-center justify-between font-semibold">
+                  <span className="text-slate-500 dark:text-slate-400">Ação Automática:</span>
+                  <span className="text-slate-700 dark:text-slate-300">Reiniciar rotação para os 12 membros</span>
+                </div>
+              </div>
+
+              <div className="mt-6 flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setSemesterPromptModal(null)}
+                  className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer"
+                >
+                  Gerir Mais Tarde
+                </button>
+                <button
+                  type="button"
+                  onClick={handleGenerateNextSemesterCycle}
+                  className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-xs font-black uppercase tracking-wider transition-all shadow-lg shadow-emerald-600/20 cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  <span>Gerar Próximo Ciclo</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Semester Celebration Success Modal */}
+        {semesterCelebrationModal?.isOpen && (
+          <div 
+            className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 select-none"
+            onClick={() => setSemesterCelebrationModal(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl p-6 text-center"
+            >
+              <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto mb-4 border border-emerald-500/20 animate-bounce">
+                <CheckCircle className="w-7 h-7" />
+              </div>
+              <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                {semesterCelebrationModal.newLeva}º Ciclo Semestral Iniciado com Sucesso!
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+                O <strong>{semesterCelebrationModal.completedLeva}º Semestre</strong> foi arquivado e o <strong>{semesterCelebrationModal.newLeva}º Semestre</strong> está formalmente ativo (Meses {semesterCelebrationModal.startMonth} a {semesterCelebrationModal.endMonth}).
+              </p>
+
+              <div className="mt-4 p-4 rounded-2xl bg-slate-50 dark:bg-slate-850/60 border border-slate-100 dark:border-slate-800 text-left space-y-2 text-xs">
+                <div className="flex items-center justify-between font-bold">
+                  <span className="text-slate-500 dark:text-slate-400">Ciclo Atual:</span>
+                  <span className="text-emerald-600 dark:text-emerald-400 font-mono font-black">{semesterCelebrationModal.newLeva}º Semestre</span>
+                </div>
+                <div className="flex items-center justify-between font-semibold">
+                  <span className="text-slate-500 dark:text-slate-400">Mês em Foco:</span>
+                  <span className="font-mono font-bold text-slate-900 dark:text-white">Mês {semesterCelebrationModal.startMonth}</span>
+                </div>
+                <div className="flex items-center justify-between font-semibold">
+                  <span className="text-slate-500 dark:text-slate-400">Membros Alocados:</span>
+                  <span className="text-slate-700 dark:text-slate-300">12 Cooperantes (2 por mês)</span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setSemesterCelebrationModal(null)}
+                className="w-full mt-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-xs font-black uppercase tracking-wider transition-all shadow-lg shadow-emerald-600/20 cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <span>Aceder ao Novo Ciclo</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
             </motion.div>
           </div>
         )}
